@@ -195,7 +195,7 @@ const langStrings = {
         enterNameForEachPlayer: 'Por favor entre com o nome de cada jogador.',
         allPlayersChooseHouse: 'Para cenários, todos os jogadores devem ter a casa escolhida.',
         notes: "Notas",
-        note1: "Se você escolher um cenário, o app irá gerar as casas caídas e a oferta de tecnologia automaticamente and tech tableau for you. You'll find it on the bottom of the 'Tech' page after starting a game.",
+        note1: "Se você escolher um cenário, o app irá gerar as casas caídas e a oferta de tecnologia automaticamente. Você irá encontrá-la na parte inferior da página de Tecnologias depois de começar um jogo.",
         note2: "Mantenha a Pág. de Tec. atualizada com as tecnologias dos jogadores. Os poderes das mesmas serão incluídos nos cálculos.",
         note3: "Se estiver utilizando Cargueiros, e eles enviarem Corvetas, simplesmente aumente o número de Corvetas na calculadora antes de rodar o cálculo. O app não envia as Corvetas dos Cargueiros automaticamente.",
         note4: "O app mostrará todos os possíveis resultados, exceto por variações onde você obviamente deveria retornar Corvetas mas escolhe outra frota.",
@@ -865,3 +865,4 @@ const langStrings = {
         invaderAbsorbedAllDmg: 'Invasor ha absorbido todo el daño.'
     }
 }
+
