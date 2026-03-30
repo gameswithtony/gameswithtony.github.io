@@ -143,7 +143,7 @@ var app = new Vue({
         error: null,
         isGameStateOpen: false,
         gameState: "",
-        appVersion: '1.2'
+        appVersion: '1.3'
     },
     mounted: function() {
         if (localStorage.getItem(LOCALSTORAGENAME)) {
@@ -928,7 +928,7 @@ var app = new Vue({
                     this.setHumanAction('12');
                     return;
                 }
-    
+                this.humanPlayer.nextAction.actiondata.consumelocations = {};
                 this.setHumanAction('13');
             }
         },
@@ -2790,7 +2790,7 @@ var app = new Vue({
                     }
                 }
 
-                if (this.currentPlayer.nextAction.actiondata.linktargetlocationid3 !== null && this.currentPlayer.nextAction.actiondata.linktargetlocationid4 !== undefined) {
+                if (this.currentPlayer.nextAction.actiondata.linktargetlocationid3 !== null && this.currentPlayer.nextAction.actiondata.linktargetlocationid3 !== undefined && this.currentPlayer.nextAction.actiondata.linktargetlocationid4 !== null && this.currentPlayer.nextAction.actiondata.linktargetlocationid4 !== undefined) {
                     this.layNetworkTile(this.currentPlayer.player_type, this.currentPlayer.nextAction.actiondata.linktargetlocationid3, this.currentPlayer.nextAction.actiondata.linktargetlocationid4);
 
                     let networkcost = this.currentEra === ERA.Canal ? CANALERANETWORKCOST : RAILERANETWORKCOST;
@@ -2928,7 +2928,7 @@ var app = new Vue({
 
                         let ironInMarket = self.board.market.ironInMarket;
 
-                        if (c.coalConsumed > ironInMarket) {
+                        if (c.ironConsumed > ironInMarket) {
                             self.board.market.ironInMarket = 0;
                         } else {
                             self.board.market.ironInMarket = ironInMarket - c.ironConsumed;
@@ -3058,10 +3058,10 @@ var app = new Vue({
                 if (l.type === LOCATIONTYPE.Industries) {
                     _.forEach(l.spaces, function (s) {
                         if (s.tile && s.tile.level === 1) {
-                            l.possibleLinkVPs = l.possibleLinkVPs - s.tile.VPs;
+                            l.possibleLinkVPs = l.possibleLinkVPs - s.tile.LinkVPs;
 
                             if (s.tile.flipped) {
-                                l.totalLinkVPs = l.totalLinkVPs - s.tile.VPs;
+                                l.totalLinkVPs = l.totalLinkVPs - s.tile.LinkVPs;
                             }
                             
                             s.tile = null;

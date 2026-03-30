@@ -38,20 +38,8 @@ l.totalLinkVPs = l.totalLinkVPs - s.tile.LinkVPs;
 
 ---
 
-### BUG 3: Mismatched null/undefined check for AI second network link (MODERATE)
-**File:** `app.js:2793`
-```javascript
-// CURRENT (checks different variables):
-if (this.currentPlayer.nextAction.actiondata.linktargetlocationid3 !== null
-    && this.currentPlayer.nextAction.actiondata.linktargetlocationid4 !== undefined) {
-
-// Line 2781 checks the SAME variable correctly:
-if (this.currentPlayer.nextAction.actiondata.linktargetlocationid1 !== null
-    && this.currentPlayer.nextAction.actiondata.linktargetlocationid1 !== undefined) {
-```
-**Impact:** Line 2781 correctly checks id1 for both null and undefined. Line 2793 checks id3 for null but id4 for undefined. If id3 is `undefined` (not null), `undefined !== null` is `true`, potentially triggering a network lay with an undefined location.
-
-**Fix:** Change to check `linktargetlocationid3 !== null && linktargetlocationid3 !== undefined`.
+### ~~BUG 3: Mismatched null/undefined check for AI second network link~~ (ALREADY FIXED)
+**File:** `app.js:2793` — Now correctly checks all four conditions: both `linktargetlocationid3` and `linktargetlocationid4` are checked for both `!== null` and `!== undefined`.
 
 ---
 
@@ -186,7 +174,7 @@ See Report B above. Same root cause - `!isAIPlayersTile` at line 301 blocks all 
 1. **Line 2931:** `c.coalConsumed` -> `c.ironConsumed` (Bug 1)
 2. **Line 3061:** `s.tile.VPs` -> `s.tile.LinkVPs` (Bug 2)
 3. **Line 3064:** `s.tile.VPs` -> `s.tile.LinkVPs` (Bug 2)
-4. **Line 2793:** Fix null/undefined check to use `linktargetlocationid3` for both (Bug 3)
+4. ~~**Line 2793:** Fix null/undefined check (Bug 3)~~ — ALREADY FIXED
 5. **Line 932:** Clear `consumelocations` before Canal Era network confirmation (Report A)
 
 ### Priority 2 (correctness)
