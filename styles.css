@@ -1,43 +1,287 @@
+/* Games With Tony — palette drawn from the cards avatar:
+   maroon outlines, cream card faces, pink/lavender/periwinkle fronts,
+   plus the original orange banner. */
+
+:root {
+    --orange: #FFA500;
+    --ink: #542A22;
+    --ink-soft: rgba(84, 42, 34, 0.75);
+    --cream: #F9F0DE;
+    --card-face: #FFFDF6;
+    --pink: #F78DA3;
+    --lav: #C9A2EA;
+    --peri: #8CA0EA;
+    --shadow: rgba(84, 42, 34, 0.16);
+}
+
 * {
-    font-family: 'Noto Sans', sans-serif;
     box-sizing: border-box;
 }
 
 body {
     margin: 0;
+    font-family: 'Nunito Sans', sans-serif;
+    background-color: var(--cream);
+    color: var(--ink);
+    line-height: 1.55;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
-h1, h2 {
-    margin: 1.5rem 1rem 0.325rem 1rem;
-    padding: 0;
+main {
+    flex: 1;
 }
 
-p {
-    margin: 0 1rem 1rem 1rem;
-    padding: 0 1rem 0 0;
+::selection {
+    background-color: var(--orange);
+    color: var(--ink);
+}
+
+/* ---- Banner ---- */
+
+.banner {
+    background-color: var(--orange);
+    border-bottom: 4px solid var(--ink);
+    padding: 0.9rem clamp(1rem, 4vw, 2rem);
 }
 
 h1 {
+    font-family: 'Alfa Slab One', serif;
+    font-weight: 400;
+    font-size: clamp(1.45rem, 4.5vw, 2.1rem);
+    letter-spacing: 0.01em;
     margin: 0;
-    padding: 1rem;
-    background-color: orange;
+    max-width: 1020px;
+    margin-inline: auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 1.7rem;
+    gap: 1rem;
 }
 
 .avatar {
-    margin: 0;
-    height: 50px;
+    height: clamp(48px, 8vw, 64px);
+    transform: rotate(-4deg);
+    transition: transform 0.25s ease;
 }
 
-p {
-    margin-bottom: 0.25rem;;
+h1:hover .avatar {
+    transform: rotate(4deg) translateY(-2px);
 }
 
-.small {
+/* ---- Layout ---- */
+
+main {
+    max-width: 1020px;
+    margin-inline: auto;
+    padding: 0 clamp(1rem, 4vw, 1.5rem) 2.5rem;
+}
+
+.intro {
+    font-size: 1.05rem;
+    max-width: 62ch;
+    margin: 1.75rem 0 0.5rem;
+}
+
+.intro a {
+    color: var(--ink);
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-color: var(--orange);
+    text-decoration-thickness: 2.5px;
+    text-underline-offset: 3px;
+}
+
+.intro a:hover {
+    text-decoration-thickness: 5px;
+}
+
+/* ---- Jump nav ---- */
+
+.jump-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.4rem 0 0.25rem;
+}
+
+.jump-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background-color: var(--card-face);
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.3rem 0.95rem;
     font-size: 0.9rem;
-    margin-top: 0rem;
-    margin-bottom: 1rem;
+    font-weight: 800;
+    color: var(--ink);
+    text-decoration: none;
+    box-shadow: 3px 3px 0 var(--shadow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.jump-nav a::before {
+    content: var(--pip);
+    color: var(--accent);
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.jump-nav a:nth-child(1) { --accent: var(--pink);   --pip: "\2665"; }
+.jump-nav a:nth-child(2) { --accent: var(--orange); --pip: "\2666"; }
+.jump-nav a:nth-child(3) { --accent: var(--peri);   --pip: "\2663"; }
+
+.jump-nav a:hover {
+    transform: translate(-1px, -2px);
+    box-shadow: 4px 5px 0 var(--accent);
+}
+
+.jump-nav a:active {
+    transform: translate(0, 0);
+    box-shadow: 2px 2px 0 var(--accent);
+}
+
+section {
+    margin-top: 2rem;
+}
+
+h2 {
+    font-family: 'Alfa Slab One', serif;
+    font-weight: 400;
+    font-size: clamp(1.15rem, 3vw, 1.4rem);
+    margin: 0 0 1rem;
+    scroll-margin-top: 1rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+/* ---- Cards ---- */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 1.1rem;
+}
+
+.card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    background-color: var(--card-face);
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    padding: 1rem 2.3rem 1rem 1.1rem;
+    box-shadow: 4px 4px 0 var(--shadow);
+    color: var(--ink);
+    text-decoration: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+    transform: translate(-2px, -3px) rotate(-0.6deg);
+    box-shadow: 6px 7px 0 var(--accent);
+}
+
+.card:active {
+    transform: translate(0, 0) rotate(0deg);
+    box-shadow: 3px 3px 0 var(--accent);
+}
+
+/* Corner pip, like the index of a playing card */
+.card::after {
+    content: var(--pip);
+    position: absolute;
+    top: 0.5rem;
+    right: 0.8rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--accent);
+}
+
+.cards .card:nth-child(4n + 1) { --accent: var(--pink);   --pip: "\2665"; }
+.cards .card:nth-child(4n + 2) { --accent: var(--orange); --pip: "\2666"; }
+.cards .card:nth-child(4n + 3) { --accent: var(--peri);   --pip: "\2663"; }
+.cards .card:nth-child(4n + 4) { --accent: var(--lav);    --pip: "\2660"; }
+
+.card-line {
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.card-line strong {
+    font-weight: 800;
+}
+
+.card-desc {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+}
+
+/* ---- Footer flourish ---- */
+
+.suit-row {
+    display: flex;
+    justify-content: center;
+    gap: 0.9rem;
+    margin-top: 2.75rem;
+    font-size: 1.05rem;
+}
+
+.suit-row span:nth-child(1) { color: var(--pink); }
+.suit-row span:nth-child(2) { color: var(--orange); }
+.suit-row span:nth-child(3) { color: var(--peri); }
+.suit-row span:nth-child(4) { color: var(--lav); }
+
+.site-footer {
+    background-color: var(--orange);
+    border-top: 4px solid var(--ink);
+    padding: 0.8rem clamp(1rem, 4vw, 2rem);
+}
+
+.site-footer p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.footer-avatar {
+    height: 30px;
+    transform: rotate(-4deg);
+    transition: transform 0.25s ease;
+}
+
+.site-footer p:hover .footer-avatar {
+    transform: rotate(4deg) translateY(-2px);
+}
+
+/* ---- Accessibility ---- */
+
+a:focus-visible {
+    outline: 3px solid var(--peri);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.card:focus-visible {
+    outline-offset: 4px;
+    border-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition: none !important;
+        animation: none !important;
+    }
 }
