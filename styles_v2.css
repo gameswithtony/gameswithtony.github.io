@@ -177,7 +177,7 @@ h2 {
     background-color: var(--card-face);
     border: 2px solid var(--ink);
     border-radius: 14px;
-    padding: 1rem 2.3rem 1rem 1.1rem;
+    padding: 1rem 1.1rem;
     box-shadow: 4px 4px 0 var(--shadow);
     color: var(--ink);
     text-decoration: none;
@@ -194,21 +194,11 @@ h2 {
     box-shadow: 3px 3px 0 var(--accent);
 }
 
-/* Corner pip, like the index of a playing card */
-.card::after {
-    content: var(--pip);
-    position: absolute;
-    top: 0.5rem;
-    right: 0.8rem;
-    font-size: 1.1rem;
-    line-height: 1;
-    color: var(--accent);
-}
-
-.cards .card:nth-child(4n + 1) { --accent: var(--pink);   --pip: "\2665"; }
-.cards .card:nth-child(4n + 2) { --accent: var(--orange); --pip: "\2666"; }
-.cards .card:nth-child(4n + 3) { --accent: var(--peri);   --pip: "\2663"; }
-.cards .card:nth-child(4n + 4) { --accent: var(--lav);    --pip: "\2660"; }
+/* Accent color for the hover shadow, cycling like a shuffled deck */
+.cards .card:nth-child(4n + 1) { --accent: var(--pink); }
+.cards .card:nth-child(4n + 2) { --accent: var(--orange); }
+.cards .card:nth-child(4n + 3) { --accent: var(--peri); }
+.cards .card:nth-child(4n + 4) { --accent: var(--lav); }
 
 .card-line {
     font-weight: 600;
