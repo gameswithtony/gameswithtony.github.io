@@ -114,11 +114,15 @@ function syncAimFields() {
 }
 
 function readAimFields() {
+  // Mid-edit a field can be empty/invalid — hold the current aim rather than
+  // snapping the arrow to a default.
+  const st = game.getState();
+  const cur = st.aim[st.turn];
   const angle = parseFloat($('f-angle').value);
   const power = parseFloat($('f-power').value);
   return {
-    angle: Number.isFinite(angle) ? angle : 45,
-    power: Number.isFinite(power) ? power : 50,
+    angle: Number.isFinite(angle) ? angle : cur.angle,
+    power: Number.isFinite(power) ? power : cur.power,
   };
 }
 
@@ -309,8 +313,12 @@ function wireDom() {
   $('btn-quit').addEventListener('click', quitToMenu);
   $('btn-throw').addEventListener('click', fireCurrent);
 
-  $('f-angle').addEventListener('change', applyAimFields);
-  $('f-power').addEventListener('change', applyAimFields);
+  // 'input' fires per keystroke/spinner click so the aim arrow tracks the
+  // fields live; 'change' still commits the clamped value on blur.
+  for (const id of ['f-angle', 'f-power']) {
+    $(id).addEventListener('input', applyAimFields);
+    $(id).addEventListener('change', applyAimFields);
+  }
   $('f-angle').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') $('f-power').focus();
   });

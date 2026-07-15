@@ -23,6 +23,7 @@ canvas {
   --dim: #8a93a8;
   --panel: rgba(3, 10, 34, 0.88);
   --mono: ui-monospace, Consolas, "Cascadia Mono", "Courier New", monospace;
+  color-scheme: dark;   /* native widgets (select popups, spinners) render dark */
 }
 
 /* faint CRT scanlines — pure flourish */
@@ -157,6 +158,13 @@ input[type="number"] { width: 5em; }
 select { width: 12.5em; }
 input:focus, select:focus {
   outline: 2px solid var(--yellow);
+}
+
+/* The dropdown popup is native UI: without explicit colors some browsers
+   paint it white while the options inherit light text — unreadable. */
+select option {
+  background-color: #0a1030;
+  color: var(--ink);
 }
 
 /* -------------------------------------------------------------- aim panel */
