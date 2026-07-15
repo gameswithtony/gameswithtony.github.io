@@ -1,0 +1,250 @@
+/* GORILLAS — page shell + DOM overlays. World rendering is all canvas;
+   these styles never affect what is visible in the world (SPEC §9.1, §14.1). */
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  position: fixed;
+  inset: 0;
+}
+
+:root {
+  --yellow: #ffe14d;
+  --ink: #e8ecf5;
+  --dim: #8a93a8;
+  --panel: rgba(3, 10, 34, 0.88);
+  --mono: ui-monospace, Consolas, "Cascadia Mono", "Courier New", monospace;
+}
+
+/* faint CRT scanlines — pure flourish */
+#scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    rgba(0, 0, 0, 0.14) 2px 3px
+  );
+  opacity: 0.5;
+  z-index: 5;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+.hidden { display: none !important; }
+
+/* ---------------------------------------------------------- full screens */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel {
+  pointer-events: auto;
+  background: var(--panel);
+  border: 3px double var(--yellow);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.35), 0 12px 60px rgba(0, 0, 0, 0.6);
+  padding: clamp(18px, 4vmin, 44px) clamp(24px, 6vmin, 64px);
+  text-align: center;
+  max-width: min(88vw, 560px);
+}
+
+h1 {
+  margin: 0 0 4px;
+  color: var(--yellow);
+  font-size: clamp(28px, 7vmin, 56px);
+  letter-spacing: 0.08em;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+h2 {
+  margin: 0 0 14px;
+  color: var(--yellow);
+  font-size: clamp(16px, 3.4vmin, 26px);
+  letter-spacing: 0.12em;
+}
+
+.tag {
+  margin: 0 0 22px;
+  color: var(--dim);
+  font-size: clamp(11px, 2vmin, 15px);
+  letter-spacing: 0.2em;
+}
+
+.hint {
+  margin: 18px 0 0;
+  color: var(--dim);
+  font-size: clamp(10px, 1.8vmin, 13px);
+}
+
+.btnrow {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+button {
+  pointer-events: auto;
+  font-family: var(--mono);
+  font-size: clamp(13px, 2.4vmin, 17px);
+  letter-spacing: 0.1em;
+  color: var(--yellow);
+  background: transparent;
+  border: 3px double var(--yellow);
+  padding: 10px 22px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+button:hover, button:focus-visible {
+  background: var(--yellow);
+  color: #0a1030;
+  outline: none;
+}
+
+/* ------------------------------------------------------------- setup form */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: clamp(12px, 2.2vmin, 15px);
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+
+input[type="text"], input[type="number"], select {
+  font-family: var(--mono);
+  font-size: clamp(13px, 2.2vmin, 16px);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 225, 77, 0.5);
+  padding: 6px 8px;
+  width: 12em;
+}
+input[type="number"] { width: 5em; }
+select { width: 12.5em; }
+input:focus, select:focus {
+  outline: 2px solid var(--yellow);
+}
+
+/* -------------------------------------------------------------- aim panel */
+
+#aim {
+  position: absolute;
+  top: max(58px, 9vh);
+  left: 14px;
+  pointer-events: auto;
+  background: var(--panel);
+  border: 2px solid rgba(255, 225, 77, 0.6);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: min(92vw, 560px);
+  font-size: clamp(11px, 2vmin, 14px);
+}
+#aim.side-right {
+  left: auto;
+  right: 14px;
+}
+#aim label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+#aim-name {
+  color: var(--yellow);
+  letter-spacing: 0.08em;
+  font-weight: bold;
+}
+#aim button {
+  padding: 6px 14px;
+  border-width: 2px;
+}
+#aim .hint {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+/* ----------------------------------------------------------------- banner */
+
+#banner {
+  position: absolute;
+  top: 26%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+}
+#banner-title {
+  color: var(--yellow);
+  font-size: clamp(24px, 6vmin, 52px);
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+#banner-sub {
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: clamp(12px, 2.6vmin, 18px);
+  letter-spacing: 0.15em;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+#banner-buttons {
+  margin-top: 20px;
+  pointer-events: auto;
+}
+
+/* ------------------------------------------------------------------- mute */
+
+#mute {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  font-size: clamp(18px, 3vmin, 26px);
+  padding: 6px;
+  filter: drop-shadow(2px 2px 1px rgba(0, 0, 0, 0.6));
+}
+#mute:hover { background: transparent; }
+
+@media (max-width: 640px) {
+  #aim { gap: 6px; padding: 6px 8px; }
+  #aim .hint { display: none; }
+}

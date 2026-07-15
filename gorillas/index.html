@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>GORILLAS</title>
+  <meta name="description" content="A browser tribute to QBasic GORILLA.BAS — wide destructible city, dynamic camera, hotseat or vs. AI.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍌</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="scanlines"></div>
+
+  <div id="ui">
+    <button id="mute" title="Sound (M)">🔊</button>
+
+    <section id="menu" class="screen">
+      <div class="panel">
+        <h1>G O R I L L A S</h1>
+        <p class="tag">QBasic · IBM 1991 · reborn</p>
+        <div class="btnrow">
+          <button id="btn-1p">1 PLAYER</button>
+          <button id="btn-2p">2 PLAYERS</button>
+        </div>
+        <p class="hint">exploding bananas · treacherous wind · a fresh skyline every round</p>
+      </div>
+    </section>
+
+    <section id="setup" class="screen hidden">
+      <div class="panel">
+        <h2 id="setup-title">SETUP</h2>
+        <div class="form">
+          <label class="row">PLAYER 1
+            <input id="f-p1" type="text" maxlength="10" value="Player 1">
+          </label>
+          <label class="row" id="row-p2">PLAYER 2
+            <input id="f-p2" type="text" maxlength="10" value="Player 2">
+          </label>
+          <label class="row hidden" id="row-diff">DIFFICULTY
+            <select id="f-diff">
+              <option value="easy">EASY</option>
+              <option value="medium" selected>MEDIUM</option>
+              <option value="hard">HARD</option>
+            </select>
+          </label>
+          <label class="row">PLAY TO
+            <select id="f-playto">
+              <option value="1">1 POINT</option>
+              <option value="3" selected>3 POINTS</option>
+              <option value="5">5 POINTS</option>
+              <option value="7">7 POINTS</option>
+            </select>
+          </label>
+          <label class="row">GRAVITY
+            <select id="f-gravity">
+              <option value="120">MOON</option>
+              <option value="400" selected>EARTH</option>
+              <option value="650">HEAVY</option>
+            </select>
+          </label>
+          <label class="row">WIND
+            <select id="f-wind">
+              <option value="none">NONE</option>
+              <option value="steady" selected>STEADY (per round)</option>
+              <option value="gusty">GUSTY (per throw)</option>
+            </select>
+          </label>
+        </div>
+        <div class="btnrow">
+          <button id="btn-back">BACK</button>
+          <button id="btn-start">START GAME</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="aim" class="hidden">
+      <span id="aim-name">Player 1 ▶</span>
+      <label>ANGLE <input id="f-angle" type="number" min="0" max="360" step="1" value="45"></label>
+      <label>POWER <input id="f-power" type="number" min="1" max="100" step="1" value="55"></label>
+      <button id="btn-throw">THROW</button>
+      <span class="hint">or drag back from your gorilla · arrows nudge · enter throws</span>
+    </div>
+
+    <div id="banner" class="hidden">
+      <div id="banner-title"></div>
+      <div id="banner-sub"></div>
+      <div id="banner-buttons" class="btnrow hidden">
+        <button id="btn-again">REMATCH</button>
+        <button id="btn-menu">MENU</button>
+      </div>
+    </div>
+
+    <section id="pause" class="screen hidden">
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <div class="btnrow">
+          <button id="btn-resume">RESUME</button>
+          <button id="btn-quit">QUIT TO MENU</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
