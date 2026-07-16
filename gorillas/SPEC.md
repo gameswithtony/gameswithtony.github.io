@@ -456,6 +456,11 @@ point. Without it a fast banana pins to the frame edge and the camera chases it 
   `rect.w` and `VIEW_ASPECT`; lerp the center linearly.
 - **Asymmetric rates.** Widening is snappy (`k_out ≈ 0.25`) so the banana never leads the frame off.
   Closing back in is lazy (`k_in ≈ 0.08`) so the descent settles gracefully.
+- **Impact hold.** If the flight widened the frame past the default, the rect freezes for
+  `CAM_HOLD_AFTER_HIT` (≈0.9 s, TUNABLE) at the moment the banana explodes, so the blast and the
+  fresh crater read before the camera moves. The close-in that follows uses `k_settle ≈ 0.05` —
+  lazier than the normal `k_in`. A wider target (e.g. the full-city pullback) overrides the hold;
+  a `snap` cancels it.
 - **Deadzone**: ignore target changes under ~10 u so the camera doesn't shimmer.
 - Scale all rates by frame delta so behavior is frame-rate independent.
 

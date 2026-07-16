@@ -204,6 +204,9 @@ function handleGameEvent(ev) {
       break;
     case 'explode':
       audio.play('building');
+      // If the flight pulled the camera out, linger on the blast before
+      // closing back in (§9.4).
+      camera.holdWide();
       break;
     case 'gorillaHit':
       audio.play('gorilla');

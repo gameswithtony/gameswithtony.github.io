@@ -36,6 +36,8 @@ const S = {
   aiMem: null,
   aiPlanned: false,
   aiFireAt: 0,
+  postBlastAim: false, // the turn now starting follows an explosion — pace the AI
+
   sun: { x: 0, y: 55, shocked: false },
   roundWinner: -1,
   matchWinner: -1,
@@ -173,6 +175,7 @@ function startRound() {
   flight = null;
   S.aiMem = ai.createAiState();     // new geometry — corrections start over
   S.roundWinner = -1;
+  S.postBlastAim = false;   // new world, camera snaps — no pacing carryover
   S.turn = S.nextThrower;
   rollWind();
   S.mode = 'ROUND_INTRO';
@@ -185,7 +188,14 @@ function enterAim() {
   S.mode = 'AIM';
   S.sun.shocked = false;
   S.aiPlanned = false;
-  S.aiFireAt = S.time + 0.9 + S.rng.range(0, 0.9);
+  // After a blast the camera lingers wide then eases back in (§9.4, ~2 s
+  // from impact). Give the AI a matching beat so the player reorients before
+  // the next banana flies. Time-based on purpose — the simulation may not
+  // read the camera (Invariant 2). One rng draw either way (determinism).
+  S.aiFireAt = S.time + (S.postBlastAim
+    ? 2.1 + S.rng.range(0, 0.7)
+    : 0.9 + S.rng.range(0, 0.9));
+  S.postBlastAim = false;
   S.resumedNote = false;
   emit('checkpoint');   // the start of a turn is the unit of persistence
 }
@@ -308,6 +318,7 @@ function resolveImpact(outcome) {
   S.mode = 'RESOLVE';
   S.timer = S.time + 0.75;
   S.resolveAction = 'advance';
+  S.postBlastAim = true;
 }
 
 function advanceTurn() {
@@ -427,6 +438,7 @@ export function restore(snap) {
   S.wind = snap.wind;
   S.aim = snap.aim;
   S.resumedNote = true;
+  S.postBlastAim = false;
   S.mode = 'ROUND_INTRO';
   S.timer = S.time + 1.2;
   emit('roundStart', { round: S.round });

@@ -35,6 +35,8 @@ export const CAM_PAD = 80;
 export const CAM_LOOKAHEAD = 0.25;    // seconds of velocity lead
 export const CAM_K_OUT = 0.25;        // widening rate (per 60fps frame; rate-scaled by dt)
 export const CAM_K_IN = 0.08;         // closing rate — lazy on purpose
+export const CAM_K_SETTLE = 0.05;     // closing rate after an impact hold — lazier still
+export const CAM_HOLD_AFTER_HIT = 0.9; // s the wide shot lingers on a hit before closing in
 export const CAM_DEADZONE = 10;       // world units
 
 // --- LOD thresholds (§13.2), in multiples of ARENA_W ---

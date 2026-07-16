@@ -7,7 +7,7 @@
 
 import {
   ARENA_W, WORLD_W, GROUND_Y, VIEW_ASPECT,
-  CAM_PAD, CAM_K_OUT, CAM_K_IN, CAM_DEADZONE,
+  CAM_PAD, CAM_K_OUT, CAM_K_IN, CAM_K_SETTLE, CAM_HOLD_AFTER_HIT, CAM_DEADZONE,
 } from './config.js';
 
 const st = {
@@ -21,6 +21,19 @@ const st = {
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+
+let holdT = 0;        // seconds left of post-impact hold (holdWide)
+let settling = false; // closing back in from an impact hold — use CAM_K_SETTLE
+
+// Impact hold (§9.4): freeze the frame briefly after a banana hit so the
+// explosion and fresh damage read before the camera closes back in — but
+// only if the flight actually pulled the camera out.
+export function holdWide() {
+  if (st.rect.w > ARENA_W * 1.1) {
+    holdT = CAM_HOLD_AFTER_HIT;
+    settling = true;
+  }
+}
 
 export function setViewport(cssW, cssH, dpr) {
   st.cssW = Math.max(1, cssW);
@@ -89,11 +102,21 @@ export function snap(target) {
   const tr = resolveTarget(target);
   st.rect.x = tr.x; st.rect.y = tr.y; st.rect.w = tr.w; st.rect.h = tr.h;
   st.scale = st.letterbox.w / st.rect.w;
+  holdT = 0;
+  settling = false;
 }
 
 export function update(dt, target) {
   const tr = resolveTarget(target);
   const cur = st.rect;
+  if (holdT > 0) {
+    if (tr.w > cur.w + 0.5) {
+      holdT = 0;     // a wider target (e.g. full-city pullback) overrides the hold
+    } else {
+      holdT -= dt;   // rect frozen — scale can't have changed, nothing to update
+      return;
+    }
+  }
   const curCx = cur.x + cur.w / 2;
   const curCy = cur.y + cur.h / 2;
   const tCx = tr.x + tr.w / 2;
@@ -105,8 +128,15 @@ export function update(dt, target) {
                  Math.abs(tCy - curCy) > CAM_DEADZONE;
   if (moving) {
     // Widening is snappy so the banana never leads the frame off; closing back
-    // in is lazy. Width lerps in log space — framing scale is multiplicative.
-    const k = tr.w > cur.w + 0.5 ? CAM_K_OUT : CAM_K_IN;
+    // in is lazy — lazier still when settling down from an impact hold. Width
+    // lerps in log space — framing scale is multiplicative.
+    let k;
+    if (tr.w > cur.w + 0.5) {
+      k = CAM_K_OUT;
+      settling = false;
+    } else {
+      k = settling ? CAM_K_SETTLE : CAM_K_IN;
+    }
     const f = 1 - Math.pow(1 - k, dt * 60);
     const nw = Math.exp(lerp(Math.log(cur.w), Math.log(tr.w), f));
     const ncx = lerp(curCx, tCx, f);
@@ -116,6 +146,8 @@ export function update(dt, target) {
     cur.x = ncx - cur.w / 2;
     cur.y = ncy - cur.h / 2;
     clampRect(cur);
+  } else {
+    settling = false;   // back at the target — settle phase over
   }
   st.scale = st.letterbox.w / st.rect.w;
 }

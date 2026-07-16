@@ -443,40 +443,77 @@ function drawHud(state, ui, alpha, dt, view) {
   ctx.fillText(`${p1.score}  ${p1.name}`, lb.x + lb.w - pad, cy);
   ctx.textAlign = 'center';
 
-  // Bottom line: round info (or AI status), wind arrow beneath it (§12 —
-  // screen space so it doesn't shrink when the camera widens).
+  // Bottom-center panel: round info (or AI status) with the wind gauge
+  // beneath it (§12 — screen space so it doesn't shrink when the camera
+  // widens). Both lines share one translucent backdrop — they float over
+  // buildings of any hue (gray/maroon/teal, lit windows), so they need
+  // their own ground to stay readable. Sky-family navy keeps it in scene.
   const wcx = lb.x + lb.w / 2;
   const wy = lb.y + lb.h - fs * 0.9;
-  ctx.font = `${fs * 0.62}px Consolas, 'Courier New', monospace`;
-  ctx.fillStyle = '#8a93a8';
+  const subY = wy - fs * 1.1;
   let sub = `ROUND ${state.round} · FIRST TO ${state.settings.playTo}`;
   if (state.mode === 'AIM' && state.players[state.turn].isAI) {
     sub = `${state.players[state.turn].name.toUpperCase()} IS AIMING…`;
   }
-  ctx.fillText(sub, wcx, wy - fs * 1.1);
+  const subFont = `${fs * 0.62}px Consolas, 'Courier New', monospace`;
+  const windFont = `${fs * 0.6}px Consolas, 'Courier New', monospace`;
+  ctx.font = subFont;
+  const subW = ctx.measureText(sub).width;
 
-  ctx.font = `${fs * 0.6}px Consolas, 'Courier New', monospace`;
-  if (Math.abs(state.wind) < 1) {
-    ctx.fillStyle = '#8a93a8';
-    ctx.fillText('WIND · CALM', wcx, wy);
+  const calm = Math.abs(state.wind) < 1;
+  const wdir = Math.sign(state.wind);
+  const wlen = calm ? 0 : Math.abs(state.wind / C.WIND_MAX) * lb.w * 0.13;
+  ctx.font = windFont;
+  const label = calm ? 'WIND · CALM' : 'WIND';
+  const labelW = ctx.measureText(label).width;
+  const gap = fs * 0.5;
+  const tipLen = 7;
+  const groupW = calm ? labelW : labelW + gap + wlen * 2 + tipLen;
+
+  const padX = fs * 0.7;
+  const panelW = Math.max(subW, groupW) + padX * 2;
+  const panelT = subY - fs * 0.55;
+  const panelB = wy + fs * 0.55;
+  ctx.save();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(5, 13, 36, 0.72)';
+  ctx.strokeStyle = 'rgba(154, 173, 214, 0.22)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(wcx - panelW / 2, panelT, panelW, panelB - panelT, fs * 0.5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.font = subFont;
+  ctx.fillStyle = '#8a93a8';
+  ctx.fillText(sub, wcx, subY);
+
+  ctx.font = windFont;
+  ctx.fillStyle = '#8a93a8';
+  if (calm) {
+    ctx.fillText(label, wcx, wy);
   } else {
-    const len = (state.wind / C.WIND_MAX) * lb.w * 0.13;
-    ctx.fillStyle = '#8a93a8';
-    ctx.textAlign = Math.sign(state.wind) > 0 ? 'right' : 'left';
-    ctx.fillText('WIND ', wcx - Math.sign(state.wind) * (Math.abs(len) + fs * 0.9), wy);
+    // Label on the tail side, arrow pointing with the wind; the whole
+    // group is laid out from its left edge so it centers as one unit.
+    const gx = wcx - groupW / 2;
+    const lineL = wdir > 0 ? gx + labelW + gap : gx + tipLen;
+    const lineR = lineL + wlen * 2;
+    ctx.textAlign = 'left';
+    ctx.fillText(label, wdir > 0 ? gx : lineR + gap, wy);
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#ff6a4d';
     ctx.fillStyle = '#ff6a4d';
     ctx.lineWidth = Math.max(1.5, fs * 0.12);
     ctx.beginPath();
-    ctx.moveTo(wcx - len, wy);
-    ctx.lineTo(wcx + len, wy);
+    ctx.moveTo(lineL, wy);
+    ctx.lineTo(lineR, wy);
     ctx.stroke();
-    const dir = Math.sign(state.wind);
+    const hx = wdir > 0 ? lineR : lineL;
     ctx.beginPath();
-    ctx.moveTo(wcx + len + dir * 7, wy);
-    ctx.lineTo(wcx + len - dir * 4, wy - 5);
-    ctx.lineTo(wcx + len - dir * 4, wy + 5);
+    ctx.moveTo(hx + wdir * tipLen, wy);
+    ctx.lineTo(hx - wdir * 4, wy - 5);
+    ctx.lineTo(hx - wdir * 4, wy + 5);
     ctx.closePath();
     ctx.fill();
   }
