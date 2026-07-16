@@ -147,7 +147,9 @@ button:hover, button:focus-visible {
 
 input[type="text"], input[type="number"], select {
   font-family: var(--mono);
-  font-size: clamp(13px, 2.2vmin, 16px);
+  /* never below 16px: smaller text makes iOS Safari auto-zoom on focus,
+     which is how the viewport ends up stuck mis-scaled mid-game */
+  font-size: clamp(16px, 2.4vmin, 18px);
   color: var(--ink);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 225, 77, 0.5);
@@ -240,17 +242,17 @@ select option {
 
 /* ------------------------------------------------------------------- mute */
 
-#mute {
+#mute, #pause-btn {
   position: absolute;
-  top: 10px;
-  right: 12px;
   border: none;
   background: transparent;
   font-size: clamp(18px, 3vmin, 26px);
   padding: 6px;
   filter: drop-shadow(2px 2px 1px rgba(0, 0, 0, 0.6));
 }
-#mute:hover { background: transparent; }
+#mute { top: 10px; right: 12px; }
+#pause-btn { bottom: 10px; left: 12px; }
+#mute:hover, #pause-btn:hover { background: transparent; }
 
 @media (max-width: 640px) {
   #aim { gap: 6px; padding: 6px 8px; }

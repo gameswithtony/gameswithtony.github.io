@@ -16,6 +16,9 @@ export function createRng(seed) {
     int: (lo, hi) => lo + Math.floor(next() * (hi - lo + 1)),   // inclusive
     pick: (arr) => arr[Math.floor(next() * arr.length)],
     chance: (p) => next() < p,
+    // For save/resume: mulberry32's entire state is one uint32.
+    getState: () => a >>> 0,
+    setState: (v) => { a = v >>> 0; },
   };
 }
 

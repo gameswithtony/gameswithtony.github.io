@@ -26,6 +26,9 @@ const S = {
   wind: 0,
   windAtThrow: 0,
   round: 0,
+  citySeed: 0,
+  carves: [],          // this round's carve history, for save/resume replay
+  resumedNote: false,
   turn: 0,
   nextThrower: 0,
   aim: [{ angle: 45, power: 55 }, { angle: 45, power: 55 }],
@@ -150,6 +153,8 @@ function startRound() {
   const citySeed = Math.floor(S.rng.next() * 0xffffffff) >>> 0;
   const { gorillaSpawns } = terrain.generate(citySeed);
   emit('cityChange', { seed: citySeed });
+  S.citySeed = citySeed;
+  S.carves = [];
 
   S.players.forEach((p, i) => {
     p.alive = true;
@@ -173,6 +178,7 @@ function startRound() {
   S.mode = 'ROUND_INTRO';
   S.timer = S.time + 1.4;
   emit('roundStart', { round: S.round });
+  emit('checkpoint');
 }
 
 function enterAim() {
@@ -180,6 +186,8 @@ function enterAim() {
   S.sun.shocked = false;
   S.aiPlanned = false;
   S.aiFireAt = S.time + 0.9 + S.rng.range(0, 0.9);
+  S.resumedNote = false;
+  emit('checkpoint');   // the start of a turn is the unit of persistence
 }
 
 export function setAim(idx, angle, power) {
@@ -255,6 +263,7 @@ function endFlight(outcome) {
 function explodeAt(x, y) {
   const color = terrain.buildingColorAt(x, y);
   terrain.carve(x, y, C.EXPLOSION_R);
+  S.carves.push({ x, y, r: C.EXPLOSION_R });
   emit('explode', { x, y, color });
 }
 
@@ -343,6 +352,85 @@ function stepFlight() {
     resolveImpact(flight.outcome);
     flight = null;
   }
+}
+
+// ------------------------------------------------------------ save/resume --
+// Snapshots capture the START of a turn — never a banana in flight. main.js
+// owns the localStorage side (§15); this module only builds and applies them.
+// The city is stored as its seed plus this round's carve history; replaying
+// the carves onto the regenerated skyline restores mask and art exactly.
+
+export function getSnapshot() {
+  if (!S.settings || S.players.length < 2 || S.matchWinner >= 0) return null;
+  return {
+    v: 1,
+    settings: S.settings,
+    seed: S.seed,
+    rngState: S.rng.getState(),
+    round: S.round,
+    citySeed: S.citySeed,
+    carves: S.carves.slice(),
+    scores: S.players.map((p) => p.score),
+    turn: S.turn,
+    nextThrower: S.nextThrower,
+    wind: S.wind,
+    aim: S.aim.map((a) => ({ ...a })),
+    aiMem: S.aiMem,
+  };
+}
+
+export function restore(snap) {
+  if (!snap || snap.v !== 1 || !snap.settings ||
+      !Array.isArray(snap.settings.names) || !Array.isArray(snap.scores) ||
+      !Array.isArray(snap.carves) || typeof snap.citySeed !== 'number') {
+    return false;
+  }
+  S.settings = snap.settings;
+  S.seed = snap.seed;
+  S.rng = createRng(1);
+  S.rng.setState(snap.rngState);
+
+  S.round = snap.round;
+  S.citySeed = snap.citySeed;
+  // Placement raycasts run inside generate, before the carves — same order
+  // as the original round, so positions come back identical.
+  const { gorillaSpawns } = terrain.generate(snap.citySeed);
+  emit('cityChange', { seed: snap.citySeed });
+  S.carves = [];
+  for (const c of snap.carves) {
+    terrain.carve(c.x, c.y, c.r);
+    S.carves.push(c);
+  }
+
+  S.players = snap.settings.names.map((name, i) => ({
+    name,
+    isAI: snap.settings.ai && i === 1,
+    score: snap.scores[i],
+    alive: true,
+    x: gorillaSpawns[i].x,
+    feetY: gorillaSpawns[i].feetY,
+    facing: i === 0 ? 1 : -1,
+    throwPoseUntil: 0,
+  }));
+  S.sun = {
+    x: (S.players[0].x + S.players[1].x) / 2,
+    y: 55,
+    shocked: false,
+  };
+  S.banana = null;
+  flight = null;
+  S.aiMem = snap.aiMem || ai.createAiState();
+  S.roundWinner = -1;
+  S.matchWinner = -1;
+  S.turn = snap.turn;
+  S.nextThrower = snap.nextThrower;
+  S.wind = snap.wind;
+  S.aim = snap.aim;
+  S.resumedNote = true;
+  S.mode = 'ROUND_INTRO';
+  S.timer = S.time + 1.2;
+  emit('roundStart', { round: S.round });
+  return true;
 }
 
 // Advances exactly one fixed DT (Invariant 4). main.js owns the accumulator.

@@ -89,6 +89,7 @@ function quitToMenu() {
   hideBanner();
   $('aim').classList.add('hidden');
   audio.music(true);
+  saveStored({ match: null });   // abandoning is the "start a new game" path
   game.toMenu();
 }
 
@@ -154,6 +155,7 @@ function syncUiToMode() {
 
   const humanAiming = st.mode === 'AIM' && st.players.length === 2 && !st.players[st.turn].isAI;
   $('aim').classList.toggle('hidden', !humanAiming);
+  $('pause-btn').classList.toggle('hidden', st.mode === 'MENU');
   if (humanAiming) {
     $('aim').classList.toggle('side-right', st.turn === 1);
     $('aim-name').textContent = `${st.players[st.turn].name} ▶`;
@@ -161,9 +163,13 @@ function syncUiToMode() {
   }
 
   switch (st.mode) {
-    case 'ROUND_INTRO':
-      showBanner(`ROUND ${st.round}`, st.round === 1 ? 'go bananas' : 'fresh city · old grudge');
+    case 'ROUND_INTRO': {
+      const sub = st.resumedNote
+        ? 'match resumed'
+        : (st.round === 1 ? 'go bananas' : 'fresh city · old grudge');
+      showBanner(`ROUND ${st.round}`, sub);
       break;
+    }
     case 'AIM':
     case 'FLIGHT':
     case 'RESOLVE':
@@ -189,6 +195,10 @@ function handleGameEvent(ev) {
         });
       }
       break;
+    case 'checkpoint':
+      // Turn-start snapshot — a refresh resumes here, never mid-flight.
+      saveStored({ match: game.getSnapshot() });
+      break;
     case 'throw':
       audio.play('throw');
       break;
@@ -211,7 +221,7 @@ function handleGameEvent(ev) {
       const w = st.players[ev.winner];
       const wins = Array.isArray(stored.wins) ? stored.wins : [0, 0];
       wins[ev.winner]++;
-      saveStored({ wins });
+      saveStored({ wins, match: null });   // finished matches don't resume
       showBanner(
         `${w.name.toUpperCase()} WINS THE MATCH!`,
         `${st.players[0].score} — ${st.players[1].score} · the city lies in ruins`,
@@ -267,6 +277,15 @@ let acc = 0;
 function frame(now) {
   const dtReal = Math.min((now - last) / 1000, 0.25);
   last = now;
+
+  // Self-heal the backing store every frame: Safari pinch-zoom and address-bar
+  // dances can leave ResizeObserver unfired or fired with transient sizes,
+  // stranding the canvas mis-scaled. Cheap check, bulletproof result.
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.max(1, Math.round(canvas.clientWidth * dpr)) ||
+      canvas.height !== Math.max(1, Math.round(canvas.clientHeight * dpr))) {
+    resize();
+  }
 
   if (!paused) {
     acc += dtReal;
@@ -336,18 +355,20 @@ function wireDom() {
   audio.setMuted(!!stored.muted);
   applyMute();
 
+  const togglePause = () => {
+    if (game.getState().mode === 'MENU') return;
+    paused = !paused;
+    showScreen(paused ? 'pause' : null);
+  };
+  $('pause-btn').addEventListener('click', togglePause);
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'm' || e.key === 'M') {
       const tag = e.target && e.target.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
       muteBtn.click();
     }
-    if (e.key === 'Escape') {
-      const mode = game.getState().mode;
-      if (mode === 'MENU') return;
-      paused = !paused;
-      showScreen(paused ? 'pause' : null);
-    }
+    if (e.key === 'Escape') togglePause();
   });
 
   // Audio can only start after a user gesture; unlock once, on the first.
@@ -402,11 +423,24 @@ function wireInput() {
 render.init(canvas);
 resize();
 new ResizeObserver(resize).observe(canvas);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+window.addEventListener('orientationchange', resize);
 wireDom();
 wireInput();
-game.toMenu();
-for (const ev of game.drainEvents()) handleGameEvent(ev);
-showScreen('menu');
-audio.music(true);   // starts once audio is unlocked by the first gesture
+
+// A refresh resumes the saved match at the start of the interrupted turn;
+// quitting to the menu (Esc) is how you abandon it and start a new game.
+let resumed = false;
+if (stored.match) {
+  try { resumed = game.restore(stored.match); } catch { resumed = false; }
+}
+if (resumed) {
+  showScreen(null);
+} else {
+  game.toMenu();
+  showScreen('menu');
+  audio.music(true);   // starts once audio is unlocked by the first gesture
+}
 camera.snap({ mode: 'default', centerX: C.WORLD_W / 2 });
+for (const ev of game.drainEvents()) handleGameEvent(ev);   // roundStart re-snaps on resume
 requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
