@@ -70,11 +70,11 @@ function startMusicNow() {
   if (musicSource || !actx || !buffers.intro || muted) return;
   try {
     const src = actx.createBufferSource();
-    src.buffer = buffers.intro;
-    src.loop = true;
+    src.buffer = buffers.intro;   // plays once — no loop
     const gain = actx.createGain();
     gain.gain.value = 0.4;
     src.connect(gain).connect(actx.destination);
+    src.onended = () => { if (musicSource === src) musicSource = null; };
     src.start();
     musicSource = src;
   } catch {

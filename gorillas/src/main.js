@@ -41,7 +41,7 @@ const ui = { drag: null };
 function readSetupForm() {
   const p1 = ($('f-p1').value || 'Player 1').slice(0, 10);
   const p2 = pendingAi
-    ? 'The Machine'
+    ? 'Kong'
     : ($('f-p2').value || 'Player 2').slice(0, 10);
   return {
     names: [p1, p2],
@@ -63,7 +63,7 @@ function openSetup(aiMode) {
   pendingAi = aiMode;
   $('row-p2').classList.toggle('hidden', aiMode);
   $('row-diff').classList.toggle('hidden', !aiMode);
-  $('setup-title').textContent = aiMode ? '1 PLAYER · VS THE MACHINE' : '2 PLAYERS · HOTSEAT';
+  $('setup-title').textContent = aiMode ? '1 PLAYER · VS KONG' : '2 PLAYERS · HOTSEAT';
   showScreen('setup');
 }
 
