@@ -7,7 +7,7 @@
 // flight code path the real banana uses (Invariant 5) — this module never
 // approximates physics itself.
 
-import { MAX_SPEED } from './config.js';
+import { MAX_SPEED, GORILLA_W } from './config.js';
 
 const PARAMS = {
   easy:   { openA: 12,  openP: 12,  gain: 0.38, overQ: 0.45, overM: 1.8,  jitA: 3.0, jitP: 3.5 },
@@ -28,7 +28,30 @@ export function createAiState() {
     solved: null,     // { angle, power, wind, time } — a shot that connected
     solvedMisses: 0,
     shotsFired: 0,
+    futileCount: 0,   // consecutive throws with no forward progress — arms tunneling
   };
+}
+
+// Last-resort tunneling (§11.3): pinned against a tall neighbor with the wind
+// hard against us, every steep lob just blows back behind us — the correction
+// loop can't walk that in. Instead, bite into the blocking wall at the lowest
+// angle that connects; a few carves open a flatter corridor toward the target.
+// Only reached after consecutive futile throws — normal play never tunnels
+// (a mid-map blocker has its own lob/hammer logic in computeShot).
+function tunnelShot(env) {
+  const { rng, dir } = env;
+  const R = Math.abs(env.targetX - env.meX);
+  for (let a = 30; a <= 62; a += 4) {         // lowest workable angle wins
+    const angle = clamp(a + rng.range(-2, 2), 20, 85);
+    const power = clamp(52 + rng.range(0, 12), 12, 100);
+    const o = env.simulate(angle, power).outcome;
+    if (o.type === 'gorilla') continue;       // digging, not sniping (§11.2)
+    const progress = (o.x - env.meX) * dir;
+    if (o.type === 'terrain' && progress > GORILLA_W && progress < R * 0.55) {
+      return { angle, power };
+    }
+  }
+  return null;   // no wall bites — the corridor is open (or this isn't a wall problem)
 }
 
 // Coarse ballistic solve: R = v² sin(2θ) / g, two wind-drift refinements.
@@ -59,6 +82,18 @@ export function computeShot(env) {
   const R = Math.abs(env.targetX - env.meX);
   let angle;
   let power;
+
+  // Worst-case escape hatch: nothing we throw lands ahead of us. Dig.
+  // Returned directly — the verification loop below would reject a
+  // deliberate wall shot as stillborn and steepen it right back into the
+  // futile lob. (`|| 0`: resumed matches may carry a mem without the field.)
+  if ((mem.futileCount || 0) >= 2) {
+    const dig = tunnelShot(env);
+    if (dig) return dig;
+    // Corridor open — restart clean rather than correct off a wall shot.
+    mem.futileCount = 0;
+    mem.lastShot = null;
+  }
 
   if (mem.solved) {
     // Reuse the converged solution, compensating for any wind change since.
@@ -132,9 +167,14 @@ export function observe(mem, rep) {
   if (o.type === 'gorilla' && o.player === rep.targetIdx) {
     mem.solved = { angle: rep.angle, power: rep.power, wind: rep.wind, time: rep.time };
     mem.solvedMisses = 0;
+    mem.futileCount = 0;
     mem.lastShot = null;
     return;
   }
+
+  // No meaningful forward progress — blown back behind us or dead at our
+  // feet. Consecutive futile throws arm last-resort tunneling (§11.3).
+  mem.futileCount = progress < R * 0.12 ? (mem.futileCount || 0) + 1 : 0;
 
   if (mem.solved) {
     // The stored solution missed under new conditions; tolerate one fluke.

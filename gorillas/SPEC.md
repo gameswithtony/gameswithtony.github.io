@@ -567,6 +567,18 @@ player could not see.
 Note the AI gets the §7.1 scenario for free: as the building between the gorillas gets perforated, its
 forward simulation starts finding shots through the tunnel. No tunnel-aware code required.
 
+### 11.3 Last-resort tunneling
+
+One situation defeats the correction loop entirely: pinned beside a tall neighbor, forced steep, with
+a strong headwind — every lob blows back and lands behind the shooter, and the signed-miss correction
+has nothing to walk in. After **two consecutive throws with no forward progress** (impact short of
+12% of the range), the AI deliberately digs: it sweeps its forward simulation from low angles upward
+and throws the lowest shot that bites into the blocking wall (terrain impact between one gorilla-width
+and 55% of the range). Repeated bites carve a corridor; the moment a swept shot no longer connects
+with the wall, correction memory resets and normal play resumes with a fresh opening solve. Tunneling
+must never trigger while shots are making progress — a mid-map blocker is handled by the ordinary
+lob-or-hammer response, not this.
+
 ---
 
 ## 12. Wind
