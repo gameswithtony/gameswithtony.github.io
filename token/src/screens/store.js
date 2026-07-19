@@ -1,27 +1,25 @@
 // store.js — QUARTER STORE (months 3/6/9, before the major hits).
 //
-// NOTE (flagged in the WP5 report): the pure engine exposes NO decision surface
-// for mid-run hire/fire/model-switch — pendingDecisions only emits plan/event
-// kinds, and the UI is forbidden from mutating hidden state outside
-// applyDecision/beginMonth (that is what keeps auto-save and the drift test
-// honest). So in this build the quarter store is a review-and-continue
-// interstitial: it shows the roster, the model, and the burn against the
-// contract, then lets you carry on. Wiring hire/fire/switch requires an engine
-// `kind:'store'` decision surface (a future WP), at which point this screen drops
-// in as the menu over those decisions with zero structural change here.
+// The engine exposes a kind:'store' decision surface (hire an empty desk /
+// switch model / carry on), so this screen is the menu over those decisions. It
+// renders ONLY the visible resume data the engine puts on each option row (name,
+// salary, trait, claimed resume) — never a candidate's true Understanding — and
+// dispatches each choice through applyDecision like every other screen. It is one
+// action per quarter: any pick (a hire, a model switch, or "Carry on") opens the
+// month. Skippable in one tap (Enter = Carry on).
 
 import { config } from '../../config.js';
 
 const TIER_LABEL = { budget: 'Budget', standard: 'Standard', frontier: 'Frontier' };
 
 export function render(c) {
-  const { vs, h } = c;
-  let burn = 0;
+  const { vs, h, decisions } = c;
+  const store = decisions.find((d) => d.kind === 'store');
+
   const roster = [];
   for (const role of ['junior', 'qa', 'senior']) {
     const m = vs.team[role];
     if (m) {
-      burn += 0; // salaries are hidden in the projection; show mood + name
       roster.push(`<div class="card"><span class="hi">${h.esc(m.name)}</span>
         <span class="det">${h.esc(role)} · ${h.esc(m.trait)}</span> <span>${m.mood}</span></div>`);
     } else {
@@ -30,6 +28,19 @@ export function render(c) {
   }
 
   const quarter = vs.month === 3 ? 'first' : vs.month === 6 ? 'second' : 'third';
+
+  // Purchasable options (hires + model switches) as numbered rows; "Carry on"
+  // (the engine's skip) is the primary Enter action.
+  const buys = store ? store.options.filter((o) => o.id !== 'skip') : [];
+  let key = 1;
+  const buyRows = buys.map((o) => h.row({
+    key: key++, label: h.esc(o.label), detail: o.detail,
+    attrs: `data-action="dispatch" data-decision="store" data-option="${o.id}"`
+  })).join('');
+  const carryOn = h.row({
+    key: 'enter', label: '▶ Carry on',
+    attrs: 'data-action="dispatch" data-decision="store" data-option="skip"'
+  });
 
   return `
     <div class="screen scroll">
@@ -44,8 +55,12 @@ export function render(c) {
       <div class="card"><span class="hi">${TIER_LABEL[vs.model] || vs.model}</span>
         <span class="det">$${config.tokenCosts[vs.model]}/task</span></div>
 
+      <div class="hi caps" style="margin-top:6px">For sale</div>
+      <div class="small dim">Resumes run optimistic — the truth shows only under a check.</div>
+      <div class="menu">${buyRows || '<div class="row empty"><span class="lab dim">Nothing on the shelf — a full crew.</span></div>'}</div>
+
       <div class="card"><span class="dim">Contract: ${h.money(config.contractMonthly)}/mo. A landmark waits at month's end.</span></div>
 
-      <div class="menu">${h.row({ key: 'enter', label: '▶ Carry on', attrs: 'data-action="store-continue"' })}</div>
+      <div class="menu">${carryOn}</div>
     </div>`;
 }

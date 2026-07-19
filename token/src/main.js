@@ -221,6 +221,7 @@ function resumeRun() {
   app.rng = rngFromState(app.gs.seed, app.gs.rngState);
   if (app.gs.ending) { enterGameOver(); return; }
   if (app.gs.phase === 'event') { openEvent(); return; }
+  if (app.gs.phase === 'store') { app.view = 'store'; return render(); }
   app.view = 'hub';
   render();
 }
@@ -256,6 +257,8 @@ function proceed(prevMonth, wasEvent) {
   if (app.gs.phase === 'event') { openEvent(); return; }
   if (app.gs.ending) { app.booksMonth = prevMonth; app.afterBooks = 'gameover'; return openBooks(); }
   if (app.gs.month > prevMonth) { app.booksMonth = prevMonth; app.afterBooks = 'month'; return openBooks(); }
+  // quarter store still open (a hire/model-switch keeps it up; skip dismisses it)
+  if (app.gs.phase === 'store') { app.view = 'store'; return render(); }
   // still mid-plan: stay on the working sub-screen while it has work, else hub
   const dec = pendingDecisions(app.gs);
   if (app.view === 'assign' && dec.some((d) => d.kind === 'route')) return render();

@@ -14,7 +14,9 @@ import { runCheck } from './checks.js';
 import { applyEffects } from './effects.js';
 import { drawEvent } from './events-engine.js';
 import { resolveManualHunt, resolveAiHunt } from './hunt.js';
+import { createRng } from './rng.js';
 import { generateTasks } from '../data/tasks.js';
+import { generateCandidates } from '../data/candidates.js';
 import { events } from '../data/events.js';
 import { majors } from '../data/majors.js';
 import { incidents } from '../data/incidents.js';
@@ -76,6 +78,92 @@ export function beginMonth(state, rng) {
 }
 
 // ---------------------------------------------------------------------------
+// Quarter store (months 3/6/9, BEFORE the plan) — PLAN.md §1: "the quarter store
+// sells only hires and model switches." One skippable decision surface.
+// ---------------------------------------------------------------------------
+
+/** True at the quarter-end months that open a store (3, 6, 9 — NOT 12, which is
+ *  the fixed Renewal Review with no store). */
+export function isQuarterStore(month) {
+  return config.majorMonths.includes(month) && month !== config.months;
+}
+
+// Candidate offers are drawn from a DERIVED, independent RNG (seed ^ month), so
+// they NEVER advance the game's main rng cursor. Consequence: a run that SKIPS
+// the store is byte-identical to a run with no store surface at all — which is
+// exactly what keeps the WP4-locked balance intact for the skip-first policies.
+// Offers persist in state as plain data (candidates carry hidden `und`, same as
+// hired members already do; the projection/UI never expose it).
+function generateStoreOffers(state) {
+  const rng = createRng((state.seed ^ (state.month * 0x9e3779b1)) >>> 0);
+  const pool = generateCandidates(rng);
+  const offers = { junior: null, qa: null, senior: null };
+  for (const role of ROLES) {
+    if (!state.team[role]) offers[role] = pool[role]; // two candidates for each UNFILLED role
+  }
+  return offers;
+}
+
+/** Enter a month. At a quarter-store month, open the store first (defer the plan
+ *  until it is dismissed); otherwise go straight to the Plan step. */
+export function startMonth(state, rng) {
+  if (isQuarterStore(state.month)) {
+    const s = clone(state);
+    s.phase = 'store';
+    s.storeOffers = generateStoreOffers(s);
+    s.storeDone = false;
+    return s;
+  }
+  return beginMonth(state, rng);
+}
+
+// Dismiss the store and open the Plan step (task-gen draws from the main rng at
+// exactly the cursor position beginMonth would have used with no store — see
+// generateStoreOffers).
+function enterPlan(state, rng) {
+  const s = clone(state);
+  delete s.storeOffers;
+  delete s.storeDone;
+  return beginMonth(s, rng);
+}
+
+// Build the single kind:'store' decision. `skip` MUST be first (deterministic
+// policies and the runner fall back to first-enabled on this unknown kind, so
+// skip-first preserves their locked behavior). Option labels/details carry ONLY
+// visible resume data — never the candidate's true Understanding.
+function buildStoreDecision(state) {
+  const opts = [{ id: 'skip', label: 'Carry on — open the month', disabled: false, detail: '' }];
+  for (const role of ROLES) {
+    const cands = state.storeOffers && state.storeOffers[role];
+    if (cands) {
+      cands.forEach((c, i) => {
+        opts.push({
+          id: `hire-${role}-${i}`,
+          label: `Hire ${c.name} — ${role}`,
+          disabled: false,
+          detail: `$${c.salary}/mo · ${c.trait} · resume ${c.claimed}`
+        });
+      });
+    }
+  }
+  for (const tier of Object.keys(config.tokenCosts)) {
+    if (tier !== state.model) {
+      opts.push({
+        id: `model-${tier}`,
+        label: `Switch to ${tier} model`,
+        disabled: false,
+        detail: `$${config.tokenCosts[tier]}/task`
+      });
+    }
+  }
+  return {
+    id: 'store', kind: 'store',
+    prompt: `The general store — hire for an empty desk or switch models (month ${state.month})`,
+    options: opts
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Decision surface
 // ---------------------------------------------------------------------------
 
@@ -102,6 +190,10 @@ function routeOptions(state, isBacklog) {
 
 /** Every currently-askable decision as plain data. */
 export function pendingDecisions(state) {
+  if (state.phase === 'store') {
+    return [buildStoreDecision(state)];
+  }
+
   if (state.phase === 'plan') {
     const decisions = [];
     for (const t of state.tasks) {
@@ -168,7 +260,9 @@ export function pendingDecisions(state) {
 export function applyDecision(state, decisionId, optionId, rng) {
   let s = clone(state);
 
-  if (s.phase === 'plan') {
+  if (s.phase === 'store') {
+    if (decisionId === 'store') s = applyStoreChoice(s, optionId, rng);
+  } else if (s.phase === 'plan') {
     if (decisionId.startsWith('route-task-')) {
       const t = s.tasks.find((x) => `route-task-${x.id}` === decisionId);
       if (t) applyRouteChoice(s, t, optionId, false);
@@ -204,6 +298,36 @@ function planComplete(s) {
   return s.tasks.every((t) => t.route != null)
     && s.backlog.every((b) => b.route != null)
     && s.aiHuntDecided && s.focusUsed;
+}
+
+// Apply one store choice. The store is ONE decision per quarter: `skip`, a single
+// hire (fills an empty desk; salary joins monthly burn at Books), or a single
+// model switch — then the month opens. (One-shot, not a shop you loop in: it
+// keeps the store skippable in one tap AND caps how much the uniform-random bot
+// can help itself in a quarter, which is what keeps random's win rate in band.)
+// None of these consume the MAIN rng, so a run that only ever skips is identical
+// to the pre-store engine — the WP4-locked balance for skip-first policies holds.
+function applyStoreChoice(s, optionId, rng) {
+  if (optionId.startsWith('hire-')) {
+    const parts = optionId.split('-');           // hire-<role>-<idx>
+    const role = parts[1];
+    const idx = Number(parts[2]);
+    const cands = s.storeOffers && s.storeOffers[role];
+    const c = cands && cands[idx];
+    if (c && !s.team[role]) {
+      s.team[role] = { name: c.name, trait: c.trait, salary: c.salary, und: c.und, morale: 60 };
+      s.log.push({ month: s.month, type: 'hire', role, name: c.name, salary: c.salary });
+    }
+  } else if (optionId.startsWith('model-')) {
+    const tier = optionId.slice('model-'.length);
+    if (config.tokenCosts[tier] && tier !== s.model) {
+      const from = s.model;
+      s.model = tier;
+      s.log.push({ month: s.month, type: 'model-switch', from, to: tier });
+    }
+  }
+  // skip, hire, or switch: one action closes the store into the Plan step.
+  return enterPlan(s, rng);
 }
 
 // ---------------------------------------------------------------------------
@@ -512,7 +636,7 @@ export function advanceMonth(state, rng) {
   }
 
   s.month += 1;
-  return beginMonth(s, rng);
+  return startMonth(s, rng);   // opens the quarter store at months 3/6/9, else the plan
 }
 
 // Renewal Review (month 12, fixed): Coding(you), Judgment(you), bus-factor(team)

@@ -66,6 +66,10 @@
       "optionId": "review"
     },
     {
+      "decisionId": "store",
+      "optionId": "skip"
+    },
+    {
       "decisionId": "route-task-t3-0",
       "optionId": "ai"
     },
@@ -130,6 +134,10 @@
       "optionId": "hunt"
     },
     {
+      "decisionId": "store",
+      "optionId": "skip"
+    },
+    {
       "decisionId": "route-task-t6-0",
       "optionId": "ai"
     },
@@ -152,7 +160,8 @@
   ],
   "finalSummary": {
     "ending": "outage-unsolved",
-    "month": 6,
-    "decisions": 32
+    "finalMonth": 6,
+    "decisions": 34,
+    "storeDecisions": 2
   }
 }
