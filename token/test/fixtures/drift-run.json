@@ -1,0 +1,158 @@
+{
+  "note": "Recorded via the UI decision path (initState + applyDecision). Regenerate with the same driver in drift.test.js. finalSummary is informational, not asserted.",
+  "setup": {
+    "classId": "vibe",
+    "hires": {
+      "junior": {
+        "name": "Devon",
+        "trait": "quick study",
+        "salary": 200,
+        "und": 35
+      },
+      "qa": {
+        "name": "Renata",
+        "trait": "steady under pages",
+        "salary": 250,
+        "und": 45
+      },
+      "senior": null
+    },
+    "model": "standard",
+    "seed": 12345
+  },
+  "decisionLog": [
+    {
+      "decisionId": "route-task-t1-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t1-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t1-2",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "event-junior-asks-how-auth-works",
+      "optionId": "pair"
+    },
+    {
+      "decisionId": "route-task-t2-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t2-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "event-subtle-race-condition",
+      "optionId": "review"
+    },
+    {
+      "decisionId": "route-task-t3-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t3-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t3-2",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "event-the-big-migration",
+      "optionId": "hand"
+    },
+    {
+      "decisionId": "route-task-t4-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t4-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t4-2",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "route-task-t5-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t5-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t5-2",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "route-task-t6-0",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "route-task-t6-1",
+      "optionId": "ai"
+    },
+    {
+      "decisionId": "ai-hunt",
+      "optionId": "skip"
+    },
+    {
+      "decisionId": "focus",
+      "optionId": "hunt"
+    },
+    {
+      "decisionId": "event-the-outage",
+      "optionId": "hand"
+    }
+  ],
+  "finalSummary": {
+    "ending": "outage-unsolved",
+    "month": 6,
+    "decisions": 32
+  }
+}
