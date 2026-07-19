@@ -416,24 +416,8 @@ function render() {
   const mod = SCREENS[app.view];
   stage.innerHTML = mod.render(c);
   if (typeof mod.after === 'function') mod.after(c);
-  fitStage();
 }
 
-// ===========================================================================
-// Stage fitting: letterboxed scaled stage on desktop/landscape; single-column
-// reflow on portrait phones.
-// ===========================================================================
-function fitStage() {
-  const vw = window.innerWidth, vh = window.innerHeight;
-  const portrait = vw < 700 && vh >= vw;
-  document.body.classList.toggle('portrait', portrait);
-  if (portrait) {
-    document.documentElement.style.setProperty('--scale', 1);
-  } else {
-    const scale = Math.min(vw / 640, vh / 400);
-    document.documentElement.style.setProperty('--scale', scale);
-  }
-}
 // ===========================================================================
 // Input: one delegated click listener + number-key / Enter selection.
 // (All DOM wiring + boot lives in wireAndBoot(), called only in a browser, so
@@ -503,7 +487,6 @@ export { app, dispatch, hasSave, clearSave, H, render as rerender,
 // Boot — browser only.
 // ===========================================================================
 function wireAndBoot() {
-  window.addEventListener('resize', fitStage);
   stage.addEventListener('click', onStageClick);
   document.addEventListener('keydown', onKeyDown);
 

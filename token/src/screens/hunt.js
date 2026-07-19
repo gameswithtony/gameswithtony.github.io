@@ -33,20 +33,26 @@ const CODE_LINES = [
   '} // TODO: verify path', 'schedule(job, cron)', '  return early(false)'
 ];
 
-// A chunky beetle glyph (SVG group), sized to fill its button.
+// A chunky cartoon ladybug (SVG group), sized to fill its button.
 function bugSvg() {
   return `<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-    <ellipse cx="20" cy="22" rx="11" ry="13" fill="var(--ega-brightred)" stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="20" y1="10" x2="20" y2="34" stroke="var(--ega-black)" stroke-width="2"/>
-    <circle cx="20" cy="9" r="5" fill="var(--ega-black)"/>
-    <line x1="9"  y1="16" x2="2"  y2="12" stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="9"  y1="24" x2="2"  y2="26" stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="31" y1="16" x2="38" y2="12" stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="31" y1="24" x2="38" y2="26" stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="16" y1="4"  x2="13" y2="0"  stroke="var(--ega-black)" stroke-width="2"/>
-    <line x1="24" y1="4"  x2="27" y2="0"  stroke="var(--ega-black)" stroke-width="2"/>
-    <circle cx="17" cy="20" r="1.6" fill="var(--ega-yellow)"/>
-    <circle cx="23" cy="20" r="1.6" fill="var(--ega-yellow)"/>
+    <line x1="9"  y1="16" x2="2"  y2="12" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="9"  y1="24" x2="2"  y2="26" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="31" y1="16" x2="38" y2="12" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="31" y1="24" x2="38" y2="26" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="16" y1="5"  x2="13" y2="1"  stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="24" y1="5"  x2="27" y2="1"  stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="13" cy="1" r="1.6" fill="var(--ink)"/>
+    <circle cx="27" cy="1" r="1.6" fill="var(--ink)"/>
+    <ellipse cx="20" cy="22" rx="11" ry="13" fill="var(--coral)" stroke="var(--ink)" stroke-width="2.5"/>
+    <line x1="20" y1="10" x2="20" y2="34" stroke="var(--ink)" stroke-width="2.5"/>
+    <circle cx="20" cy="10" r="5.5" fill="var(--ink)"/>
+    <circle cx="18" cy="9" r="1.1" fill="#ffffff"/>
+    <circle cx="22" cy="9" r="1.1" fill="#ffffff"/>
+    <circle cx="15" cy="19" r="2" fill="var(--ink)"/>
+    <circle cx="25" cy="19" r="2" fill="var(--ink)"/>
+    <circle cx="17" cy="28" r="2" fill="var(--ink)"/>
+    <circle cx="23" cy="28" r="2" fill="var(--ink)"/>
   </svg>`;
 }
 
@@ -97,9 +103,8 @@ export function render(c) {
   const { h, vs } = c;
   if (phase === 'result') return renderResult(c);
 
-  const portrait = typeof document !== 'undefined'
-    && document.body && document.body.classList.contains('portrait');
-  const cols = portrait ? 2 : 3;
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 620;
+  const cols = narrow ? 2 : 3;
   const n = cols * 3;                              // 2x3 mobile, 3x3 desktop
   const params = (c.app && c.app.huntParams) || { ammo: 0, spawnBudget: 0, density: {} };
   const panels = buildPanels(params, n).map(panelHtml).join('');

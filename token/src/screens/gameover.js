@@ -115,19 +115,19 @@ function chart(gs, h) {
       <svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Confidence versus Understanding across the year">
         <line x1="${pad}" y1="${Hh - pad}" x2="${W - pad}" y2="${Hh - pad}" stroke="var(--dim)" stroke-width="1"/>
         <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${Hh - pad}" stroke="var(--dim)" stroke-width="1"/>
-        <polygon points="${gapPts}" fill="var(--ega-brown)" fill-opacity="0.28"/>
-        <path d="${path('client')}" fill="none" stroke="var(--ega-brightmagenta)" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <polygon points="${gapPts}" fill="var(--sun)" fill-opacity="0.35"/>
+        <path d="${path('client')}" fill="none" stroke="var(--grape)" stroke-width="1.5" stroke-dasharray="3 2"/>
         <path d="${path('und')}" fill="none" stroke="var(--warn)" stroke-width="2"/>
-        <path d="${path('conf')}" fill="none" stroke="var(--accent)" stroke-width="2"/>
-        <line x1="${lostX}" y1="${pad}" x2="${lostX}" y2="${Hh - pad}" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="2 2"/>
-        <text x="${lostX}" y="${pad - 6}" font-size="8" fill="var(--gold)" text-anchor="middle">month ${gs.month}</text>
+        <path d="${path('conf')}" fill="none" stroke="#2a86c9" stroke-width="2"/>
+        <line x1="${lostX}" y1="${pad}" x2="${lostX}" y2="${Hh - pad}" stroke="#b8860b" stroke-width="1.5" stroke-dasharray="2 2"/>
+        <text x="${lostX}" y="${pad - 6}" font-size="8" fill="#b8860b" text-anchor="middle">month ${gs.month}</text>
         <text x="${pad}" y="${Hh - 6}" font-size="8" fill="var(--dim)">month 1</text>
         <text x="${W - pad}" y="${Hh - 6}" font-size="8" fill="var(--dim)" text-anchor="end">month ${months}</text>
       </svg>
       <div class="legend">
-        <span class="k"><span class="swatch" style="background:var(--accent)"></span>Confidence</span>
+        <span class="k"><span class="swatch" style="background:#2a86c9"></span>Confidence</span>
         <span class="k"><span class="swatch" style="background:var(--warn)"></span>Understanding</span>
-        <span class="k"><span class="swatch" style="background:var(--ega-brightmagenta)"></span>Client</span>
+        <span class="k"><span class="swatch" style="background:var(--grape)"></span>Client</span>
       </div>
     </div>`;
 }
