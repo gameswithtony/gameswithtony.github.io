@@ -25,8 +25,14 @@ export const config = {
   eventChance: 0.65,            // chance of a regular-deck draw on a non-quarter month
 
   // --- Review capacity ---------------------------------------------------
-  capacityBase: 3,
-  capacityQaBonus: 2,          // +2 review capacity while a QA is hired
+  // WP4 (balance): base lowered 3->2 and the QA bonus raised 2->3. Net capacity
+  // for a QA-hiring player is unchanged (2+3 = 5, as before), but a player WITHOUT
+  // a QA now runs on 2 instead of 3 — which is what makes the QA hire actually
+  // matter. This is the lever that makes `no-qa` diverge from `qualified` past Q1:
+  // starved of review capacity, no-qa ships more raw AI, accruing the defects and
+  // Cognitive Debt that the mid/late-year decks turn into deaths. See balance.test.js.
+  capacityBase: 2,
+  capacityQaBonus: 3,          // +3 review capacity while a QA is hired
   // capacity penalty: -1 for each threshold your Energy is below (low-energy bands)
   energyBands: { capacityPenaltyThresholds: [60, 30] },
 
@@ -100,7 +106,18 @@ export const config = {
   renewalClientMod: { high: 75, low: 35, amount: 10 }, // DC -10 when client>=75, +10 when <=35
 
   // --- Renewal Review (month 12, fixed) ---------------------------------
-  renewal: { baseDc: 55, cdCoef: 2, needed: 2, of: 3 }, // dc = base + cdCoef*CD -/+ clientMod
+  // WP4 (balance): the year-end exam is the single lever that sets the win rate,
+  // because it fires AFTER every death-generating system and gates every survivor.
+  //   baseDc 55 -> 73  : with the baseline decks a survivor won ~55% of the time;
+  //                      73 pulls the strong deterministic bot (`qualified`) into
+  //                      the 25-35% headline band (economy doc §Balance targets).
+  //   cdCoef  2 -> 4   : the CD term is what SEPARATES the strategies at the exam.
+  //                      `qualified` reviews (low CD) and clears it; `random`
+  //                      carries real CD and 4x/point buries it below 5% wins —
+  //                      "the late bill," mechanized. Note the renewal checks are
+  //                      Coding + Judgment (x2); Debugging is NOT examined, so
+  //                      debugging knobs move the Outage death, not the win rate.
+  renewal: { baseDc: 73, cdCoef: 4, needed: 2, of: 3 }, // dc = base + cdCoef*CD -/+ clientMod
 
   // --- Incidents ---------------------------------------------------------
   incident: {
