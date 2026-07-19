@@ -22,7 +22,17 @@ import { grow, delegateDecay } from './decay.js';
 export function resolveManualHunt(state, { ammo, skinModifier = 0 }, rng) {
   const s = clone(state);
   const H = config.hunt;
-  const clampMod = clamp01ish(skinModifier, H.skinModifierClamp);
+  // Sanctioned skin write-back channel (WP6). engine.js resolveHunt passes an
+  // explicit skinModifier:0 for headless/policy runs, so those are byte-identical
+  // to before. The interactive whack-a-mole session, which cannot reach the frozen
+  // applyDecision signature, instead stashes its clamped performance modifier on a
+  // TRANSIENT state field; we read it here when no explicit modifier was given, and
+  // DELETE it from the returned state so it never persists into the serialized save
+  // (keeping the drift/resume contracts honest — the skin touches sim state only
+  // through this one clamped number).
+  const mod = skinModifier || s._huntSkinModifier || 0;
+  delete s._huntSkinModifier;
+  const clampMod = clamp01ish(mod, H.skinModifierClamp);
 
   const debuggingUnd = s.skills.debugging.und;
   const pool = s.defects.length;
@@ -84,4 +94,69 @@ export function resolveAiHunt(state, rng, { tier }) {
 // Clamp a skin modifier symmetrically to +/- clampAmount.
 function clamp01ish(mod, clampAmount) {
   return Math.max(-clampAmount, Math.min(clampAmount, mod));
+}
+
+/**
+ * huntParams(state) — the ONE engine-sanctioned projection the whack-a-mole skin
+ * (WP6) reads to pace itself. It runs on the full state (like the engine, not the
+ * visibleState projection), but returns ONLY derived pacing the skin needs — never
+ * raw Understanding, never the raw defect pool. This keeps the fair-bot boundary:
+ * the skin's difficulty comes through this sanctioned door, and screens still
+ * render everything else from visibleState.
+ *
+ * Read-only; no behavior change to any existing resolution path.
+ *
+ * @returns {{
+ *   ammo:number, windowMs:number, spawnEveryMs:number, durationMs:number,
+ *   spawnBudget:number, density:object, expectedFixes:number
+ * }}
+ */
+export function huntParams(state) {
+  const H = config.hunt;
+  const dbg = clamp01((state.skills.debugging.und || 0) / 100); // hidden -> pacing only
+  const pool = state.defects.length;
+  const ammo = Math.max(0, state.capacity.total - state.capacity.spent);
+
+  // Higher Debugging Understanding => bugs linger longer and appear faster (you
+  // SEE more of the pool). Low Understanding => short windows, sparse spawns: the
+  // screen looks calm — the same lie the statistical surfacing tells.
+  const windowMs = Math.round(700 + 1100 * dbg);        // 700..1800 ms
+  const spawnEveryMs = Math.round(1200 - 500 * dbg);    // 1200..700 ms
+  const durationMs = (H.timerSeconds || 45) * 1000;
+
+  // Spawn budget: how many bugs the session shows, tied to the (hidden) pool and
+  // Understanding. An empty pool => a near-clean screen; a deep pool at high
+  // Understanding => a busy one.
+  const cadenceMax = Math.max(1, Math.floor(durationMs / spawnEveryMs));
+  const spawnBudget = pool > 0
+    ? Math.max(3, Math.min(cadenceMax, Math.round(pool * (0.6 + 0.8 * dbg))))
+    : 0;
+
+  return {
+    ammo, windowMs, spawnEveryMs, durationMs, spawnBudget,
+    density: provenanceDensity(state),
+    expectedFixes: expectedManualFixes(state, ammo)
+  };
+}
+
+// Per-provenance defect counts so the skin can label panels and cluster bugs in
+// "unreviewed" modules (defect provenance). Read-only.
+function provenanceDensity(state) {
+  const counts = {};
+  for (const d of state.defects) {
+    const p = d.provenance || 'unknown';
+    counts[p] = (counts[p] || 0) + 1;
+  }
+  return counts;
+}
+
+// The statistical par (fixed count at skinModifier 0) the skin's performance is
+// judged against — mirrors resolveManualHunt's formula, read-only, for reporting.
+function expectedManualFixes(state, ammo) {
+  const H = config.hunt;
+  const dbg = state.skills.debugging.und || 0;
+  const pool = state.defects.length;
+  const surfaceFrac = clamp01(H.baseSurface + H.undSurface * (dbg / 100));
+  const surfaced = Math.min(pool, Math.round(pool * surfaceFrac));
+  return Math.min(surfaced, Math.max(0, Math.floor(ammo)));
 }

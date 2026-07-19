@@ -11,6 +11,8 @@
   <!-- Fixed 640x400 logical stage; screens render into #stage (WP5). -->
   <div id="stage" aria-live="polite"></div>
   <div id="overlay" aria-hidden="true"></div>
+  <!-- Persistent mute toggle (WP6); wired in main.js, survives re-renders. -->
+  <button id="mute" type="button" aria-label="Mute sound" aria-pressed="false">🔊</button>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

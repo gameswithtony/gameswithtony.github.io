@@ -16,7 +16,9 @@ import { config } from '../config.js';
 import { initState } from './state.js';
 import { rngFromState } from './sim/rng.js';
 import { applyDecision, pendingDecisions } from './sim/engine.js';
+import { huntParams } from './sim/hunt.js';
 import { visibleState } from './sim/visible.js';
+import * as Audio from './audio.js';
 
 import { classes } from './data/classes.js';
 import { events } from './data/events.js';
@@ -229,6 +231,17 @@ function resumeRun() {
 // The one path that changes game state.
 function dispatch(decisionId, optionId) {
   if (!app.gs || app.gs.ending) return;
+  // Manual hunt: play the whack-a-mole minigame FIRST, so the player's
+  // performance becomes the clamped skinModifier, THEN resolve the month with it.
+  if (decisionId === 'focus' && optionId === 'hunt') {
+    return startHuntMinigame();
+  }
+  commitDecision(decisionId, optionId);
+}
+
+// Actually apply a decision through the pure engine and route to the next screen.
+function commitDecision(decisionId, optionId) {
+  if (!app.gs || app.gs.ending) return;
   const prevMonth = app.gs.month;
   const wasEvent = app.gs.phase === 'event';
   app.log.push({ decisionId, optionId });
@@ -236,14 +249,35 @@ function dispatch(decisionId, optionId) {
   saveGame();
   app.explain = '';
 
-  // Manual hunt: show the placeholder result screen before continuing.
+  // Manual hunt just resolved: show the result phase (swing tally + engine count).
   if (decisionId === 'focus' && optionId === 'hunt') {
     app.huntResult = latestLog('hunt', prevMonth);
+    app.huntPhase = 'result';
     app.pendingProceed = { prevMonth, wasEvent };
     app.view = 'hunt';
     return render();
   }
   proceed(prevMonth, wasEvent);
+}
+
+// Launch the interactive hunt (WP6). huntParams(app.gs) is the sanctioned pacing
+// projection — the ONLY channel the skin's difficulty comes through.
+function startHuntMinigame() {
+  app.huntPhase = 'play';
+  app.huntParams = huntParams(app.gs);
+  app.huntTally = null;
+  app.view = 'hunt';
+  render();
+}
+
+// Called by the hunt screen when the 45s session ends (naturally or via Leave).
+// result.modifier is the clamped performance number — the skin's one write-back.
+function finishHuntMinigame(result) {
+  app.huntTally = result || {};
+  const clamp = config.hunt.skinModifierClamp;
+  const mod = Math.max(-clamp, Math.min(clamp, (result && result.modifier) || 0));
+  app.gs._huntSkinModifier = mod;         // transient; resolveManualHunt consumes it
+  commitDecision('focus', 'hunt');
 }
 
 function proceed(prevMonth, wasEvent) {
@@ -280,12 +314,13 @@ function openEvent() {
   const def = deck.find((e) => e.id === pe.id) || null;
   const dec = pendingDecisions(app.gs).find((d) => d.kind === 'event');
   app.currentEvent = { def, deck: pe.deck, prompt: dec ? dec.prompt : (def ? safeText(def) : '') };
+  Audio.eventSting();
   app.view = 'event';
   render();
 }
 function safeText(def) { try { return def.text(app.gs); } catch (e) { return def.id; } }
 
-function openBooks() { app.view = 'books'; render(); }
+function openBooks() { Audio.monthStamp(); app.view = 'books'; render(); }
 
 function afterBooks() {
   if (app.afterBooks === 'gameover') return enterGameOver();
@@ -300,6 +335,7 @@ function afterBooks() {
 
 function enterGameOver() {
   clearSave();                          // finishing a run clears the save
+  Audio.deathDirge();
   app.scoreSaved = false;
   app.savedInitials = '';
   app.view = 'gameover';
@@ -358,6 +394,11 @@ function ctx() {
     event: app.currentEvent,
     eventResult: app.eventResult,
     huntResult: app.huntResult,
+    huntParams: app.huntParams,
+    huntPhase: app.huntPhase,
+    huntTally: app.huntTally,
+    onHuntDone: finishHuntMinigame,
+    audio: Audio,
     booksMonth: app.booksMonth,
     hasSave: hasSave(),
     topten: getTopTen(),
@@ -366,6 +407,10 @@ function ctx() {
 }
 
 function render() {
+  // Kill any running hunt rAF loop before rebuilding the stage (defensive: the
+  // hunt is the only rAF in the app, and it self-stops, but never leak one).
+  if (app.huntStop) { app.huntStop(); app.huntStop = null; }
+  app.huntFinishNow = null;
   clearTimers();
   const c = ctx();
   const mod = SCREENS[app.view];
@@ -395,14 +440,19 @@ function fitStage() {
 // this module imports cleanly under Node for headless checks.)
 // ===========================================================================
 function onStageClick(e) {
+  Audio.ensureStarted();                 // first user gesture unlocks WebAudio
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const a = el.dataset;
+  if (a.action !== 'explain') Audio.tick();   // menu tick (bug squashes beep on their own)
   switch (a.action) {
     case 'explain':
       app.explain = (app.explain === a.explain) ? '' : a.explain;
       // re-render just the explain line without rebuilding the screen
       { const line = stage.querySelector('.explain'); if (line) line.textContent = app.explain; }
+      return;
+    case 'hunt-leave':
+      if (app.huntFinishNow) app.huntFinishNow();
       return;
     case 'nav': app.view = a.view; return render();
     case 'dispatch': return dispatch(a.decision, a.option);
@@ -430,6 +480,7 @@ function onStageClick(e) {
 
 function onKeyDown(e) {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  Audio.ensureStarted();                 // first user gesture unlocks WebAudio
   if (e.key === 'Enter') {
     const primary = stage.querySelector('[data-key="enter"]') || stage.querySelector('.row[data-key]');
     if (primary) { e.preventDefault(); primary.click(); }
@@ -455,6 +506,19 @@ function wireAndBoot() {
   window.addEventListener('resize', fitStage);
   stage.addEventListener('click', onStageClick);
   document.addEventListener('keydown', onKeyDown);
+
+  // Persistent mute toggle (outside #stage, so re-renders never disturb it).
+  const muteBtn = document.getElementById('mute');
+  if (muteBtn) {
+    const paint = () => {
+      muteBtn.textContent = Audio.isMuted() ? '\u{1F507}' : '\u{1F50A}';
+      muteBtn.setAttribute('aria-pressed', String(Audio.isMuted()));
+      muteBtn.setAttribute('aria-label', Audio.isMuted() ? 'Unmute sound' : 'Mute sound');
+    };
+    paint();
+    muteBtn.addEventListener('click', () => { Audio.ensureStarted(); Audio.toggleMute(); paint(); });
+  }
+
   app.view = 'title';
   render();
 }

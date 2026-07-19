@@ -6,41 +6,208 @@
 
 import { config } from '../../config.js';
 
-// Minimal static office banner. A pure function of visibleState: a desk per
-// seat, empty (dashed) desks where no one was hired. WP6 replaces this.
-function office(vs) {
-  const seats = [
-    { x: 40, label: 'YOU', filled: true, mood: '' },
-    { x: 190, label: 'JR', filled: !!vs.team.junior, mood: vs.team.junior ? vs.team.junior.mood : '' },
-    { x: 340, label: 'QA', filled: !!vs.team.qa, mood: vs.team.qa ? vs.team.qa.mood : '' },
-    { x: 490, label: 'SR', filled: !!vs.team.senior, mood: vs.team.senior ? vs.team.senior.mood : '' }
-  ];
-  const desks = seats.map((s) => {
-    const stroke = s.filled ? 'var(--border)' : 'var(--dim)';
-    const dash = s.filled ? '' : 'stroke-dasharray="4 3"';
-    const chair = s.filled
-      ? `<circle cx="${s.x + 55}" cy="42" r="12" fill="var(--panel)" stroke="${stroke}" stroke-width="2"/>`
-      : `<rect x="${s.x + 40}" y="30" width="24" height="18" fill="none" stroke="var(--dim)" stroke-width="2" ${dash}/>`;
-    const face = s.mood ? `<text x="${s.x + 55}" y="47" font-size="13" text-anchor="middle">${s.mood}</text>` : '';
-    return `
-      <g>
-        <rect x="${s.x}" y="70" width="110" height="34" fill="var(--panel)" stroke="${stroke}" stroke-width="2" ${dash}/>
-        <rect x="${s.x + 12}" y="52" width="46" height="26" fill="var(--panel-2)" stroke="${stroke}" stroke-width="2" ${dash}/>
-        ${chair}${face}
-        <text x="${s.x + 55}" y="120" font-size="11" text-anchor="middle" fill="var(--dim)">${s.label}</text>
-      </g>`;
-  }).join('');
+// ===========================================================================
+// THE OFFICE SCENE (WP6, full animated per UI spec). A PURE function of
+// visibleState: posture, chairs, monitor glow and the window all render from the
+// projection — decorative truth, never the only truth (the strip's mood faces
+// mirror what posture shows). Animation is CSS steps() on TRANSFORMS only; the
+// duration comes from a CSS var driven by visible workload. No canvas, no rAF.
+//
+// Pose -> visible condition (see the report table):
+//   you slumped .......... energy < BURN_LOW              (burnout looming)
+//   you typing ........... otherwise; speed = visible workload (tasks+backlog)
+//   member slumped ....... mood ☹️ (morale sinking)
+//   member scrolling ..... mood 🙂/😐 AND CD >= CD_HOT    (the AI does their work)
+//   member typing ........ mood 🙂/😐 AND CD <  CD_HOT
+//   empty + boxes ........ seat null, never hired
+//   chair still spinning . seat null, a prior hire in the log (they just quit)
+//   monitor glow ......... intensity by model tier (the rack shows the nameplate)
+//   window ............... one art per quarter (season from the month)
+// ===========================================================================
+
+const BURN_LOW = 30;      // your Energy below this reads as slumped/burning out
+const CD_HOT = 5;         // Cognitive Debt at/above this: the machine carries them
+
+const SEASONS = ['winter','winter','spring','spring','spring','summer','summer','summer','fall','fall','fall','winter'];
+function seasonOf(month) { return SEASONS[(month - 1) % 12] || 'winter'; }
+
+// ---- window art per season (static SVG; no animation needed) --------------
+function windowArt(month) {
+  const s = seasonOf(month);
+  const sky = { winter: '#12325a', spring: '#1c5a3a', summer: '#2a6ad6', fall: '#7a4a12' }[s] || '#12325a';
+  let art = '';
+  if (s === 'winter') {
+    art = `<circle cx="18" cy="14" r="6" fill="#cfe6ff"/>` +
+      dots([[14,30],[30,20],[46,36],[62,24],[36,42],[54,14]], '#ffffff', 1.6);
+  } else if (s === 'spring') {
+    art = `<rect x="36" y="24" width="6" height="24" fill="#4a3010"/>` +
+      `<circle cx="39" cy="20" r="12" fill="#55ff55"/>` +
+      dots([[33,16],[45,18],[39,26],[30,40],[52,38]], '#ff9de0', 1.8);
+  } else if (s === 'summer') {
+    art = `<circle cx="39" cy="22" r="11" fill="var(--ega-yellow)"/>` +
+      rays(39, 22, 15) + `<rect x="24" y="42" width="30" height="6" fill="#2a8a3a"/>`;
+  } else { // fall
+    art = `<rect x="36" y="22" width="6" height="24" fill="#4a3010"/>` +
+      `<circle cx="39" cy="18" r="11" fill="#aa5500"/>` +
+      dots([[20,34],[54,30],[30,44],[48,42],[62,38]], '#ff9a3a', 1.8);
+  }
   return `
-    <div class="office"><svg viewBox="0 0 620 130" preserveAspectRatio="xMidYMid meet">
-      <rect x="2" y="2" width="616" height="126" fill="none" stroke="var(--border)" stroke-width="2"/>
-      <rect x="540" y="14" width="60" height="40" fill="var(--panel-2)" stroke="var(--border)" stroke-width="2"/>
-      <text x="570" y="38" font-size="10" text-anchor="middle" fill="var(--accent)">${seasonWord(0)}</text>
-      ${desks}
-    </svg></div>`;
+    <g>
+      <rect x="24" y="8" width="94" height="58" fill="${sky}" stroke="var(--border)" stroke-width="2"/>
+      <g transform="translate(24,8)">${art}</g>
+      <line x1="71" y1="8" x2="71" y2="66" stroke="var(--border)" stroke-width="2"/>
+      <line x1="24" y1="37" x2="118" y2="37" stroke="var(--border)" stroke-width="2"/>
+    </g>`;
+}
+function dots(pts, fill, r) {
+  return pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`).join('');
+}
+function rays(cx, cy, len) {
+  let out = '';
+  for (let a = 0; a < 360; a += 45) {
+    const rad = a * Math.PI / 180;
+    out += `<line x1="${(cx + Math.cos(rad) * (len - 3)).toFixed(1)}" y1="${(cy + Math.sin(rad) * (len - 3)).toFixed(1)}"
+      x2="${(cx + Math.cos(rad) * len).toFixed(1)}" y2="${(cy + Math.sin(rad) * len).toFixed(1)}"
+      stroke="var(--ega-yellow)" stroke-width="2"/>`;
+  }
+  return out;
 }
 
-// (kept tiny — the seasonal glyph is rendered from the strip's month elsewhere)
-function seasonWord() { return ''; }
+// ---- server rack + model nameplate ----------------------------------------
+function rack(model) {
+  const glow = { budget: '#00aa00', standard: '#55ff55', frontier: '#55ffff' }[model] || '#55ff55';
+  const lights = [18, 30, 42].map((y, i) =>
+    `<rect class="rack-led" x="548" y="${y}" width="8" height="4" fill="${glow}" style="opacity:${0.5 + i * 0.2}"/>`).join('');
+  return `
+    <g>
+      <rect x="540" y="8" width="72" height="58" fill="var(--panel-2)" stroke="var(--border)" stroke-width="2"/>
+      ${lights}
+      <rect x="560" y="14" width="46" height="30" fill="none" stroke="var(--dim)" stroke-width="1"/>
+      <text x="576" y="60" font-size="8" fill="${glow}" text-anchor="middle" class="caps">${esc(model)}</text>
+    </g>`;
+}
+
+// ---- character poses (local coords; station <g> translates them into place) --
+// Each returns SVG drawn around a seated figure centered at x≈70, sitting at a
+// desk whose top is y≈150. Transforms-only animation via CSS classes.
+function poseTyping(color) {
+  return `<g class="fig type">
+    <g class="torso">
+      <rect x="56" y="112" width="28" height="30" rx="4" fill="${color}" stroke="var(--ega-black)" stroke-width="2"/>
+      <circle cx="70" cy="104" r="11" fill="#e6b98a" stroke="var(--ega-black)" stroke-width="2"/>
+      <g class="arms">
+        <rect x="48" y="128" width="12" height="6" fill="${color}" stroke="var(--ega-black)" stroke-width="1.5"/>
+        <rect x="80" y="128" width="12" height="6" fill="${color}" stroke="var(--ega-black)" stroke-width="1.5"/>
+      </g>
+    </g>
+  </g>`;
+}
+function poseSlumped(color) {
+  return `<g class="fig">
+    <rect x="54" y="120" width="32" height="24" rx="4" fill="${color}" stroke="var(--ega-black)" stroke-width="2"/>
+    <circle cx="70" cy="124" r="11" fill="#e6b98a" stroke="var(--ega-black)" stroke-width="2"/>
+    <text x="90" y="118" font-size="11">z</text>
+  </g>`;
+}
+function poseScrolling(color) {
+  return `<g class="fig lean">
+    <g class="torso">
+      <rect x="56" y="114" width="28" height="28" rx="4" fill="${color}" stroke="var(--ega-black)" stroke-width="2"/>
+      <circle cx="72" cy="104" r="11" fill="#e6b98a" stroke="var(--ega-black)" stroke-width="2"/>
+      <rect x="82" y="112" width="9" height="14" rx="1" fill="var(--ega-black)" stroke="var(--dim)" stroke-width="1"/>
+      <rect x="83" y="114" width="7" height="8" fill="#55ffff" class="phone-glow"/>
+    </g>
+  </g>`;
+}
+function chairSpinning() {
+  return `<g class="chair-spin" transform="translate(70,132)">
+    <ellipse cx="0" cy="0" rx="16" ry="7" fill="var(--panel)" stroke="var(--border)" stroke-width="2"/>
+    <rect x="-3" y="0" width="6" height="14" fill="var(--dim)"/>
+    <line x1="-12" y1="16" x2="12" y2="16" stroke="var(--dim)" stroke-width="2"/>
+  </g>`;
+}
+function emptyBoxes() {
+  return `<g>
+    <rect x="70" y="122" width="16" height="16" fill="none" stroke="var(--dim)" stroke-width="2" stroke-dasharray="4 3"/>
+    <g stroke="var(--brown,#aa5500)" stroke-width="2" fill="var(--panel-2)">
+      <rect x="48" y="126" width="18" height="16"/>
+      <rect x="52" y="114" width="16" height="14"/>
+    </g>
+    <line x1="48" y1="134" x2="66" y2="134" stroke="var(--dim)" stroke-width="1"/>
+  </g>`;
+}
+
+// One desk station: desk, monitor with tier glow, and the resolved pose.
+function station(x, opts) {
+  const { label, color, pose, model, filled } = opts;
+  const glow = { budget: '#0a3a0a', standard: '#0a4a10', frontier: '#0a4a4a' }[model] || '#0a3a0a';
+  const glowColor = filled ? glow : 'var(--panel-2)';
+  return `
+    <g transform="translate(${x},0)">
+      <!-- monitor -->
+      <rect x="24" y="120" width="40" height="28" fill="${glowColor}" stroke="var(--border)" stroke-width="2" class="${filled ? 'monitor lit' : 'monitor'}"/>
+      <rect x="40" y="148" width="8" height="6" fill="var(--dim)"/>
+      ${pose}
+      <!-- desk -->
+      <rect x="8" y="150" width="124" height="10" fill="var(--panel)" stroke="var(--border)" stroke-width="2"/>
+      <text x="70" y="176" font-size="11" text-anchor="middle" fill="var(--dim)" class="caps">${esc(label)}</text>
+    </g>`;
+}
+
+function resolvePose(role, vs) {
+  // YOU
+  if (role === 'you') {
+    const slumped = vs.energy < BURN_LOW;
+    return { filled: true, pose: slumped ? poseSlumped('var(--ega-brightblue)') : poseTyping('var(--ega-brightblue)') };
+  }
+  const m = vs.team[role];
+  if (m) {
+    const color = { junior: 'var(--ega-green)', qa: 'var(--ega-magenta)', senior: 'var(--ega-brown)' }[role];
+    if (m.mood === '☹️') return { filled: true, pose: poseSlumped(color) };
+    if (vs.cd >= CD_HOT) return { filled: true, pose: poseScrolling(color) };
+    return { filled: true, pose: poseTyping(color) };
+  }
+  // empty seat: distinguish "just quit" (a prior hire in the log) from "never hired"
+  const wasHired = (vs.log || []).some((l) => l.type === 'hire' && l.role === role);
+  return { filled: false, pose: wasHired ? chairSpinning() : emptyBoxes() };
+}
+
+function office(vs) {
+  const waiting = vs.tasks.filter((t) => t.route == null).length
+    + vs.backlog.filter((b) => b.route == null).length;
+  // more visible work -> faster typing (the "pace" homage, keyed to workload)
+  const typeDur = Math.max(280, 820 - waiting * 140);
+
+  const seats = [
+    { role: 'you', label: 'YOU' },
+    { role: 'junior', label: 'JUNIOR' },
+    { role: 'qa', label: 'QA' },
+    { role: 'senior', label: 'SENIOR' }
+  ];
+  const xs = [8, 158, 308, 458];
+  const stations = seats.map((s, i) => {
+    const r = resolvePose(s.role, vs);
+    const color = s.role === 'you' ? 'var(--ega-brightblue)' : 'var(--fg)';
+    return station(xs[i], { label: s.label, color, pose: r.pose, model: vs.model, filled: r.filled });
+  }).join('');
+
+  return `
+    <div class="office" style="--type-dur:${typeDur}ms">
+      <svg viewBox="0 0 640 190" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="The office. Your desk and up to three teammates; the window shows the season.">
+        <rect x="2" y="2" width="636" height="186" fill="var(--panel-2)" stroke="var(--border)" stroke-width="2"/>
+        <rect x="2" y="100" width="636" height="88" fill="var(--panel)"/>
+        ${windowArt(vs.month)}
+        ${rack(vs.model)}
+        ${stations}
+      </svg>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 export function render(c) {
   if (c.view === 'map') return mapPane(c);
