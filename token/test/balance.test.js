@@ -247,15 +247,24 @@ test('no-qa tracks qualified through Q1, then diverges below it', () => {
   assert.ok(m12Gap >= 0.04, `no-qa does not diverge below qualified: M12 reach ${(B.noQa.m12Rate * 100).toFixed(1)}% vs ${(B.qualified.m12Rate * 100).toFixed(1)}% (gap ${(m12Gap * 100).toFixed(1)}pts)`);
 });
 
-test('qualified: no single death cause is more than 50% of its losses', () => {
-  // The strong bot should die of varied causes, not one dominant trap. Observed:
-  // the Outage is the top cause at ~48% of qualified's (few) deaths. This runs
-  // CLOSE to the 50% line and config can't push it lower — the Outage deaths are
-  // early (month-3) draws on Vibe's low STARTING Debugging (20, before any hunt),
-  // which no knob reaches (starting skills live in data/classes.js). If it ever
-  // crosses 50%, the fix is content (raise Vibe's Debugging, or lower the Outage
-  // dc), not a config knob. Deliberately NOT eased via burnout, which would only
-  // inflate the Outage's share (see the pure-self note above).
-  const share = B.qualified.topDeathShare;
-  assert.ok(share <= 0.50, `qualified top death cause (${B.qualified.topDeathCause}) is ${(share * 100).toFixed(1)}% of losses (> 50%)`);
+test('qualified: no deck-authored ambush is more than 50% of its losses', () => {
+  // MOREFUN retune. The original assertion ("no single cause > 50%") guarded
+  // against one dominant TRAP — in practice the Outage's instant-death check.
+  // Under the systemic difficulty (D1 ramp, D2 margins, D4 milestones) the
+  // strong bot's rare deaths are engine arithmetic (fired/bankruptcy/burnout in
+  // the Q4 crunch), which is the designed shape, not a trap — so the guard now
+  // names its real target: no deck-authored endRun cause (outage-unsolved,
+  // everyone-quit, ...) may dominate the loss column. Engine deaths may.
+  const ENGINE_DEATHS = new Set(['bankruptcy', 'burnout', 'fired']);
+  const authored = Object.entries(B.qualified.deaths).filter(([cause]) => !ENGINE_DEATHS.has(cause));
+  const authoredTotal = authored.reduce((a, [, n]) => a + n, 0);
+  for (const [cause, n] of authored) {
+    const share = B.qualified.deathTotal ? n / B.qualified.deathTotal : 0;
+    assert.ok(share <= 0.50, `qualified authored death '${cause}' is ${(share * 100).toFixed(1)}% of losses (> 50%)`);
+  }
+  // and authored deaths together stay the minority of the strong bot's losses
+  if (B.qualified.deathTotal > 0) {
+    assert.ok(authoredTotal / B.qualified.deathTotal <= 0.50,
+      `deck-authored deaths are ${(100 * authoredTotal / B.qualified.deathTotal).toFixed(1)}% of qualified's losses (> 50%)`);
+  }
 });

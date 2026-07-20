@@ -71,6 +71,7 @@ function tone(freq, dur, when = 0, peak = 0.06, type = 'square') {
 export function tick()       { tone(520, 0.035, 0, 0.035); }               // menu tick
 export function bugFixed()   { tone(880, 0.045, 0, 0.05); tone(1320, 0.05, 0.035, 0.045); } // squash
 export function eventSting() { tone(330, 0.09, 0, 0.06); tone(494, 0.10, 0.075, 0.055); tone(392, 0.13, 0.16, 0.05); }
+export function pagerAlarm() { [0, 0.16, 0.32].forEach((t) => tone(1046, 0.09, t, 0.055)); tone(784, 0.16, 0.5, 0.05); } // the 2am page
 export function monthStamp() { tone(196, 0.14, 0, 0.08); tone(147, 0.20, 0.06, 0.07); }      // ledger stamp
 export function deathDirge() { [349, 294, 262, 196].forEach((f, i) => tone(f, 0.34, i * 0.30, 0.07)); }
 

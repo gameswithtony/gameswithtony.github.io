@@ -21,6 +21,7 @@ function renderChoices(c) {
   if (!decision) return renderResolution(c);   // defensive: state already advanced
   const def = event && event.def;
   const major = event && event.deck === 'major';
+  const incident = event && event.deck === 'incident';
 
   const rows = decision.options.map((o, i) => {
     const choiceDef = def ? def.choices.find((ch) => ch.id === o.id) : null;
@@ -39,11 +40,13 @@ function renderChoices(c) {
 
   const plate = major
     ? `<div class="plate">${h.esc((def && def.title) ? def.title : humanize(def ? def.id : 'Major'))} — ${quarterOf(vs.month)}</div>`
-    : '';
+    : incident
+      ? `<div class="plate pager">⚠ 02:00 · PRODUCTION PAGE</div>`
+      : '';
 
   return `
     <div class="screen center">
-      <div class="event-card${major ? ' major' : ''}">
+      <div class="event-card${major ? ' major' : incident ? ' incident' : ''}">
         ${plate}
         <div class="hi">${h.esc(decision.prompt)}</div>
         <div class="menu" style="margin-top:10px">${rows}</div>
@@ -56,13 +59,22 @@ function renderResolution(c) {
   const { h, eventResult, event, vs } = c;
   const r = eventResult || {};
   const def = r.def || (event && event.def);
-  const major = (r.deck || (event && event.deck)) === 'major';
+  const deck = r.deck || (event && event.deck);
+  const major = deck === 'major';
+  const incident = deck === 'incident';
 
   let checkLine = '';
   if (r.check) {
     checkLine = r.check.success
       ? `<div class="sub">The check holds. ✓</div>`
       : `<div class="warn">The check fails. ✗</div>`;
+  }
+  // MOREFUN D6: the incident's bill, on the card where it was run up.
+  let severityLine = '';
+  if (incident && r.incident) {
+    severityLine = r.incident.severity > 0
+      ? `<div class="warn">Severity +${r.incident.severity} joins the SLA pool. It bills monthly until hunted down.</div>`
+      : `<div class="sub">Contained. Nothing joins the SLA pool.</div>`;
   }
   let revealLine = '';
   if (r.reveal) {
@@ -73,10 +85,11 @@ function renderResolution(c) {
 
   return `
     <div class="screen center">
-      <div class="event-card${major ? ' major' : ''}">
+      <div class="event-card${major ? ' major' : incident ? ' incident' : ''}">
         <div class="hi">${h.esc(r.prompt || (def ? def.id : 'Resolved.'))}</div>
         ${choiceLine}
         <div style="margin-top:8px">${checkLine}</div>
+        ${severityLine}
         ${revealLine}
         <div class="menu" style="margin-top:12px">
           ${h.row({ key: 'enter', label: '▶ Continue', attrs: 'data-action="event-continue"' })}

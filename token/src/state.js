@@ -85,6 +85,7 @@ export function initState(classId, hires = {}, model = 'standard', seed = 1) {
     slipped: 0,
     tasks: [],
     backlog: [],
+    milestone: null,      // quarterly deliverable (MOREFUN D4); set by beginMonth
     defects: [],          // hidden
     openSeverity: 0,      // SLA pool from incidents (visible)
 

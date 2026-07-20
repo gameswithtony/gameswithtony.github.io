@@ -19,10 +19,11 @@
 // cd ±2 · defects ±3 · client ±15 · morale ±20). No unconditional removeMember/
 // endRun — only behind a check-fail branch or an earned predicate.
 //
-// NOTE (WP1/WP2 boundary): today the engine computes flare severity from `base`
-// and its own internal team responder check; the per-incident `choices` below are
-// authored to the full schema for the schema test and the WP5 UI, ready for the
-// engine to present them. See the WP2 report for this documented call.
+// MOREFUN D6: a flare is a set piece. It takes the month's event slot, plays on
+// its own 2 a.m.-page screen, and the severity lands when the player's chosen
+// response resolves — a choice with a `check` is the responder roll (pass =
+// responderPassMult); a choice without one means nobody qualified answered the
+// page, and severity lands in full alongside the choice's own effects.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const incidents = [

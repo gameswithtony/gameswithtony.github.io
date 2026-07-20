@@ -21,7 +21,16 @@ export const config = {
   // --- Clock -------------------------------------------------------------
   months: 12,
   majorMonths: [3, 6, 9, 12],   // quarter-end set pieces; 12 is the Renewal Review
-  tasksPerMonth: { min: 2, max: 3 },
+  // MOREFUN D1 — the demand ramp: success breeds scope. Task load scales by
+  // quarter while review capacity stays flat, so from mid-year on the player
+  // CANNOT review everything and every month is triage. Indexed by quarter-1.
+  tasksPerMonth: [
+    { min: 2, max: 2 },         // Q1 (m1-3)
+    { min: 3, max: 3 },         // Q2 (m4-6)
+    { min: 4, max: 4 },         // Q3 (m7-9)
+    { min: 5, max: 6 }          // Q4 (m10-12)
+  ],
+  memberTasksPerMonth: 1,       // a teammate holds ONE assigned task per month ("1 theirs")
   eventChance: 0.65,            // chance of a regular-deck draw on a non-quarter month
 
   // --- Review capacity ---------------------------------------------------
@@ -85,12 +94,25 @@ export const config = {
   cdPerRawAi: 1,               // +1 CD per unreviewed AI task
 
   // --- Money / the ledger -----------------------------------------------
-  contractMonthly: 2500,       // revenue in
+  // MOREFUN D2 — thin margins: baseline surplus sits near zero; profit comes
+  // from performance (backlog goodwill, quiet incidents, milestone bonuses).
+  contractMonthly: 2000,       // revenue in
   slaPerSeverity: 250,         // revenue lost per open incident-severity point
   slipFee: 250,                // -$ when a fresh task slips
   goodwillBonus: 150,          // +$ when a backlog item is cleared
   contractorCost: 1000,        // the "ferry" option in majors
   openSeverityCap: 20,         // severity pool ceiling
+
+  // --- Quarterly milestones (MOREFUN D4) ----------------------------------
+  // The client names a deliverable each quarter; tagged fresh tasks must all
+  // ship by the quarter-end month. The bonus is a main profit source under the
+  // thin-margin economy; the miss is a client wound the decks can read.
+  milestone: {
+    taggedPerMonth: [1, 1, 2, 2], // tagged fresh tasks per month, by quarter
+    bonus: 1200,                  // paid at the deadline books when all tagged work shipped
+    clientBonus: 8,               // client bump on a hit
+    clientHit: 12                 // client damage on a miss
+  },
 
   // --- Client happiness (0-100) -----------------------------------------
   clientStart: 70,
@@ -154,9 +176,14 @@ export const config = {
   moodThresholds: { happy: 70, ok: 40 }, // >=happy 🙂, >=ok 😐, else ☹️
 
   // --- Event / effect magnitude caps (schema-enforced in WP2) -----------
+  // MOREFUN D5: caps scale by quarter. An entry declaring `minMonth` is only
+  // drawable from that month on, and its authored magnitudes may use the cap
+  // multiplier of that month's quarter — events change your month early and
+  // can genuinely wound you late. Majors still stack their own 2x on top.
   eventEffectCaps: {
     money: 800, energy: 20, skill: 5, cd: 2, defects: 3, client: 15, morale: 20,
-    majorMultiplier: 2         // majors get 2x the caps
+    majorMultiplier: 2,        // majors get 2x the caps
+    quarterMultipliers: [1, 1.5, 2, 2.5]  // cap scale by the quarter of minMonth
   },
 
   // --- Scoring (v1 placeholder; tune in WP4) -----------------------------

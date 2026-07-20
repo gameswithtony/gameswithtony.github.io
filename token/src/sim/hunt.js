@@ -97,17 +97,17 @@ function clamp01ish(mod, clampAmount) {
 }
 
 /**
- * huntParams(state) — the ONE engine-sanctioned projection the whack-a-mole skin
- * (WP6) reads to pace itself. It runs on the full state (like the engine, not the
- * visibleState projection), but returns ONLY derived pacing the skin needs — never
- * raw Understanding, never the raw defect pool. This keeps the fair-bot boundary:
- * the skin's difficulty comes through this sanctioned door, and screens still
- * render everything else from visibleState.
+ * huntParams(state) — the ONE engine-sanctioned projection the hunt skin reads
+ * to pace itself (MOREFUN D7: Spot the Bug). It runs on the full state (like the
+ * engine, not the visibleState projection), but returns ONLY derived pacing the
+ * skin needs — never raw Understanding, never the raw defect pool. This keeps
+ * the fair-bot boundary: the skin's difficulty comes through this sanctioned
+ * door, and screens still render everything else from visibleState.
  *
  * Read-only; no behavior change to any existing resolution path.
  *
  * @returns {{
- *   ammo:number, windowMs:number, spawnEveryMs:number, durationMs:number,
+ *   ammo:number, legibility:number, durationMs:number,
  *   spawnBudget:number, density:object, expectedFixes:number
  * }}
  */
@@ -117,23 +117,21 @@ export function huntParams(state) {
   const pool = state.defects.length;
   const ammo = Math.max(0, state.capacity.total - state.capacity.spent);
 
-  // Higher Debugging Understanding => bugs linger longer and appear faster (you
-  // SEE more of the pool). Low Understanding => short windows, sparse spawns: the
-  // screen looks calm — the same lie the statistical surfacing tells.
-  const windowMs = Math.round(700 + 1100 * dbg);        // 700..1800 ms
-  const spawnEveryMs = Math.round(1200 - 500 * dbg);    // 1200..700 ms
+  // MOREFUN D7: atrophy rendered as illegibility. Legibility is the fraction of
+  // code panels the hunter can actually READ; the rest render as static. An
+  // atrophied hunter stares at their own system and cannot parse it.
+  const legibility = Math.round((0.30 + 0.65 * dbg) * 100) / 100;   // 0.30..0.95
   const durationMs = (H.timerSeconds || 45) * 1000;
 
-  // Spawn budget: how many bugs the session shows, tied to the (hidden) pool and
-  // Understanding. An empty pool => a near-clean screen; a deep pool at high
-  // Understanding => a busy one.
-  const cadenceMax = Math.max(1, Math.floor(durationMs / spawnEveryMs));
+  // Spawn budget: how many buggy boards the session can show, tied to the
+  // (hidden) pool and Understanding. An empty pool => clean boards only; a deep
+  // pool at high Understanding => bug after bug.
   const spawnBudget = pool > 0
-    ? Math.max(3, Math.min(cadenceMax, Math.round(pool * (0.6 + 0.8 * dbg))))
+    ? Math.max(3, Math.min(12, Math.round(pool * (0.6 + 0.8 * dbg))))
     : 0;
 
   return {
-    ammo, windowMs, spawnEveryMs, durationMs, spawnBudget,
+    ammo, legibility, durationMs, spawnBudget,
     density: provenanceDensity(state),
     expectedFixes: expectedManualFixes(state, ammo)
   };

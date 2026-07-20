@@ -23,12 +23,13 @@ export function render(c) {
   const revenue = books.revenue || 0;
   const salaries = books.salaries || 0;
   const tokens = books.tokens || 0;
+  const msBonus = books.milestoneBonus || 0;
   const slaPenalty = Math.max(0, config.contractMonthly - revenue);
-  const net = revenue - salaries - tokens;
+  const net = revenue + msBonus - salaries - tokens;
 
   // notable month lines (no hidden numbers except the sanctioned reveal)
   const notes = log.filter((l) => l.month === booksMonth
-    && ['reveal', 'title', 'incident', 'hunt', 'ai-hunt', 'renewal'].includes(l.type))
+    && ['reveal', 'title', 'incident', 'hunt', 'ai-hunt', 'renewal', 'milestone'].includes(l.type))
     .map((l) => noteLine(l, h)).filter(Boolean);
 
   return `
@@ -36,6 +37,7 @@ export function render(c) {
       <div class="stamp caps">Month ${booksMonth} · Books</div>
       <div class="ledger">
         ${line('Revenue', revenue, 'pos', h)}
+        ${msBonus > 0 ? line('⭐ Milestone bonus', msBonus, 'pos', h) : ''}
         ${slaPenalty > 0 ? line('SLA penalty', -slaPenalty, 'neg', h) : ''}
         ${line('Payroll', -salaries, 'neg', h)}
         ${line('AI tokens', -tokens, 'neg', h)}
@@ -58,6 +60,9 @@ function noteLine(l, h) {
     case 'hunt': return `Hunt: fixed ${l.fixed}.`;
     case 'ai-hunt': return `AI hunt: closed ${l.fixed}${l.regressions ? `, ${l.regressions} quiet regression(s)` : ''}.`;
     case 'renewal': return `<span class="hi">Renewal: passed ${l.passed} of 3 — ${l.renewed ? 'RENEWED' : 'not renewed'}.</span>`;
+    case 'milestone': return l.hit
+      ? `<span class="hi">⭐ Milestone shipped — ${h.esc(l.title)}.</span>`
+      : `<span class="warn">⭐ Milestone missed — ${h.esc(l.title)} (${l.shipped}/${l.need} shipped).</span>`;
     default: return '';
   }
 }

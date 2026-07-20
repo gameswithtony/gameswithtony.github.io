@@ -72,7 +72,15 @@ const fixtures = (() => {
   const s4 = withNoMembers((s) => { s.cd = 6; });                 // high Cognitive Debt
   const s5 = initState('vibe', { junior: { name: 'Jun', trait: 'quick study', salary: 200, und: 40, morale: 10 } }, 'standard', 4); // sunk morale
   const s6 = withNoMembers((s) => { s.month = 12; });             // month 12 (renewal)
-  return [s0, s1, s3, s4, s5, s6];
+  // MOREFUN D5 fixtures — the mid/late-year deck reads earned wreckage + minMonth.
+  const backlogItem = (i) => ({ id: `bl-1-t1-${i}`, task: { id: `t1-${i}`, title: 'Old ask', size: 'medium', route: null }, route: null });
+  const s7 = pristineHealthy();                                   // late-year, missed milestone, deep CD, named backlog
+  s7.month = 8; s7.cd = 8; s7.client = 80;
+  s7.flags.milestonesMissed = 1;
+  s7.backlog = [1, 2, 3].map(backlogItem);
+  const s8 = withNoMembers((s) => { s.month = 5; s.cd = 5; s.client = 50; }); // Q2: unpaid invoice, debt ceiling, scope creep
+  const s9 = withNoMembers((s) => { s.month = 11; s.cd = 9; });   // Q4: the audit of the audit
+  return [s0, s1, s3, s4, s5, s6, s7, s8, s9];
 })();
 
 // ---------------------------------------------------------------------------
@@ -137,11 +145,13 @@ test('every predicate is callable against sample states without throwing', () =>
 });
 
 test('every deck entry is reachable — some fixture satisfies its predicate', () => {
+  // Mirrors engine eligibility: the minMonth gate AND the predicate (MOREFUN D5).
   for (const e of ALL) {
     const reachable = fixtures.some((st) => {
+      if (e.minMonth && st.month < e.minMonth) return false;
       try { return e.when ? !!e.when(st) : true; } catch { return false; }
     });
-    assert.ok(reachable, `${e.id}: no fixture state satisfies its predicate`);
+    assert.ok(reachable, `${e.id}: no fixture state satisfies its predicate (with its minMonth gate)`);
   }
 });
 
@@ -201,10 +211,15 @@ test('every effect object uses only legal keys (applyEffects does not throw)', (
   }
 });
 
-test('every effect is inside the §5 magnitude caps (2× for majors)', () => {
+test('every effect is inside the §5 magnitude caps (2× majors, ×quarter of minMonth)', () => {
+  // MOREFUN D5: an entry's caps scale with the quarter of its minMonth —
+  // late-gated events are allowed to genuinely wound.
+  const QMULT = CAPS.quarterMultipliers || [1, 1, 1, 1];
+  const quarterMult = (minMonth) =>
+    QMULT[Math.min(4, Math.max(1, Math.ceil((minMonth || 1) / 3))) - 1];
   for (const [deckName, deck] of Object.entries(DECKS)) {
-    const mult = deckName === 'majors' ? MAJOR_MULT : 1;
     for (const e of deck) {
+      const mult = (deckName === 'majors' ? MAJOR_MULT : 1) * quarterMult(e.minMonth);
       for (const c of e.choices) {
         for (const block of effectBlocks(c)) {
           checkCaps(block, mult, `${deckName}/${e.id}/${c.id}`);

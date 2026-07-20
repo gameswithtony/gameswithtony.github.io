@@ -28,9 +28,11 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 // Tuning constants local to the policy (not config knobs — these shape *play*,
 // not the game). Documented in the WP3 report.
-const HARD_SELF_ENERGY = 40;   // self-build hard tasks while Energy is above this
-const REST_ENERGY = 30;        // rest below this
+const HARD_SELF_ENERGY = 55;   // self-build hard tasks while Energy is above this
+const REST_ENERGY = 45;        // rest below this
 const HUNT_CD = 4;             // hunt when Cognitive Debt reaches this
+const FERRY_MONEY = 4000;      // at an event, buy the 'pay' option when this rich
+const HAND_ENERGY = 50;        // below this, avoid 'hand' set-piece options
 
 const hasOption = (d, id) => d.options.some((o) => o.id === id && !o.disabled);
 const firstEnabled = (d) => (d.options.find((o) => !o.disabled) || d.options[0]).id;
@@ -126,7 +128,14 @@ export const qualified = {
 
     // Events: the generic decision surface exposes no effect data on option rows
     // (only id/label/disabled/detail), so a fair bot cannot rank branches by
-    // outcome. Take the first offered branch. (Judgment call — see WP3 report.)
+    // outcome. Two id-level heuristics for the river crossings (ids ARE the
+    // visible surface): a rich shop buys the ferry, and a tired one does not
+    // ford by hand. Otherwise take the first offered branch.
+    if (visible.money >= FERRY_MONEY && hasOption(decision, 'pay')) return 'pay';
+    if (visible.energy < HAND_ENERGY) {
+      const notHand = decision.options.find((o) => !o.disabled && o.id !== 'hand');
+      if (notHand) return notHand.id;
+    }
     return firstEnabled(decision);
   }
 };

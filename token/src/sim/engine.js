@@ -17,6 +17,7 @@ import { resolveManualHunt, resolveAiHunt } from './hunt.js';
 import { createRng } from './rng.js';
 import { generateTasks } from '../data/tasks.js';
 import { generateCandidates } from '../data/candidates.js';
+import { milestones } from '../data/milestones.js';
 import { events } from '../data/events.js';
 import { majors } from '../data/majors.js';
 import { incidents } from '../data/incidents.js';
@@ -24,6 +25,9 @@ import { incidents } from '../data/incidents.js';
 const clone = (s) => structuredClone(s);
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const ROLES = ['junior', 'qa', 'senior'];
+
+/** Quarter of a month (1-4), clamped so month 13+ never walks off a schedule. */
+export const quarterOf = (m) => Math.min(4, Math.max(1, Math.ceil(m / 3)));
 
 // pendingEvent stores only { deck, id } in gameState (JSON-serializable — event
 // objects hold functions and must never enter state). Resolve to the live event
@@ -66,9 +70,27 @@ export function beginMonth(state, rng) {
   s._skillActivity = {};             // 'grew' | 'delegated' per skill, for rust
   s.pendingEvent = null;
 
-  const count = rng.range(config.tasksPerMonth.min, config.tasksPerMonth.max);
+  // MOREFUN D1: the demand ramp — task load reads the per-quarter schedule.
+  const sched = config.tasksPerMonth[quarterOf(s.month) - 1];
+  const count = rng.range(sched.min, sched.max);
   s.tasks = generateTasks(rng, count, s.month);
   s.backlog = s.backlog.map((b) => ({ ...b, route: null }));
+
+  // MOREFUN D4: quarterly milestones. The client names a deliverable at each
+  // quarter's first month; 1-2 fresh tasks per month arrive tagged toward it
+  // (tags carry the milestone id so stale backlog tags never count later).
+  if ((s.month - 1) % 3 === 0) {
+    const pool = milestones.filter((m) => !s.flags[`ms-${m.id}`]);
+    const src = pool.length ? pool : milestones;
+    const pick = src[rng.range(0, src.length - 1)];
+    s.flags[`ms-${pick.id}`] = true;
+    s.milestone = { id: pick.id, title: pick.title, deadlineMonth: s.month + 2, need: 0, shipped: 0 };
+  }
+  if (s.milestone) {
+    const tagCount = Math.min(config.milestone.taggedPerMonth[quarterOf(s.month) - 1], s.tasks.length);
+    for (let i = 0; i < tagCount; i++) s.tasks[i].milestone = s.milestone.id;
+    s.milestone.need += tagCount;
+  }
 
   s.capacity = { total: computeCapacity(s), spent: 0 };
   // capacityDelta and tokensCostMult are one-shot; consume them now
@@ -167,6 +189,15 @@ function buildStoreDecision(state) {
 // Decision surface
 // ---------------------------------------------------------------------------
 
+// A teammate holds one assigned task per month ("Assign: 1 theirs"). Usage is
+// derived from the routes already recorded this plan — no extra state.
+function memberSlotUsed(state, role) {
+  const key = `assign-${role}`;
+  const used = state.tasks.filter((t) => t.route === key).length
+    + state.backlog.filter((b) => b.route === key).length;
+  return used >= (config.memberTasksPerMonth ?? 1);
+}
+
 function routeOptions(state, isBacklog) {
   const cap = state.capacity;
   const opts = [
@@ -177,9 +208,11 @@ function routeOptions(state, isBacklog) {
       detail: cap.spent >= cap.total ? 'no capacity left' : '1 capacity' }
   ];
   for (const role of ROLES) {
+    const hired = !!state.team[role];
+    const taken = hired && memberSlotUsed(state, role);
     opts.push({
-      id: `assign-${role}`, label: `Assign to ${role}`, disabled: !state.team[role],
-      detail: state.team[role] ? 'their slot' : 'not hired'
+      id: `assign-${role}`, label: `Assign to ${role}`, disabled: !hired || taken,
+      detail: !hired ? 'not hired' : taken ? 'their slot is taken' : 'their slot'
     });
   }
   opts.push(isBacklog
@@ -434,11 +467,18 @@ export function resolveWork(state, rng) {
     }
   };
 
+  // Tagged work counts toward the CURRENT milestone only (ids must match).
+  const countMilestone = (item) => {
+    if (s.milestone && item.milestone === s.milestone.id) s.milestone.shipped += 1;
+  };
+
   // fresh tasks
   for (const t of s.tasks) {
     const result = runRoute(t, t.route, { fromBacklog: false });
     if (result === 'slipped') {
       newBacklog.push({ id: `bl-${s.month}-${t.id}`, task: { ...t, route: null }, route: null });
+    } else if (result === 'shipped') {
+      countMilestone(t);
     }
   }
   // backlog items
@@ -447,7 +487,7 @@ export function resolveWork(state, rng) {
       newBacklog.push({ ...b, route: null });
       continue;
     }
-    runRoute(b.task, b.route, { fromBacklog: true });
+    if (runRoute(b.task, b.route, { fromBacklog: true }) === 'shipped') countMilestone(b.task);
     // cleared: goodwill + client bump (not re-added to backlog)
     s.money += config.goodwillBonus;
     s.client = clamp(s.client + config.clientDeltas.backlogClear, config.clientMin, config.clientMax);
@@ -506,11 +546,20 @@ export function maybeEvent(state, rng) {
     return s;
   }
 
-  // incident flare (independent of the regular draw)
+  // Incident flare (MOREFUN D6: a set piece, not a ledger line). A flare is
+  // played out on screen — it takes the month's event slot, and its severity
+  // lands when the player's response resolves (see resolveEvent).
   const pool = s.defects.length;
   if (pool > 0) {
     const flareP = Math.min(config.incident.flarePerDefect * pool, config.incident.flareCap);
-    if (rng.chance(flareP)) s = flareIncident(s, rng);
+    if (rng.chance(flareP)) {
+      const inc = drawEvent(s, incidents, rng);
+      if (inc) {
+        s.pendingEvent = { deck: 'incident', id: inc.id };
+        s.phase = 'event';
+        return s;
+      }
+    }
   }
 
   // regular monthly event
@@ -521,35 +570,18 @@ export function maybeEvent(state, rng) {
   return s;
 }
 
-// WP1: an incident flare is engine-computed. Severity = Base x (1 + cdCoef*CD)
-// x (responderPassMult if a team-Debugging check passes) + floor(pool/divisor).
-// The responder check demonstrates team-target resolution. WP2 aligns incidents
-// to the full event schema.
-function flareIncident(state, rng) {
-  const s = clone(state);
-  const list = incidents.filter((i) => { try { return i.when ? i.when(s) : true; } catch { return false; } });
-  const inc = list.length ? list[rng.range(0, list.length - 1)] : null;
-  const base = inc?.base ?? config.incident.baseSeverity;
-
-  const chk = runCheck(s, { skill: 'debugging', dc: 50, target: 'team' }, rng);
-  const passMult = chk.success ? config.incident.responderPassMult : 1.0;
-  const sev = Math.round(
-    base * (1 + config.cdCoef * s.cd) * passMult + Math.floor(s.defects.length / config.incident.defectPoolDivisor)
-  );
-  s.openSeverity = Math.min(config.openSeverityCap, s.openSeverity + Math.max(0, sev));
-  s.log.push({ month: s.month, type: 'incident', id: inc?.id ?? 'incident', severity: sev, responderPassed: chk.success });
-  return s;
-}
-
 export function resolveEvent(state, optionId, rng) {
   let s = clone(state);
   const ev = resolvePendingEvent(s);
+  const deck = s.pendingEvent && s.pendingEvent.deck;
   const choice = ev.choices.find((c) => c.id === optionId) || ev.choices[0];
+  let checkPassed = null;
 
   if (choice.cost) s = applyEffects(s, choice.cost, rng);
 
   if (choice.check) {
     const chk = runCheck(s, choice.check, rng);
+    checkPassed = chk.success;
     // a check targeting you is always a calibration reveal (snap conf toward und)
     if (chk.valid && (choice.check.target == null || choice.check.target === 'you')) {
       const before = s.skills[choice.check.skill].conf;
@@ -566,6 +598,24 @@ export function resolveEvent(state, optionId, rng) {
     s = applyEffects(s, choice.effects, rng);
   }
 
+  // MOREFUN D6: an incident's severity lands when the response resolves.
+  //   Severity = base × (1 + cdCoef·CD) × (passMult if the responder check
+  //   passed, else 1) + floor(defectPool / divisor)
+  // No check chosen counts as no responder — the AI triaged, or you rolled
+  // back and went to bed; the pool doesn't care that it was reasonable.
+  if (deck === 'incident') {
+    const passMult = checkPassed === true ? config.incident.responderPassMult : 1.0;
+    const sev = Math.round(
+      (ev.base ?? config.incident.baseSeverity) * (1 + config.cdCoef * s.cd) * passMult
+      + Math.floor(s.defects.length / config.incident.defectPoolDivisor)
+    );
+    s.openSeverity = Math.min(config.openSeverityCap, s.openSeverity + Math.max(0, sev));
+    s.log.push({
+      month: s.month, type: 'incident', id: ev.id,
+      severity: sev, responderPassed: checkPassed === true
+    });
+  }
+
   s.log.push({ month: s.month, type: 'event', id: ev.id, choice: choice.id });
   s.pendingEvent = null;
   return s;
@@ -579,6 +629,29 @@ export function settleBooks(state, rng) {
 
   s.money += revenue - salaries - (s.monthTokens || 0);
 
+  // MOREFUN D4: settle the quarter's milestone at its deadline books. The
+  // outcome is a flag the decks can read — misses steer the angrier set pieces.
+  let milestoneBonus = 0;
+  if (s.milestone && s.month >= s.milestone.deadlineMonth) {
+    const ms = s.milestone;
+    const hit = ms.shipped >= ms.need;
+    if (hit) {
+      milestoneBonus = config.milestone.bonus;
+      s.money += milestoneBonus;
+      s.client = clamp(s.client + config.milestone.clientBonus, config.clientMin, config.clientMax);
+      s.flags.lastMilestoneMissed = false;
+    } else {
+      s.client = clamp(s.client - config.milestone.clientHit, config.clientMin, config.clientMax);
+      s.flags.lastMilestoneMissed = true;
+      s.flags.milestonesMissed = (s.flags.milestonesMissed || 0) + 1;
+    }
+    s.log.push({
+      month: s.month, type: 'milestone', id: ms.id, title: ms.title,
+      hit, shipped: ms.shipped, need: ms.need, bonus: milestoneBonus
+    });
+    s.milestone = null;
+  }
+
   // monthly client deltas (slip/backlog-clear were applied during resolveWork)
   s.client += config.clientDeltas.openSeverityPerPoint * s.openSeverity;
   s.client += config.clientDeltas.backlogLingerPerItem * s.backlog.length;
@@ -586,7 +659,8 @@ export function settleBooks(state, rng) {
   s.client = clamp(s.client, config.clientMin, config.clientMax);
 
   s.log.push({
-    month: s.month, type: 'books', revenue, salaries, tokens: s.monthTokens || 0, money: s.money
+    month: s.month, type: 'books', revenue, salaries, tokens: s.monthTokens || 0,
+    milestoneBonus, money: s.money
   });
 
   // engine-level deaths (only these three; others arrive via endRun effect)

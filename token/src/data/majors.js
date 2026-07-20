@@ -73,7 +73,11 @@ export const majors = [
     id: 'the-outage',
     slot: 'q3',
     weight: 4,
-    when: (s) => s.cd >= 5 || s.openSeverity >= 3 || s.defects.length >= 4,
+    // MOREFUN retune: with difficulty now systemic (ramp, margins, milestones),
+    // the deck-authored death is reserved for DEEP wreckage — a shop that has
+    // truly shipped a system nobody understands. Merely-dented runs draw the
+    // other crossings and die of their own arithmetic instead.
+    when: (s) => s.cd >= 8 || s.openSeverity >= 5 || s.defects.length >= 7,
     text: () => 'The Outage: everything is down, at once, on a Friday. The dashboards are red in colors you did not know they had. Someone is already on the phone.',
     choices: [
       {

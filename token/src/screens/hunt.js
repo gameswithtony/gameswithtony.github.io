@@ -1,98 +1,98 @@
-// hunt.js — THE HUNT (WP6 whack-a-mole skin), replacing the WP5 placeholder.
+// hunt.js — THE HUNT (MOREFUN D7: Spot the Bug), replacing the whack-a-mole skin.
 //
-// A 45-second twitch minigame that is a pure SKIN over the statistical resolution
-// in src/sim/hunt.js. It NEVER touches sim state directly: it reads its pacing
-// from the sanctioned huntParams(state) projection (spawn rate, window, ammo,
-// provenance density) and writes back exactly one number — a clamped performance
-// modifier in [-0.2, +0.2] — which the engine feeds to resolveManualHunt. Stats
-// rule; twitch nudges by at most 20%.
+// A 45-second READING minigame that is a pure SKIN over the statistical
+// resolution in src/sim/hunt.js. Boards of code panels come up one after
+// another; at most one panel per board hides a genuinely flawed line, and you
+// click the LINE. Wrong clicks waste ammo. Perception and knowledge, not
+// reflexes.
+//
+// Atrophy is rendered as illegibility: huntParams.legibility (derived from
+// hidden Debugging Understanding) sets how many panels you can even read — the
+// rest are static. You are staring at your own system and cannot parse it.
+//
+// The skin contract is unchanged: it reads the sanctioned huntParams(state)
+// projection (ammo, legibility, spawnBudget, provenance density) and writes
+// back exactly one number — a clamped performance modifier in [-0.2, +0.2] —
+// which the engine feeds to resolveManualHunt. Stats rule; reading nudges by
+// at most 20%.
 //
 // Two phases, both rendered here:
-//   'play'   — the interactive grid of code panels with bugs on timed windows.
-//   'result' — the deadpan exit line ("You fixed N bugs."), N being the engine's
-//              statistical count, NOT the raw squash tally.
-//
-// prefers-reduced-motion: the 45s timer and the bug windows stay (they're the
-// game), but shake/flash cosmetics drop. Playable by touch AND mouse: bugs are
-// full <button>s, ≥44px, driven by click (which fires for both).
+//   'play'   — the interactive boards.
+//   'result' — the deadpan exit line ("You fixed N bugs."), N being the
+//              engine's statistical count, NOT the raw spotting tally.
 
 const MODULES = [
   'auth', 'payments', 'cache', 'api', 'ui', 'db',
   'jobs', 'search', 'billing', 'notifications', 'reports', 'sync'
 ];
 
-// Provenance buckets: bugs cluster in panels named after UNREVIEWED modules.
+// Provenance buckets: buggy panels prefer names of UNREVIEWED modules.
 const UNREVIEWED = new Set(['ai-raw', 'ai-hunt-regression', 'teammate']);
 
-const CODE_LINES = [
-  'function retry(req){', '  if (!ctx.valid) return;', '  const t = tokens.pop();',
-  'await db.commit(tx)', 'cache.set(key, val, ttl)', 'for (const row of rows) {',
-  '  emit("done", row.id)', 'return memo[hash] ?? calc()', 'if (queue.length > max)',
-  '  throttle(next, 250)', 'const res = model.run(p)', 'catch (e) { log.warn(e) }',
-  'state = reduce(state, a)', '  flush(buffer); buffer=[]', 'guard(user, "write")',
-  '} // TODO: verify path', 'schedule(job, cron)', '  return early(false)'
+// Buggy snippets: four lines, ONE genuinely flawed. `flaw` is the line index;
+// `kind` is the short diagnosis stamped on the panel when found. Keep lines
+// under ~30 chars so they survive the narrow grid.
+const BUGGY = [
+  { kind: 'off-by-one', flaw: 2, lines: [
+    'function sum(rows) {', '  let t = 0;', '  for (i=0; i<=rows.length; i++)', '    t += rows[i].amt;'] },
+  { kind: 'assignment, not equality', flaw: 1, lines: [
+    'function canWrite(u) {', '  if (u.role = "admin")', '    return true;', '  return acl.check(u);'] },
+  { kind: 'missing await', flaw: 1, lines: [
+    'async function load(id) {', '  const res = fetchUser(id);', '  return res.profile;', '}'] },
+  { kind: 'swapped arguments', flaw: 2, lines: [
+    '// transfer(from, to, amt)', 'function settle(inv) {', '  transfer(inv.payee,', '    inv.payer, inv.total);'] },
+  { kind: 'lexicographic sort', flaw: 1, lines: [
+    'function median(xs) {', '  xs.sort();', '  const m = xs.length >> 1;', '  return xs[m];'] },
+  { kind: 'called, not passed', flaw: 2, lines: [
+    'function debounce(fn) {', '  clearTimeout(t);', '  t = setTimeout(fn(), 250);', '}'] },
+  { kind: 'precedence', flaw: 1, lines: [
+    'function ttl(opts) {', '  if (opts.ttl || 0 > MAX)', '    throw new RangeError();', '  return opts.ttl ?? 3600;'] },
+  { kind: 'undefined + number', flaw: 0, lines: [
+    'let total;', 'for (const r of cart) {', '  total += r.price * r.qty;', '}'] },
+  { kind: 'typo in the key', flaw: 2, lines: [
+    'cache.set(userKey, user);', 'const hit =', '  cache.get(usrKey);', 'return hit ?? load(id);'] },
+  { kind: 'mutating while iterating', flaw: 2, lines: [
+    'for (const j of jobs) {', '  if (j.done)', '    jobs.splice(i, 1);', '}'] },
+  { kind: 'getDay is the weekday', flaw: 2, lines: [
+    '// bill on the 1st', 'const day =', '  new Date(ts).getDay();', 'if (day === 1) bill();'] },
+  { kind: 'swallowed error', flaw: 3, lines: [
+    'try {', '  await db.commit(tx);', '} catch (e) {', '  return true;'] }
 ];
 
-// A chunky cartoon ladybug (SVG group), sized to fill its button.
-function bugSvg() {
-  return `<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-    <line x1="9"  y1="16" x2="2"  y2="12" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="9"  y1="24" x2="2"  y2="26" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="31" y1="16" x2="38" y2="12" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="31" y1="24" x2="38" y2="26" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="16" y1="5"  x2="13" y2="1"  stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="24" y1="5"  x2="27" y2="1"  stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round"/>
-    <circle cx="13" cy="1" r="1.6" fill="var(--ink)"/>
-    <circle cx="27" cy="1" r="1.6" fill="var(--ink)"/>
-    <ellipse cx="20" cy="22" rx="11" ry="13" fill="var(--coral)" stroke="var(--ink)" stroke-width="2.5"/>
-    <line x1="20" y1="10" x2="20" y2="34" stroke="var(--ink)" stroke-width="2.5"/>
-    <circle cx="20" cy="10" r="5.5" fill="var(--ink)"/>
-    <circle cx="18" cy="9" r="1.1" fill="#ffffff"/>
-    <circle cx="22" cy="9" r="1.1" fill="#ffffff"/>
-    <circle cx="15" cy="19" r="2" fill="var(--ink)"/>
-    <circle cx="25" cy="19" r="2" fill="var(--ink)"/>
-    <circle cx="17" cy="28" r="2" fill="var(--ink)"/>
-    <circle cx="23" cy="28" r="2" fill="var(--ink)"/>
-  </svg>`;
-}
-
-// Build the panel descriptors: N panels, some flagged "hot" (unreviewed) so bugs
-// cluster there. Deterministic layout from the density map (visual only).
-function buildPanels(params, n) {
-  const density = params.density || {};
-  let unreviewed = 0, total = 0;
-  for (const p of Object.keys(density)) {
-    total += density[p];
-    if (UNREVIEWED.has(p)) unreviewed += density[p];
-  }
-  const frac = total > 0 ? unreviewed / total : 0.4;
-  const hotCount = Math.max(1, Math.min(n - 1, Math.round(frac * n)));
-  const panels = [];
-  for (let i = 0; i < n; i++) {
-    const hot = i < hotCount;                     // first `hotCount` panels are hot
-    panels.push({ idx: i, module: MODULES[i % MODULES.length], hot });
-  }
-  return panels;
-}
-
-function panelHtml(p) {
-  const lines = [];
-  const start = (p.idx * 3) % CODE_LINES.length;
-  for (let i = 0; i < 4; i++) lines.push(CODE_LINES[(start + i) % CODE_LINES.length]);
-  const tag = p.hot
-    ? `<span class="hunt-mod hot">${p.module} · unreviewed</span>`
-    : `<span class="hunt-mod">${p.module}</span>`;
-  const code = lines.map((l) => `<span class="hunt-cl">${escapeHtml(l)}</span>`).join('');
-  return `<div class="hunt-panel" data-panel="${p.idx}" data-hot="${p.hot ? 1 : 0}">
-    ${tag}
-    <div class="hunt-code">${code}</div>
-    <div class="hunt-slot"></div>
-  </div>`;
-}
+// Clean decoys: four lines of plausible, correct code.
+const CLEAN = [
+  ['function retry(fn, n) {', '  if (n <= 0) throw last;', '  return fn()', '    .catch(() => retry(fn, n-1));'],
+  ['const key = hash(req.url);', 'const hit = cache.get(key);', 'if (hit) return hit;', 'return fill(key, req);'],
+  ['for (const row of rows) {', '  emit("row", row.id);', '  seen.add(row.id);', '}'],
+  ['function clamp(x, lo, hi) {', '  if (x < lo) return lo;', '  if (x > hi) return hi;', '  return x;'],
+  ['const q = jobs', '  .filter((j) => !j.done)', '  .sort((a, b) => a.at - b.at)', '  .slice(0, MAX_BATCH);'],
+  ['async function save(doc) {', '  const tx = await db.begin();', '  await tx.put(doc);', '  return tx.commit();'],
+  ['guard(user, "write");', 'audit.log(user.id, "write");', 'return store.update(id,', '  patch);'],
+  ['if (queue.length > max) {', '  throttle(next, 250);', '  metrics.inc("backoff");', '}'],
+  ['const cfg = {', '  ttl: env.TTL ?? 3600,', '  retries: 3,', '};'],
+  ['function* pages(res) {', '  yield res.items;', '  if (res.next)', '    yield* pages(res.next);']
+];
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function pipStr(filled, total) {
+  filled = Math.max(0, Math.min(total, filled));
+  return '▮'.repeat(filled) + '▯'.repeat(Math.max(0, total - filled));
+}
+
+// Static for a panel you can't parse. Deterministic-ish shapes, purely visual.
+function garbledLines(seed) {
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const a = 3 + ((seed + i * 7) % 5);
+    const b = 2 + ((seed * 3 + i) % 6);
+    const c = 3 + ((seed + i * 11) % 4);
+    out.push(`${'▒'.repeat(a)} ${'▒'.repeat(b)} ${'▒'.repeat(c)}`);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,11 +105,10 @@ export function render(c) {
 
   const narrow = typeof window !== 'undefined' && window.innerWidth < 620;
   const cols = narrow ? 2 : 3;
-  const n = cols * 3;                              // 2x3 mobile, 3x3 desktop
   const params = (c.app && c.app.huntParams) || { ammo: 0, spawnBudget: 0, density: {} };
-  const panels = buildPanels(params, n).map(panelHtml).join('');
   const ammo = Math.max(0, Math.floor(params.ammo || 0));
 
+  // The grid starts empty; after() deals the first board and every one after it.
   return `
     <div class="screen hunt" data-cols="${cols}">
       ${h.strip(vs)}
@@ -121,24 +120,24 @@ export function render(c) {
           <div class="hunt-timer-fill"></div>
         </div>
       </div>
-      <div class="hunt-grid" style="--hunt-cols:${cols}">${panels}</div>
+      <div class="dim small" style="flex:0 0 auto">One of these diffs may be wrong. Click the flawed <span class="hi">line</span>.</div>
+      <div class="hunt-grid" style="--hunt-cols:${cols}"></div>
       <div class="hunt-foot">
-        <span class="hunt-tally">Squashed: <b>0</b></span>
-        <button class="row hunt-leave" data-action="hunt-leave"><span class="lab">Leave the hunt</span></button>
+        <span class="hunt-tally">Found: <b>0</b></span>
+        <button class="row hunt-next" data-hunt-next="1"><span class="lab">Looks clean — next diff ▶</span></button>
+        <button class="row hunt-leave" data-action="hunt-leave"><span class="lab">Leave</span></button>
       </div>
     </div>`;
-}
-
-function pipStr(filled, total) {
-  filled = Math.max(0, Math.min(total, filled));
-  return '▮'.repeat(filled) + '▯'.repeat(Math.max(0, total - filled));
 }
 
 function renderResult(c) {
   const { h, vs, huntResult } = c;
   const fixed = huntResult ? huntResult.fixed : 0;
   const tally = (c.app && c.app.huntTally) || {};
-  const squashed = tally.squashed || 0;
+  const found = tally.found || 0;
+  const presented = tally.presented || 0;
+  const wrong = tally.wrong || 0;
+  const unread = tally.unreadable || 0;
   return `
     <div class="screen center">
       ${h.strip(vs)}
@@ -146,9 +145,11 @@ function renderResult(c) {
       <h2 class="sub">The Hunt</h2>
       <div class="card" style="max-width:460px;text-align:left">
         <div class="hi" style="font-size:1.25em">You fixed ${fixed} ${fixed === 1 ? 'bug' : 'bugs'}.</div>
-        <div class="small dim" style="margin-top:6px">You swung at ${squashed}. What surfaces scales with
-        your hidden Debugging Understanding; your review capacity capped what you could carry. What it
-        doesn't say: how many were down there.</div>
+        <div class="small dim" style="margin-top:6px">You spotted ${found} of the ${presented} flawed
+        ${presented === 1 ? 'diff' : 'diffs'} that came up${wrong ? `, with ${wrong} false alarm${wrong === 1 ? '' : 's'}` : ''}.${
+          unread ? ` ${unread} panel${unread === 1 ? '' : 's'} you couldn't parse at all.` : ''}
+        What surfaces scales with your hidden Debugging Understanding; your review capacity capped what
+        you could carry. What it doesn't say: how many were down there.</div>
       </div>
       <div class="spacer"></div>
       <div class="menu" style="width:100%;max-width:420px">
@@ -174,94 +175,166 @@ export function after(c) {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const durationMs = params.durationMs || 45000;
-  const windowMs = params.windowMs || 1200;
-  const spawnEveryMs = params.spawnEveryMs || 900;
   const spawnBudget = Math.max(0, params.spawnBudget || 0);
+  const legibility = Math.max(0, Math.min(1, params.legibility ?? 0.8));
   const startAmmo = Math.max(0, Math.floor(params.ammo || 0));
+  const cols = Number(root.dataset.cols) || 3;
+  const panelCount = cols * 2;                       // 2x2 mobile, 3x2 desktop
 
-  const panelEls = Array.from(root.querySelectorAll('.hunt-panel'));
+  const grid = root.querySelector('.hunt-grid');
   const timerFill = root.querySelector('.hunt-timer-fill');
   const pipsEl = root.querySelector('.hunt-pips');
   const tallyEl = root.querySelector('.hunt-tally b');
+  const nextBtn = root.querySelector('.hunt-next');
 
-  // live state
+  // Hot fraction: how much of the pool lives in unreviewed modules (visual only).
+  const density = params.density || {};
+  let hotSum = 0, allSum = 0;
+  for (const p of Object.keys(density)) {
+    allSum += density[p];
+    if (UNREVIEWED.has(p)) hotSum += density[p];
+  }
+  const hotFrac = allSum > 0 ? hotSum / allSum : 0.4;
+
+  // session state
   let ammo = startAmmo;
-  let squashed = 0;
-  let spawnedTotal = 0;
-  let catchable = 0;              // bugs that appeared while ammo remained
-  const active = new Map();       // panelIdx -> { el, born }
+  let found = 0;              // flawed lines correctly clicked
+  let wrong = 0;              // false alarms (clean lines clicked)
+  let presented = 0;          // boards WITH a bug shown so far
+  let unreadable = 0;         // garbled panels dealt (for the exit line)
+  let bugsDealt = 0;          // buggy panels dealt (vs spawnBudget)
+  let board = null;           // { hasBug, bugPanel, flawLine, kind, solved }
+  let boardLock = false;      // input freeze during the advance beat
   let elapsed = 0;
-  let spawnAcc = 0;
   let last = performance.now();
   let stopped = false;
   let raf = 0;
 
-  // Spawn-weight: hot (unreviewed) panels draw 3x the bugs.
-  const weights = panelEls.map((el) => (el.dataset.hot === '1' ? 3 : 1));
+  const bugPool = shuffled(BUGGY);
+  let bugCursor = 0;
 
-  function pickPanel() {
-    const free = [];
-    let sum = 0;
-    for (let i = 0; i < panelEls.length; i++) {
-      if (!active.has(i)) { free.push(i); sum += weights[i]; }
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-    if (!free.length) return -1;
-    let r = Math.random() * sum;
-    for (const i of free) { r -= weights[i]; if (r <= 0) return i; }
-    return free[free.length - 1];
+    return a;
   }
 
-  function spawnBug() {
-    const idx = pickPanel();
-    if (idx < 0) return;
-    const slot = panelEls[idx].querySelector('.hunt-slot');
-    if (!slot) return;
-    const btn = document.createElement('button');
-    btn.className = 'hunt-bug' + (reduce ? '' : ' pop');
-    btn.type = 'button';
-    btn.setAttribute('aria-label', 'Fix bug');
-    btn.innerHTML = bugSvg();
-    btn.addEventListener('click', (e) => { e.preventDefault(); squash(idx, btn); });
-    slot.appendChild(btn);
-    active.set(idx, { el: btn, born: performance.now() });
-    spawnedTotal++;
-    if (ammo > 0) catchable++;   // only count bugs you had ammo to catch
-  }
+  function dealBoard() {
+    if (!grid) return;
+    boardLock = false;
+    const hasBug = bugsDealt < spawnBudget;
+    const garbledCount = Math.max(0, Math.min(panelCount - 1, Math.round((1 - legibility) * panelCount)));
 
-  function squash(idx, btn) {
-    if (stopped) return;
-    const rec = active.get(idx);
-    if (!rec || rec.el !== btn) return;
-    if (ammo <= 0) return;                 // out of capacity: can't fix more
-    ammo--;
-    squashed++;
-    active.delete(idx);
-    if (audio.bugFixed) audio.bugFixed();
-    if (reduce) { btn.remove(); }
-    else {
-      btn.classList.add('squashed');
-      const b = btn;
-      setTimeout(() => { if (b.parentNode) b.remove(); }, 140);
-      panelEls[idx].classList.add('flash');
-      const p = panelEls[idx];
-      setTimeout(() => p.classList.remove('flash'), 160);
-    }
-    updateHud();
-    if (ammo <= 0) finish();               // capacity spent -> hunt's over
-  }
+    // slots: shuffle indexes; garbled take the tail, the bug takes a random
+    // readable slot.
+    const order = shuffled(Array.from({ length: panelCount }, (_, i) => i));
+    const garbledSet = new Set(order.slice(0, garbledCount));
+    const readable = order.slice(garbledCount);
+    const bugSlot = hasBug ? readable[Math.floor(Math.random() * readable.length)] : -1;
 
-  function expireBugs(now) {
-    for (const [idx, rec] of active) {
-      if (now - rec.born >= windowMs) {
-        if (rec.el.parentNode) rec.el.remove();
-        active.delete(idx);                // escaped: a catchable miss
+    const snippet = hasBug ? bugPool[bugCursor++ % bugPool.length] : null;
+    const cleanPool = shuffled(CLEAN);
+    let cleanCursor = 0;
+    const mods = shuffled(MODULES);
+
+    const cells = [];
+    for (let i = 0; i < panelCount; i++) {
+      const module = mods[i % mods.length];
+      if (garbledSet.has(i)) {
+        const lines = garbledLines(i + bugsDealt * 7).map((l) => `<span class="hunt-cl">${l}</span>`).join('');
+        cells.push(`<div class="hunt-panel garbled" title="You can't parse this one.">
+          <span class="hunt-mod">▒▒▒▒▒▒.js</span>
+          <div class="hunt-code" aria-label="Unreadable code">${lines}</div>
+        </div>`);
+        continue;
       }
+      const isBug = i === bugSlot;
+      const lines = isBug ? snippet.lines : cleanPool[cleanCursor++ % cleanPool.length];
+      // the buggy diff tends to live in an unreviewed module
+      const hot = isBug ? Math.random() < Math.max(0.5, hotFrac) : Math.random() < hotFrac * 0.4;
+      const tag = hot
+        ? `<span class="hunt-mod hot">${module} · unreviewed</span>`
+        : `<span class="hunt-mod">${module}</span>`;
+      const lineHtml = lines.map((l, li) =>
+        `<button type="button" class="hunt-line" data-panel="${i}" data-line="${li}"
+           aria-label="Line: ${escapeHtml(l.trim() || '(blank)')}">${escapeHtml(l)}</button>`).join('');
+      cells.push(`<div class="hunt-panel" data-panel="${i}">
+        ${tag}
+        <div class="hunt-code">${lineHtml}</div>
+      </div>`);
     }
+
+    grid.innerHTML = cells.join('');
+    unreadable += garbledCount;
+    if (hasBug) {
+      bugsDealt++;
+      presented++;
+      board = { hasBug, bugPanel: bugSlot, flawLine: snippet.flaw, kind: snippet.kind, solved: false };
+    } else {
+      board = { hasBug: false, bugPanel: -1, flawLine: -1, kind: '', solved: false };
+    }
+  }
+
+  function advance(delayMs) {
+    boardLock = true;
+    const go = () => {
+      if (stopped) return;
+      // out of bugs to show and this board is done -> nothing left to find
+      if (bugsDealt >= spawnBudget && (board == null || board.solved || !board.hasBug)) { finish(); return; }
+      dealBoard();
+    };
+    if (typeof c.schedule === 'function') c.schedule(go, delayMs); else setTimeout(go, delayMs);
+  }
+
+  function onGridClick(e) {
+    if (stopped || boardLock) return;
+    const btn = e.target.closest('.hunt-line');
+    if (!btn || !grid.contains(btn)) return;
+    if (ammo <= 0) return;
+    const panel = Number(btn.dataset.panel);
+    const line = Number(btn.dataset.line);
+    const isFlaw = board && board.hasBug && !board.solved
+      && panel === board.bugPanel && line === board.flawLine;
+
+    ammo--;
+    if (isFlaw) {
+      found++;
+      board.solved = true;
+      btn.classList.add('found');
+      const panelEl = grid.querySelector(`.hunt-panel[data-panel="${panel}"]`);
+      if (panelEl) {
+        panelEl.classList.add('caught');
+        const badge = document.createElement('span');
+        badge.className = 'hunt-kind';
+        badge.textContent = `✓ ${board.kind}`;
+        panelEl.appendChild(badge);
+      }
+      if (audio.bugFixed) audio.bugFixed();
+      updateHud();
+      if (ammo <= 0) { finishSoon(650); return; }
+      advance(reduce ? 250 : 650);
+      return;
+    }
+    // false alarm: the line stays marked; the board stays up
+    wrong++;
+    btn.classList.add('wrong');
+    btn.disabled = true;
+    if (audio.tick) audio.tick();
+    updateHud();
+    if (ammo <= 0) finishSoon(500);
+  }
+
+  function onNext() {
+    if (stopped || boardLock) return;
+    advance(0);                      // an unfound bug simply escapes
   }
 
   function updateHud() {
     if (pipsEl) pipsEl.textContent = pipStr(ammo, startAmmo);
-    if (tallyEl) tallyEl.textContent = String(squashed);
+    if (tallyEl) tallyEl.textContent = String(found);
   }
 
   function frame(now) {
@@ -271,39 +344,32 @@ export function after(c) {
     elapsed += dt;
     const timeLeft = Math.max(0, durationMs - elapsed);
     if (timerFill) timerFill.style.width = (100 * timeLeft / durationMs).toFixed(1) + '%';
-
-    expireBugs(now);
-
-    spawnAcc += dt;
-    if (spawnAcc >= spawnEveryMs) {
-      spawnAcc = 0;
-      if (spawnedTotal < spawnBudget && ammo > 0) spawnBug();
-    }
-
-    const budgetDone = spawnedTotal >= spawnBudget && active.size === 0;
-    if (timeLeft <= 0 || budgetDone || (ammo <= 0 && active.size === 0)) { finish(); return; }
+    if (timeLeft <= 0) { finish(); return; }
     raf = requestAnimationFrame(frame);
+  }
+
+  function finishSoon(ms) {
+    boardLock = true;
+    if (typeof c.schedule === 'function') c.schedule(finish, ms); else setTimeout(finish, ms);
   }
 
   function finish() {
     if (stopped) return;
     stopped = true;
     if (raf) cancelAnimationFrame(raf);
-    for (const [, rec] of active) if (rec.el.parentNode) rec.el.remove();
-    active.clear();
 
-    // Performance -> clamped modifier. Neutral hit-rate is 50%: catching half the
-    // bugs you had ammo for is "as statistically expected" (modifier 0); flawless
-    // play caps at +0.2, whiffing at -0.2. The clamp is what keeps stats in charge.
-    const hitRate = catchable > 0 ? squashed / catchable : 0.5;
+    // Performance -> clamped modifier. Neutral is spotting HALF the flawed
+    // diffs that came up: modifier 0. A clean sweep caps at +0.2, a blind
+    // session at -0.2. The clamp is what keeps stats in charge.
+    const hitRate = presented > 0 ? found / presented : 0.5;
     const modifier = clampMod((hitRate - 0.5) * 0.4);
     if (typeof c.onHuntDone === 'function') {
-      c.onHuntDone({ squashed, spawned: spawnedTotal, catchable, modifier });
+      c.onHuntDone({ found, presented, wrong, unreadable, modifier });
     }
   }
 
   // Expose a canceller (router cleanup, no resolve) and an early-finisher (the
-  // "Leave the hunt" button — resolves with whatever was squashed so far).
+  // "Leave" button — resolves with whatever was found so far).
   if (c.app) {
     c.app.huntStop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); };
     c.app.huntFinishNow = finish;
@@ -317,6 +383,9 @@ export function after(c) {
     if (typeof c.schedule === 'function') c.schedule(done, 0); else setTimeout(done, 0);
     return;
   }
+  grid.addEventListener('click', onGridClick);
+  if (nextBtn) nextBtn.addEventListener('click', onNext);
+  dealBoard();
   raf = requestAnimationFrame(frame);
 }
 

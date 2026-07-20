@@ -48,8 +48,17 @@ export function visibleState(state) {
 
     // backlog is a visible count + routable list; defect POOL stays hidden
     backlogCount: state.backlog.length,
-    backlog: state.backlog.map((b) => ({ id: b.id, size: b.task.size, route: b.route })),
-    tasks: state.tasks.map((t) => ({ id: t.id, title: t.title, size: t.size, route: t.route })),
+    backlog: state.backlog.map((b) => ({
+      id: b.id, size: b.task.size, route: b.route,
+      milestone: !!(state.milestone && b.task.milestone === state.milestone.id)
+    })),
+    tasks: state.tasks.map((t) => ({
+      id: t.id, title: t.title, size: t.size, route: t.route,
+      milestone: !!(state.milestone && t.milestone === state.milestone.id)
+    })),
+
+    // the quarterly deliverable is fully visible (MOREFUN D4)
+    milestone: state.milestone ? { ...state.milestone } : null,
 
     // team: role, name, trait, salary, mood icon — no und, no morale number
     team: {

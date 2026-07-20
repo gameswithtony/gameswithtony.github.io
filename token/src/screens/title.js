@@ -1,9 +1,8 @@
-// title.js — TITLE screen + "Learn about the trail" and "See the Top Ten" panes.
+// title.js — TITLE screen + "Learn about the trail" pane.
 // Deadpan Oregon-Trail menu. Offers "Continue the year" only when a save exists.
 
 export function render(c) {
   if (c.view === 'about') return about(c);
-  if (c.view === 'topten') return topten(c);
 
   const { h } = c;
   const rows = [];
@@ -11,7 +10,6 @@ export function render(c) {
   rows.push(h.row({ key: k++, label: 'Travel the year', attrs: 'data-action="new-run"' }));
   if (c.hasSave) rows.push(h.row({ key: k++, label: 'Continue the year', detail: 'a run is in progress', attrs: 'data-action="resume"' }));
   rows.push(h.row({ key: k++, label: 'Learn about the trail', attrs: 'data-action="nav" data-view="about"' }));
-  rows.push(h.row({ key: k++, label: 'See the Top Ten', attrs: 'data-action="nav" data-view="topten"' }));
 
   return `
     <div class="screen center">
@@ -46,19 +44,3 @@ function about(c) {
     </div>`;
 }
 
-function topten(c) {
-  const { h, topten } = c;
-  const rows = topten.length
-    ? topten.map((e, i) => `<tr><td>${i + 1}.</td><td>${h.esc(e.initials || '???')}</td>`
-        + `<td>${h.esc(e.title || e.ending || '')}</td><td class="money">${e.score}</td></tr>`).join('')
-    : `<tr><td colspan="4" class="dim">No names on the wall yet.</td></tr>`;
-  return `
-    <div class="screen scroll center">
-      <h2 class="sub">The Top Ten</h2>
-      <table class="topten"><tbody>${rows}</tbody></table>
-      <div class="spacer"></div>
-      <div class="menu" style="max-width:360px;width:100%">
-        ${h.row({ key: 1, label: 'Back', attrs: 'data-action="nav" data-view="title"' })}
-      </div>
-    </div>`;
-}

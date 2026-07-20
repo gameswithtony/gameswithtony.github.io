@@ -2,10 +2,15 @@
 // Three tiny pure operations, per economy doc §Event system. Predicates are JS
 // functions `when(s)`; a throwing predicate is treated as not-eligible so a bad
 // edit can never crash a live run (the schema test catches it earlier).
+//
+// MOREFUN D5: an entry may declare `minMonth` — it is not drawable before that
+// month, and the schema test grants it that quarter's larger effect caps.
 
-/** Entries whose `when(state)` is truthy. Throwing predicates are excluded. */
+/** Entries whose month gate passes and whose `when(state)` is truthy.
+ *  Throwing predicates are excluded. */
 export function eligible(state, deck) {
   return deck.filter((e) => {
+    if (e.minMonth && state.month < e.minMonth) return false;
     try { return e.when ? e.when(state) : true; }
     catch { return false; }
   });

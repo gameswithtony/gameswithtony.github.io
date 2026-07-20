@@ -12,7 +12,7 @@
 //    loads it defensively and falls back to built-in copy if it is absent or
 //    shaped differently.
 //  - Qualified: the win card. Impostor: the horror-deadpan card.
-//  - Every ending then gets the postmortem chart, the score, and the Top Ten.
+//  - Every ending then gets the postmortem chart and the score.
 
 import { config } from '../../config.js';
 
@@ -170,7 +170,7 @@ function impostorCard(gs, h) {
 
 // ---- Screen ---------------------------------------------------------------
 export function render(c) {
-  const { gs, h, app, topten } = c;
+  const { gs, h } = c;
   const { score, title } = computeScore(gs);
 
   let card;
@@ -178,26 +178,10 @@ export function render(c) {
   else if (gs.ending === 'impostor') card = impostorCard(gs, h);
   else card = linkedupCard(gs, h);
 
-  let tail;
-  if (app.scoreSaved) {
-    const rows = topten.map((e, i) => {
-      const you = e.initials === app.savedInitials && e.score === score;
-      return `<tr class="${you ? 'you' : ''}"><td>${i + 1}.</td><td>${h.esc(e.initials)}</td>`
-        + `<td>${h.esc(e.title || e.ending || '')}</td><td class="money">${e.score}</td></tr>`;
-    }).join('');
-    tail = `
-      <table class="topten"><tbody>${rows}</tbody></table>
+  const tail = `
       <div class="menu" style="width:100%;max-width:420px">
         ${h.row({ key: 'enter', label: '▶ Back to the title', attrs: 'data-action="quit-title"' })}
       </div>`;
-  } else {
-    tail = `
-      <div class="initials">
-        Enter your initials:
-        <input maxlength="3" autocomplete="off" value="${h.esc((gs.class && gs.class.id ? gs.class.id.slice(0, 3) : 'YOU').toUpperCase())}">
-        <button class="row" style="display:inline-flex;width:auto;min-height:36px" data-action="save-initials"><span class="lab">Save</span></button>
-      </div>`;
-  }
 
   return `
     <div class="screen scroll center">

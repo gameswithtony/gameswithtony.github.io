@@ -267,10 +267,18 @@ export function render(c) {
   }));
   rows.push(h.row({ key: k++, label: 'Look at the year', attrs: 'data-action="nav" data-view="map"' }));
 
+  // MOREFUN D4: the quarter's deliverable, always in view with its fuse.
+  const ms = vs.milestone;
+  const msLine = ms
+    ? `<div class="card"><span class="hi">⭐ ${esc(ms.title)}</span>
+        <span class="det">due month ${ms.deadlineMonth} · ${ms.shipped}/${ms.need} shipped</span></div>`
+    : '';
+
   return `
     <div class="screen">
       ${h.strip(vs)}
       ${office(vs)}
+      ${msLine}
       <div class="hi" style="margin-top:2px">It is month ${vs.month}. What will you do?</div>
       <div class="menu">${rows.join('')}</div>
       <div class="hintbar">${h.seasonName(vs.month)} · ${h.monthName(vs.month)}</div>

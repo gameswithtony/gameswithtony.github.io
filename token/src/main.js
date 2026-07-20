@@ -38,13 +38,12 @@ import * as Books from './screens/books.js';
 import * as GameOver from './screens/gameover.js';
 
 const SAVE_KEY = 'tokentrail.save';
-const TOPTEN_KEY = 'tokentrail.topten';
 
 const HAS_DOM = typeof document !== 'undefined';
 const stage = HAS_DOM ? document.getElementById('stage') : null;
 
 const SCREENS = {
-  title: Title, about: Title, topten: Title,
+  title: Title, about: Title,
   profession: Profession, outfitting: Outfitting, store: Store,
   hub: Month, map: Month, assign: Assign, focus: Focus, hunt: Hunt,
   event: Event, eventResult: Event, books: Books, gameover: GameOver
@@ -59,6 +58,7 @@ const app = {
   log: [],               // [{ decisionId, optionId }] recorded decision log
   // transient UI context
   draft: null,           // profession/outfitting in-progress selections
+  assignDraft: {},       // assign screen picks (decisionId -> optionId), uncommitted
   currentEvent: null,    // { def, deck } for the event being shown
   eventResult: null,     // captured resolution beat data
   huntResult: null,      // captured manual-hunt report
@@ -193,13 +193,6 @@ function loadSave() {
 }
 function hasSave() { const s = loadSave(); return !!(s && s.state && !s.state.ending); }
 
-export function getTopTen() {
-  try { return JSON.parse(localStorage.getItem(TOPTEN_KEY)) || []; } catch (e) { return []; }
-}
-export function saveTopTen(list) {
-  try { localStorage.setItem(TOPTEN_KEY, JSON.stringify(list.slice(0, 10))); } catch (e) {}
-}
-
 // ===========================================================================
 // Run lifecycle
 // ===========================================================================
@@ -207,6 +200,7 @@ function newRun(setup) {
   clearSave();
   app.setup = setup;
   app.log = [];
+  app.assignDraft = {};
   app.gs = initState(setup.classId, setup.hires, setup.model, setup.seed);
   app.rng = rngFromState(app.gs.seed, app.gs.rngState);
   saveGame();
@@ -219,6 +213,7 @@ function resumeRun() {
   if (!s || !s.state) { app.view = 'title'; return render(); }
   app.setup = s.setup;
   app.log = s.decisionLog || [];
+  app.assignDraft = {};
   app.gs = s.state;
   app.rng = rngFromState(app.gs.seed, app.gs.rngState);
   if (app.gs.ending) { enterGameOver(); return; }
@@ -258,6 +253,32 @@ function commitDecision(decisionId, optionId) {
     return render();
   }
   proceed(prevMonth, wasEvent);
+}
+
+// Assign-screen draft: a pick only highlights (tap again to clear); nothing
+// touches the engine until Continue commits every pick in one pass. The screen
+// itself enforces the one-'self' and capacity limits while drafting.
+function assignPick(decisionId, optionId) {
+  if (app.assignDraft[decisionId] === optionId) delete app.assignDraft[decisionId];
+  else app.assignDraft[decisionId] = optionId;
+  render();
+}
+
+function commitAssignDraft() {
+  if (!app.gs || app.gs.ending) return;
+  const valid = new Set(pendingDecisions(app.gs).map((d) => d.id));
+  const picks = Object.entries(app.assignDraft).filter(([id]) => valid.has(id));
+  app.assignDraft = {};
+  if (!picks.length) return render();
+  const prevMonth = app.gs.month;
+  for (const [decisionId, optionId] of picks) {
+    if (app.gs.ending) break;
+    app.log.push({ decisionId, optionId });
+    app.gs = applyDecision(app.gs, decisionId, optionId, app.rng);
+  }
+  saveGame();
+  app.explain = '';
+  proceed(prevMonth, false);
 }
 
 // Launch the interactive hunt (WP6). huntParams(app.gs) is the sanctioned pacing
@@ -314,7 +335,7 @@ function openEvent() {
   const def = deck.find((e) => e.id === pe.id) || null;
   const dec = pendingDecisions(app.gs).find((d) => d.kind === 'event');
   app.currentEvent = { def, deck: pe.deck, prompt: dec ? dec.prompt : (def ? safeText(def) : '') };
-  Audio.eventSting();
+  if (pe.deck === 'incident') Audio.pagerAlarm(); else Audio.eventSting();
   app.view = 'event';
   render();
 }
@@ -336,24 +357,7 @@ function afterBooks() {
 function enterGameOver() {
   clearSave();                          // finishing a run clears the save
   Audio.deathDirge();
-  app.scoreSaved = false;
-  app.savedInitials = '';
   app.view = 'gameover';
-  render();
-}
-
-// Record initials + score into the Top Ten (localStorage). Score reads hidden
-// Understanding — sanctioned at run end (PLAN.md §1: the ending is a mirror).
-function recordScore(rawInitials) {
-  if (app.scoreSaved) return;
-  const initials = String(rawInitials || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'YOU';
-  const { score, title } = GameOver.computeScore(app.gs);
-  const list = getTopTen();
-  list.push({ initials, score, title, ending: app.gs.ending, month: app.gs.month });
-  list.sort((x, y) => y.score - x.score);
-  saveTopTen(list);
-  app.scoreSaved = true;
-  app.savedInitials = initials;
   render();
 }
 
@@ -366,11 +370,12 @@ function captureEventResult(month) {
   const def = app.currentEvent && app.currentEvent.def;
   const reveal = latestLog('reveal', month);
   const check = latestLog('check', month);
+  const incident = latestLog('incident', month);
   const evLine = [...app.gs.log].reverse().find((l) => l.type === 'event' && l.month === month);
   let choice = null;
   if (def && evLine) choice = def.choices.find((c) => c.id === evLine.choice) || null;
   return {
-    def, choice, reveal, check,
+    def, choice, reveal, check, incident,
     deck: app.currentEvent ? app.currentEvent.deck : 'event',
     prompt: app.currentEvent ? app.currentEvent.prompt : '',
     month
@@ -401,7 +406,6 @@ function ctx() {
     audio: Audio,
     booksMonth: app.booksMonth,
     hasSave: hasSave(),
-    topten: getTopTen(),
     schedule: later
   };
 }
@@ -440,6 +444,8 @@ function onStageClick(e) {
       return;
     case 'nav': app.view = a.view; return render();
     case 'dispatch': return dispatch(a.decision, a.option);
+    case 'assign-pick': return assignPick(a.decision, a.option);
+    case 'assign-commit': return commitAssignDraft();
     case 'new-run': app.draft = { classId: null, hires: {}, model: 'standard', seed: makeSeed() };
       app.view = 'profession'; return render();
     case 'resume': return resumeRun();
@@ -453,10 +459,6 @@ function onStageClick(e) {
     case 'books-skip': afterBooks(); return;
     case 'hunt-continue': return huntContinue();
     case 'event-continue': return openBooks();
-    case 'save-initials': {
-      const inp = stage.querySelector('.initials input');
-      return recordScore(inp ? inp.value : '');
-    }
     case 'quit-title': clearSave(); app.gs = null; app.view = 'title'; return render();
     default: return;
   }
