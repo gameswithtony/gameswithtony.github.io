@@ -434,6 +434,7 @@ select {
   padding: 10px;
   gap: 8px;
   overflow: hidden;
+  overflow-y: auto;           /* short viewports (landscape phones) scroll the panel, never clip it */
 }
 
 #lab.hidden { display: none !important; }
