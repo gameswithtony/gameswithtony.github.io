@@ -37,6 +37,8 @@
     <div id="banner" class="hidden">
       <div id="banner-title"></div>
       <div id="banner-sub"></div>
+      <!-- End-screen stats (PLAN §11.8); empty for the mid-game banners. -->
+      <div id="banner-stats"></div>
       <button id="banner-btn">PLAY AGAIN</button>
     </div>
   </main>
@@ -54,8 +56,10 @@
     </div>
     <div id="actionbar"></div>
     <div id="globals">
-      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it">GENERATE <i>0</i></button>
+      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>0</i></button>
       <button id="btn-wait" title="Let a tick pass">WAIT <i>1</i></button>
+      <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at. -->
+      <button id="btn-run" title="Fast-forward: waits every 180 ms until something happens">RUN</button>
     </div>
     <canvas id="minimap" title="Tap to jump"></canvas>
   </footer>

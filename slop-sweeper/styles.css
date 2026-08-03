@@ -191,6 +191,30 @@ b { color: var(--paper); font-weight: 700; }
 
 #banner-sub { font-size: 12px; color: var(--dim); }
 
+/* End-screen stats (PLAN §11.8). Fixed columns so a three-digit tick count cannot reflow
+   the panel, and it scrolls inside itself rather than pushing PLAY AGAIN off the board. */
+#banner-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 132px));
+  gap: 4px 10px;
+  margin: 6px 0 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+#banner-stats:empty { display: none; }
+
+#banner-stats .stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  font-size: 10px;
+  color: var(--dim);
+}
+
 #toast, #notice {
   position: absolute;
   left: 50%;
@@ -266,6 +290,12 @@ button.verb i { background: var(--select); }
 #btn-generate:not(:disabled) i { background: var(--revealed); }
 #banner-btn { border-color: var(--coast); }
 
+/* RUN ⇄ STOP swap a three-letter word for a four-letter one, so the button is given the
+   width of the longer state: a control that changes size when you press it is a control
+   that moves the thing next to it under your finger. */
+#btn-run { min-width: 54px; text-align: center; }   /* STOP measures 53.7 here, RUN 46.8 */
+#btn-run.on { border-color: var(--user); color: var(--ink); background: var(--user); }
+
 select {
   font: inherit;
   font-size: 11px;
@@ -316,10 +346,15 @@ select {
        footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
        topbar row 1 (fixed widths) 133+67+128+83+88 + 4×6 = 523 ≤ 544 at 560px;
        the forecast takes row 2:   26 + 6 + 16 + 12 + 1 border = 61 ≤ 64 = --top-h
-   Footer widths at the worst case (280px wide, 268px usable):
-       row 1 in play    PLACE 76 + 6 + ANALYZE 91              = 173
-       row 1 placing    tray 2+12+32+6+134                     = 186
-       row 2            GENERATE 99 + 6 + WAIT 69 + 6 + map 60 = 240          */
+   Footer widths at the worst case (280px wide, 268px usable), measured in Chrome:
+       row 1 in play    PLACE 76 + 6 + ANALYZE 91                      = 173
+       row 1 placing    tray 2+12+32+6+134                             = 186
+       row 2 (≤559)     GEN 66 + 6 + WAIT 73 + 6 + RUN 48 + 6 + map 60 = 265
+   RUN joins Generate/Wait rather than the verb bar: it is not a verb, it is the same Wait
+   the button next to it dispatches, on a timer. Its 48px is bought back by GENERATE
+   shortening to GEN in the ≤559 band (see below), which is the only band where row 2 was
+   ever close to full — 265 of 268, with the 3px of slack the tray row has always had.
+   Between 560 and 899 the row holds all three at full length.                            */
 @media (max-width: 899px) {
   :root { --top-h: 64px; --hud-h: 98px; }
 
@@ -355,6 +390,7 @@ select {
 
   .narrow-hide { display: none; }
   .narrow-only { display: inline; }
+  #btn-run { min-width: 48px; }     /* STOP measures 47.7 at this padding */
 }
 
 /* --- ≤559px: the top bar genuinely needs three rows --------------------------------
@@ -373,4 +409,127 @@ select {
   .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
   .tiny-hide { display: none; }
   .tiny-only { display: inline; }
+}
+
+/* --- Level Lab (PLAN §9.2) — dev overlay, only ever built when ?lab=1 ------------------
+   An overlay, so it may scroll inside itself; the board keeps its geometry underneath and
+   is never resized by anything in here. */
+
+#lab-open {
+  position: fixed;
+  right: 8px;
+  top: calc(var(--top-h) + 8px);
+  z-index: 20;
+  border-color: var(--select);
+  color: var(--select);
+}
+
+#lab {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--void);
+  padding: 10px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+#lab.hidden { display: none !important; }
+
+.lab-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.lab-head h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--coast);
+  font-weight: 400;
+}
+
+.lab-head .hint { margin-left: auto; }
+
+.lab-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+#lab-map {
+  width: 100%;
+  min-height: 200px;
+  resize: none;
+  font: 12px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--paper);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 8px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 1;
+}
+
+#lab-map:focus, .lab-fields input:focus, .lab-fields select:focus { outline: 1px solid var(--select); }
+
+.lab-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 5px 8px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.lab-fields label { align-self: center; letter-spacing: 0.06em; }
+
+.lab-fields input, .lab-fields select {
+  font: inherit;
+  font-size: 11px;
+  width: 100%;
+  min-width: 0;
+  color: var(--paper);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 3px 5px;
+}
+
+.lab-fields .span2 { grid-column: 1 / -1; }
+
+.lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+}
+
+#lab-out {
+  flex: none;
+  max-height: 26vh;
+  overflow: auto;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--edge);
+  background: var(--void);
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#lab-out .err { color: var(--red); }
+#lab-out .warn { color: var(--hand); }
+#lab-out .ok { color: var(--ok); }
+
+@media (max-width: 720px) {
+  .lab-body { grid-template-columns: minmax(0, 1fr); }
+  #lab-map { min-height: 150px; }
 }

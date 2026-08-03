@@ -8,6 +8,7 @@
 
 import { RULES } from '../core/rules.js';
 import { legalActions } from '../core/reduce.js';
+import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
 import { crisp } from './atlas.js';
@@ -28,6 +29,7 @@ import * as cam from './camera.js';
  * @property {() => void} onRestart
  * @property {(cell: number) => void} onMinimapJump
  * @property {() => void} onCopySeed
+ * @property {() => void} onRun        fast-forward toggle (PLAN §12.6)
  */
 
 /** @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>} */
@@ -77,6 +79,7 @@ export function createHud(h) {
     actionbar: el('actionbar'),
     generate: /** @type {HTMLButtonElement} */ (el('btn-generate')),
     wait: /** @type {HTMLButtonElement} */ (el('btn-wait')),
+    run: /** @type {HTMLButtonElement} */ (el('btn-run')),
     tray: el('tray'),
     trayCanvas: /** @type {HTMLCanvasElement} */ (el('tray-canvas')),
     rotate: /** @type {HTMLButtonElement} */ (el('btn-rotate')),
@@ -87,6 +90,7 @@ export function createHud(h) {
     banner: el('banner'),
     bannerTitle: el('banner-title'),
     bannerSub: el('banner-sub'),
+    bannerStats: el('banner-stats'),
     bannerBtn: el('banner-btn'),
     toast: el('toast'),
     notice: el('notice'),
@@ -106,6 +110,7 @@ export function createHud(h) {
   dom.seed.addEventListener('click', () => h.onCopySeed());
   dom.generate.addEventListener('click', () => h.onAction('generate'));
   dom.wait.addEventListener('click', () => h.onAction('wait'));
+  dom.run.addEventListener('click', () => h.onRun());
   dom.rotate.addEventListener('click', () => h.onRotate());
   dom.confirm.addEventListener('click', () => h.onConfirm());
   dom.bannerBtn.addEventListener('click', () => h.onRestart());
@@ -192,6 +197,9 @@ export function createHud(h) {
 
     dom.generate.disabled = !globals.includes('generate');
     dom.wait.disabled = !globals.includes('wait');       // always visible, per spec owner
+    // Run is Wait on a timer, offered only once there is something to watch: before the
+    // departure gate opens, fast-forwarding is just spending the meter (PLAN §12.6).
+    dom.run.disabled = !globals.includes('wait') || !gateOpen(s);
 
     // Block tray (SPEC §10.6): fixed CSS size, legible whatever the board zoom is doing.
     // Lets the narrow-screen stylesheet give the tray the room the minimap was using,
@@ -259,18 +267,55 @@ export function createHud(h) {
     },
 
     /**
+     * The end screen (PLAN §11.8): the banner plus what the game cost. Every number is read
+     * straight off `s.stats` — nothing is accumulated by the UI, so the panel cannot drift
+     * from the reducer. Level and Restart live in the top bar, which the banner does not
+     * cover, so the controls stay reachable behind it.
+     * @param {GameState} s
      * @param {string} title
      * @param {string} sub
-     * @param {string} [button]
      */
-    banner(title, sub, button = 'PLAY AGAIN') {
+    endScreen(s, title, sub) {
       dom.bannerTitle.textContent = title;
       dom.bannerSub.textContent = sub;
-      dom.bannerBtn.textContent = button;
+      dom.bannerBtn.textContent = 'PLAY AGAIN';
+      dom.bannerStats.innerHTML = '';
+      /** @type {[string, string][]} */
+      const rows = [
+        ['TICKS', String(s.tick)],
+        ['SERVED', `${s.stats.served}/${s.schedule.total}`],
+        ['DETONATIONS', String(s.stats.detonations)],
+        ['PLACED', String(s.stats.placed)],
+        ['GENERATED', String(s.stats.generated)],
+        ['ANALYZED', String(s.stats.analyzed)],
+        ['WAITED', String(s.stats.waited)],
+        ['CONFIDENCE', String(Math.round(s.confidence))],
+      ];
+      for (const [label, value] of rows) {
+        const cell = document.createElement('div');
+        cell.className = 'stat';
+        const k = document.createElement('span');
+        k.textContent = label;
+        const v = document.createElement('b');
+        v.textContent = value;
+        cell.append(k, v);
+        dom.bannerStats.append(cell);
+      }
       dom.banner.classList.remove('hidden');
     },
 
     hideBanner() { dom.banner.classList.add('hidden'); },
+
+    /**
+     * @param {boolean} on
+     */
+    setRun(on) {
+      dom.run.classList.toggle('on', on);
+      dom.run.textContent = on ? 'STOP' : 'RUN';
+    },
+
+    /** @returns {HTMLElement} the Run button, so the shell can spare it from "any input stops". */
+    runButton() { return dom.run; },
   };
 }
 

@@ -4,9 +4,11 @@
 // HUD produces verbs, and everything meets here.
 //
 // Frame model (PLAN §11.4): there is no continuous RAF. The board is motionless between
-// ticks, so drawing is on demand; a loop runs only while the overscroll spring is alive and
-// then sleeps. Every wake re-verifies the canvas backing store (gorillas' self-heal).
+// ticks, so drawing is on demand; a loop runs only while step tweens, particles, shake or
+// the overscroll spring are alive, and then sleeps. Every wake re-verifies the canvas
+// backing store (gorillas' self-heal).
 
+import { RULES } from '../core/rules.js';
 import { blastArea, init, reduce } from '../core/reduce.js';
 import { randomSeed } from '../core/rng.js';
 import { getLevel, levelIds } from '../levels/index.js';
@@ -14,10 +16,13 @@ import * as cam from './camera.js';
 import { createRenderer, ghostCells } from './renderer.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
+import { createEffects } from './particles.js';
+import { PALETTE } from './palette.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
 /** @typedef {import('../core/state.js').Action} Action */
 /** @typedef {import('../core/state.js').Ev} Ev */
+/** @typedef {import('../levels/index.js').LevelDef} LevelDef */
 /** @typedef {import('./renderer.js').ViewOverlay} ViewOverlay */
 
 const STORE_KEY = 'slop-sweeper.level';
@@ -72,8 +77,23 @@ function boot() {
   const camera = cam.createCamera();
   const renderer = createRenderer(canvas);
   const bus = createBus();
+  const fx = createEffects();
 
-  let s = init(getLevel(levelId), pinnedSeed ?? randomSeed());
+  /** @type {LevelDef} */
+  let levelDef = getLevel(levelId);
+  /**
+   * Non-null while the Level Lab's definition is the one being played (PLAN §9.2).
+   * @type {LevelDef | null}
+   */
+  let labDef = null;
+
+  let s = init(levelDef, pinnedSeed ?? randomSeed());
+  /**
+   * The state as it was before the action currently being drained — the only place a
+   * destroyed tile still exists to be drawn coming apart (PLAN §11.6).
+   * @type {GameState}
+   */
+  let prev = s;
   /** @type {ViewOverlay} */
   const view = { selected: -1, rot: 0, anchors: null, ghost: null, blast: null };
 
@@ -90,10 +110,11 @@ function boot() {
     },
     onRotate: rotate,
     onConfirm: confirmBlock,
-    onLevel: (id) => newGame(id, pinnedSeed ?? randomSeed()),
-    onRestart: () => newGame(levelId, pinnedSeed ?? randomSeed()),
+    onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); else restart(); },
+    onRestart: restart,
     onMinimapJump: (cell) => { cam.centerOnCell(camera, s, cell); renderer.invalidate(); refresh(); },
     onCopySeed: copySeed,
+    onRun: toggleRun,
   });
   hud.setLevels(ids, levelId);
 
@@ -101,7 +122,7 @@ function boot() {
     getState: () => s,
     onTap: select,
     onViewChange: () => { renderer.invalidate(); requestDraw(); },
-    onGestureEnd: settle,
+    onGestureEnd: () => startLoop(),
     onRotate: rotate,
     onConfirm: confirmBlock,
     onEscape: () => select(-1),
@@ -111,20 +132,51 @@ function boot() {
   // --- game flow ------------------------------------------------------------------
 
   /**
-   * @param {string} id
+   * @param {string} id  a registered level
    * @param {number} seed
    */
   function newGame(id, seed) {
     levelId = id;
+    levelDef = getLevel(id);
+    labDef = null;
     store.set(STORE_KEY, id);
-    s = init(getLevel(id), seed);
+    start(seed);
+  }
+
+  /**
+   * Boot a definition the Lab is holding, with no registry write — `init()` takes a
+   * LevelDef, so a pasted level boots down exactly the same path as a registered one
+   * (PLAN §9.2). Throws exactly what the validator would throw; the Lab prints it.
+   * @param {LevelDef} def
+   * @param {number} [seed]
+   */
+  function playDef(def, seed) {
+    const next = init(def, (seed ?? s.seed) >>> 0);      // validate before touching anything
+    labDef = def;
+    levelDef = def;
+    levelId = def.id;
+    startWith(next);
+  }
+
+  /** @param {number} seed */
+  function start(seed) {
+    startWith(init(levelDef, seed));
+  }
+
+  /** @param {GameState} next */
+  function startWith(next) {
+    stopRun();
+    fx.reset();
+    s = next;
+    prev = next;
     view.selected = -1;
     view.rot = 0;
     hud.hideBanner();
-    hud.setLevels(ids, id);
+    hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
     const url = new URL(location.href);
-    url.searchParams.set('level', id);
-    if (pinnedSeed !== null) url.searchParams.set('seed', String(seed));
+    if (labDef) url.searchParams.delete('level');
+    else url.searchParams.set('level', levelId);
+    if (pinnedSeed !== null) url.searchParams.set('seed', String(s.seed));
     history.replaceState(null, '', url);
     cam.setViewport(camera, canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1);
     cam.fit(camera, s);
@@ -132,14 +184,21 @@ function boot() {
     refresh();
   }
 
+  function restart() {
+    start(pinnedSeed ?? randomSeed());
+  }
+
   /** @param {Action} a */
   function dispatch(a) {
     if (s.phase.k === 'won' || s.phase.k === 'lost') return;
     const out = reduce(s, a);
+    prev = s;
     s = out.s;
+    stepInto.clear();
     bus.drain(out.ev);
     renderer.invalidate();
     refresh();
+    startLoop();
   }
 
   /** @param {number} cell  -1 deselects */
@@ -212,24 +271,121 @@ function boot() {
 
   // --- event drain ------------------------------------------------------------------
 
+  /**
+   * Cell → the user who walked into it during the action currently being drained. The
+   * traversal consequences of a step (the tile flipping over, the mine going off, the pop
+   * at B) are held back by the walk that caused them, so the effect lands under the dot
+   * rather than ahead of it. Steps are always emitted before traversal (PLAN §7.1).
+   * @type {Map<number, number>}
+   */
+  const stepInto = new Map();
+
+  bus.on('step', (/** @type {{ user: number, from: number, to: number }} */ ev) => {
+    fx.step(ev.user, s, ev.from, ev.to);
+    stepInto.set(ev.to, ev.user);
+  });
+
+  /** @param {number} cell @returns {number} seconds to hold an effect back */
+  const walkDelay = (cell) => {
+    const user = stepInto.get(cell);
+    return user === undefined ? 0 : fx.remaining(user);
+  };
+
+  bus.on('reveal', (/** @type {{ cell: number }} */ ev) => {
+    fx.flip(ev.cell, PALETTE.AI_REVEALED, walkDelay(ev.cell));
+  });
+  bus.on('arrived', (/** @type {{ user: number }} */ ev) => {
+    fx.pop(s.dest, fx.remaining(ev.user));
+  });
+
   bus.on('blockPlaced', (/** @type {{ mines: number }} */ ev) => {
     hud.toast(ev.mines === 0 ? 'GOT AWAY WITH IT — 0 DEFECTS' : `INTRODUCED ${ev.mines} DEFECT${ev.mines === 1 ? '' : 'S'}`);
   });
   bus.on('generateRefunded', () => hud.notice('NOWHERE LEGAL TO PUT IT — TURN REFUNDED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
     hud.toast(`REVIEWED ${ev.revealed.length} · CONFIRMED ${ev.minesFound.length}`);
+    for (const c of ev.revealed) fx.flip(c, PALETTE.AI_REVEALED, 0);
+    for (const c of ev.minesFound) fx.flip(c, PALETTE.RED, 0);
   });
-  // Never says which destroyed cells held mines — they go silently (SPEC §5).
-  bus.on('detonate', (/** @type {{ destroyed: number[] }} */ ev) => {
+  // Never says which destroyed cells held mines — they go silently (SPEC §5). `destroyed`
+  // is only the cells whose construction was removed, so the visual extent comes from
+  // core's own blastArea() over the pre-blast state.
+  bus.on('detonate', (/** @type {{ at: number, destroyed: number[] }} */ ev) => {
     hud.notice(`DETONATION — ${ev.destroyed.length} TILES LOST`);
+    fx.detonate(prev, ev.at, ev.destroyed, blastArea(prev, ev.at), walkDelay(ev.at));
+    stopRun();     // no second notice: a blast announces itself louder than a line of text
   });
   bus.on('rejected', (/** @type {{ reason: string }} */ ev) => {
     // The action bar reads legalActions(), so this should be unreachable. Say so loudly.
     console.warn('slop-sweeper: reducer rejected an action —', ev.reason);
     hud.notice(`REJECTED: ${ev.reason.toUpperCase()}`);
   });
-  bus.on('won', () => hud.banner('SHIPPED', `${s.stats.served} users served in ${s.tick} ticks · ${s.stats.detonations} detonations`));
-  bus.on('lost', () => hud.banner('CONFIDENCE GONE', `${s.stats.served}/${s.schedule.total} served · ${s.tick} ticks`));
+  bus.on('won', () => { stopRun(); hud.endScreen(s, 'SHIPPED', `${s.level} · seed ${s.seed}`); });
+  bus.on('lost', () => { stopRun(); hud.endScreen(s, 'CONFIDENCE GONE', `${s.level} · seed ${s.seed}`); });
+
+  // --- fast-forward (PLAN §12.6) ------------------------------------------------------
+  // Pure UI sugar over the same `wait` the button next to it dispatches. It stops the
+  // moment anything is worth looking at, and the definition of "worth looking at" is
+  // deliberately wide: a blast, a user who could not move, the end of the game, or the
+  // player touching anything at all.
+
+  /** @type {number | undefined} */
+  let ffTimer;
+  let running = false;
+  /** Set by the drain while a fast-forward tick is resolving. */
+  let ffSteps = 0;
+  let ffHalt = '';
+
+  bus.on('step', () => { ffSteps++; });
+  bus.on('requeued', () => { ffHalt = ffHalt || 'A USER WENT BACK'; });
+
+  function toggleRun() {
+    if (running) stopRun();
+    else startRun();
+  }
+
+  function startRun() {
+    if (running || s.phase.k !== 'play') return;
+    running = true;
+    hud.setRun(true);
+    tickRun();
+  }
+
+  /** @param {string} [reason] shown as a notice when the stop was not the player's doing */
+  function stopRun(reason) {
+    if (!running) return;
+    running = false;
+    clearTimeout(ffTimer);
+    ffTimer = undefined;
+    hud.setRun(false);
+    if (reason) hud.notice(`STOPPED — ${reason}`);
+  }
+
+  function tickRun() {
+    if (!running) return;
+    if (s.phase.k !== 'play') return stopRun();
+    const moving = s.users.some((u) => u.state === 'moving');
+    ffSteps = 0;
+    ffHalt = '';
+    dispatch({ t: 'wait' });
+    if (!running) return;                    // a drained event already stopped us
+    if (s.phase.k !== 'play') return stopRun();
+    if (ffHalt) return stopRun(ffHalt);
+    // A tick where somebody who was walking did not walk is a stall or a strand — the two
+    // cases SPEC §6.4 counts as waiting, and both are things the player has to answer.
+    if (moving && ffSteps === 0) return stopRun('NOBODY COULD MOVE');
+    ffTimer = setTimeout(tickRun, RULES.FF_INTERVAL_MS);
+  }
+
+  // Any input at all stops it, and "any" is enforced at the document rather than per
+  // control, so a button added later cannot forget to opt in. The Run button itself is the
+  // one exception — pressing it is how you start.
+  const runBtn = hud.runButton();
+  /** @param {EventTarget | null} t */
+  const isRunBtn = (t) => t instanceof Node && runBtn.contains(t);
+  document.addEventListener('pointerdown', (e) => { if (!isRunBtn(e.target)) stopRun(); }, true);
+  document.addEventListener('click', (e) => { if (!isRunBtn(e.target)) stopRun(); }, true);
+  window.addEventListener('keydown', () => stopRun(), true);
 
   // --- frame model ------------------------------------------------------------------
 
@@ -240,24 +396,31 @@ function boot() {
     requestAnimationFrame(() => {
       drawPending = false;
       selfHeal();
-      renderer.draw(s, camera, view);
+      renderer.draw(s, camera, view, fx);
       hud.minimap(s, camera);           // keeps the viewport rectangle honest while panning
     });
   }
 
-  let settling = false;
-  function settle() {
-    if (settling || !cam.needsSettle(camera, s)) return;
-    settling = true;
+  /**
+   * The one animation loop: the overscroll spring and the view-only effects share it, and
+   * it exits the moment neither has anything left to say. Nothing else in the game asks for
+   * a frame, so at rest the page requests zero (SPEC §10.8).
+   */
+  let looping = false;
+  function startLoop() {
+    if (looping) return;
+    if (!cam.needsSettle(camera, s) && !fx.alive()) return;
+    looping = true;
     let last = performance.now();
     const step = (/** @type {number} */ now) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      const more = cam.settleStep(camera, s, dt);
-      renderer.draw(s, camera, view);      // the static key carries ox/oy: no invalidation needed
+      const more = cam.needsSettle(camera, s) ? cam.settleStep(camera, s, dt) : false;
+      fx.update(dt);
+      renderer.draw(s, camera, view, fx);   // the static key carries ox/oy: no invalidation needed
       hud.minimap(s, camera);
-      if (more) requestAnimationFrame(step);
-      else { settling = false; refresh(); }
+      if (more || fx.alive()) requestAnimationFrame(step);
+      else { looping = false; refresh(); }
     };
     requestAnimationFrame(step);
   }
@@ -307,6 +470,19 @@ function boot() {
   cam.fit(camera, s);
   refresh();
   console.info(`slop-sweeper: '${s.level}' seed ${s.seed} — ?level=${levelId}&seed=${s.seed} replays it exactly`);
+
+  // The Level Lab is a dev tool (PLAN §9.2): loaded only when asked for, so the shipped
+  // page never fetches it and core never learns it exists.
+  const labParam = params.get('lab');
+  if (labParam !== null && labParam !== '0') {
+    import('./lab.js')
+      .then(({ createLab }) => createLab({
+        getSeed: () => s.seed,
+        getLevel: () => labDef ?? levelDef,
+        onPlay: playDef,
+      }))
+      .catch((err) => console.error('slop-sweeper: the Level Lab failed to load', err));
+  }
 }
 
 // Importing this module in Node (the ui import check) must not throw: it boots a page only

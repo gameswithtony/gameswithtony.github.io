@@ -34,6 +34,12 @@ import { cellRect, visibleCells } from './camera.js';
  * @property {number[] | null} blast     blast preview for a selected confirmed mine
  */
 
+/**
+ * The view-only animation layer (particles.js), passed in rather than imported so the
+ * renderer stays a pure function of state + camera + overlay and can be drawn without it.
+ * @typedef {import('./particles.js').Effects} Effects
+ */
+
 export const MID_MIN_ARTPX = Math.max(2, Math.ceil(RULES.FONT_MIN_DEVICE_PX / GLYPH_H));
 export const NEAR_MIN_ARTPX = MID_MIN_ARTPX * 2;
 
@@ -255,8 +261,9 @@ export function createRenderer(canvas) {
    * @param {Camera} cam
    * @param {Atlas} at
    * @param {ViewOverlay} view
+   * @param {Effects | null} fx
    */
-  function drawDynamic(s, cam, at, view) {
+  function drawDynamic(s, cam, at, view, fx) {
     const tier = tierOf(cam.artPx);
     const t = at.tile;
     const px = cam.artPx;
@@ -284,8 +291,11 @@ export function createRenderer(canvas) {
       }
     }
 
+    // The board coming apart goes under the users; the debris goes over them (PLAN §11.6).
+    fx?.drawUnder(ctx, s, cam);
+
     // Users last but one: they are the thing the player is watching (PLAN §11.5).
-    drawUsers(s, cam, at, tier);
+    drawUsers(s, cam, at, tier, fx);
 
     if (view.selected >= 0) {
       const r = cellRect(cam, s, view.selected);
@@ -299,30 +309,47 @@ export function createRenderer(canvas) {
       ctx.fillRect(r.x, r.y, wgt, t);
       ctx.fillRect(r.x + t - wgt, r.y, wgt, t);
     }
+
+    fx?.drawOver(ctx, s, cam);
   }
 
   /**
+   * Users are drawn at their tweened positions when a step is in flight (PLAN §11.5), so
+   * stacking is by *drawn* position rather than by cell: a queued pile and a column of
+   * walkers mid-step are both "one place with N users in it", and neither needs the
+   * reducer to know a frame happened.
    * @param {GameState} s
    * @param {Camera} cam
    * @param {Atlas} at
    * @param {Tier} tier
+   * @param {Effects | null} fx
    */
-  function drawUsers(s, cam, at, tier) {
-    /** @type {Map<number, number>} */
+  function drawUsers(s, cam, at, tier, fx) {
+    const t = at.tile;
+    const px = cam.artPx;
+
+    /** @type {Map<string, { x: number, y: number, n: number }>} */
     const stacks = new Map();
     for (const u of s.users) {
-      if (u.state === 'arrived') continue;   // served users leave the board
-      stacks.set(u.at, (stacks.get(u.at) ?? 0) + 1);
+      const tw = fx ? fx.userPos(u.id) : null;
+      // An arrived user is off the board — unless its last step is still in the air.
+      if (u.state === 'arrived' && !tw) continue;
+      const cx = tw ? tw.x : u.at % s.w;
+      const cy = tw ? tw.y : Math.floor(u.at / s.w);
+      const x = Math.round((cam.ox + cx * t) / px) * px;
+      const y = Math.round((cam.oy + cy * t) / px) * px;
+      const key = `${x},${y}`;
+      const cur = stacks.get(key);
+      if (cur) cur.n++;
+      else stacks.set(key, { x, y, n: 1 });
     }
     if (stacks.size === 0) return;
 
-    const t = at.tile;
-    const px = cam.artPx;
     const dotArt = tier === 'far' ? 3 : tier === 'mid' ? 3 : 4;
     const dot = dotArt * px;
 
-    for (const [cell, n] of stacks) {
-      const r = cellRect(cam, s, cell);
+    for (const { x, y, n } of stacks.values()) {
+      const r = { x, y };
       if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
 
       // A stack becomes the count itself rather than a dot wearing a badge: eight art pixels
@@ -358,16 +385,28 @@ export function createRenderer(canvas) {
      * @param {GameState} s
      * @param {Camera} cam
      * @param {ViewOverlay} view
+     * @param {Effects | null} [fx]
      */
-    draw(s, cam, view) {
+    draw(s, cam, view, fx = null) {
       const at = atlasFor(cam.artPx);
       const key = `${version}|${cam.artPx}|${cam.ox}|${cam.oy}|${cam.cw}|${cam.ch}`;
       if (key !== staticKey) {
         buildStatic(s, cam, at);
         staticKey = key;
       }
+      // The composite is the one place the screen shake exists: the whole frame — cache,
+      // overlays, users, debris — moves together by a whole number of device pixels, so
+      // nothing lands off the art grid and no layer can shear away from another.
+      const shake = fx ? fx.shakeOffset(cam.artPx) : { x: 0, y: 0 };
+      ctx.save();
+      if (shake.x || shake.y) {
+        ctx.fillStyle = PALETTE.VOID;      // the strip the shake uncovers is not board
+        ctx.fillRect(0, 0, cam.cw, cam.ch);
+        ctx.translate(shake.x, shake.y);
+      }
       ctx.drawImage(cache, 0, 0);
-      drawDynamic(s, cam, at, view);
+      drawDynamic(s, cam, at, view, fx);
+      ctx.restore();
     },
   };
 }

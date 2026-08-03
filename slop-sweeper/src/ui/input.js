@@ -45,6 +45,18 @@ export function createInput(el, camera, h) {
 
   const wake = () => h.wake?.();
   const refreshRect = () => { const r = el.getBoundingClientRect(); rect = { left: r.left, top: r.top }; };
+
+  /**
+   * DOM laid over the board — the end screen's buttons (PLAN §11.8) — owns its own pointers.
+   * The board's `preventDefault` on pointerdown suppresses the compatibility mouse events,
+   * and with them the `click` the button is waiting for, so an overlay control would look
+   * pressed and do nothing. Asking whether the target is interactive keeps that decision
+   * out of this module's knowledge of the page.
+   * @param {Event} e
+   * @returns {boolean}
+   */
+  const overlayOwns = (e) =>
+    e.target instanceof Element && e.target.closest('button, a, select, input, textarea') !== null;
   /** @param {PointerEvent | WheelEvent} e */
   const css = (e) => ({ x: e.clientX - rect.left, y: e.clientY - rect.top });
 
@@ -61,6 +73,7 @@ export function createInput(el, camera, h) {
   }
 
   el.addEventListener('pointerdown', (e) => {
+    if (overlayOwns(e)) return;
     wake();
     refreshRect();
     const p = css(e);
@@ -172,6 +185,7 @@ export function createInput(el, camera, h) {
   el.addEventListener('lostpointercapture', (e) => { if (pointers.has(e.pointerId)) release(e, false); });
 
   el.addEventListener('wheel', (e) => {
+    if (overlayOwns(e)) return;
     wake();
     refreshRect();
     e.preventDefault();
