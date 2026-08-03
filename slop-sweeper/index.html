@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Slop Sweeper</title>
+  <meta name="description" content="A turn-based puzzle about building software under deadline with AI assistance.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- HUD is DOM, board is canvas (SPEC §10.3). M3 fills these in; the ids are the contract. -->
+  <header id="topbar">
+    <label class="field">LEVEL
+      <select id="f-level"></select>
+    </label>
+    <button id="seed" class="chip" title="Tap to copy the seed">seed —</button>
+    <span class="chip">TICK <b id="tick">0</b></span>
+    <div id="confidence" class="meter" title="Stakeholder confidence">
+      <div id="confidence-fill" class="meter-fill"></div>
+      <span id="confidence-label" class="meter-label">100</span>
+    </div>
+    <div id="forecast" class="forecast">
+      <span>REMAINING <b id="fc-remaining">—</b></span>
+      <span>NEXT IN <b id="fc-next">—</b></span>
+      <span>WAITING <b id="fc-waiting">—</b></span>
+    </div>
+  </header>
+
+  <main id="board">
+    <canvas id="game"></canvas>
+    <div id="banner" class="hidden">
+      <div id="banner-title"></div>
+      <div id="banner-sub"></div>
+    </div>
+  </main>
+
+  <footer id="hud">
+    <div id="tray" class="hidden"></div>
+    <div id="actionbar"></div>
+    <div id="globals">
+      <button id="btn-generate" disabled>GENERATE</button>
+      <button id="btn-wait" disabled>WAIT</button>
+    </div>
+    <canvas id="minimap" width="120" height="80"></canvas>
+  </footer>
+
+  <script type="module" src="./src/ui/main.js"></script>
+</body>
+</html>

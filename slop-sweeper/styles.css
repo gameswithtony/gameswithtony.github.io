@@ -1,0 +1,159 @@
+/* HUD layout and typography only — the board is canvas and lays itself out (SPEC §10.3).
+   Colors track the §11.1 palette so the DOM and the board read as one thing. */
+
+:root {
+  --ink: #16131c;
+  --paper: #f2efe4;
+  --void: #0d1016;
+  --ocean: #14324f;
+  --coast: #e8dcc0;
+  --hand: #c98f3f;
+  --red: #d4405c;
+  --select: #55d6ff;
+  --ok: #4ade80;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--void);
+  color: var(--paper);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  overscroll-behavior: none;
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+}
+
+#topbar, #hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #11151d;
+  border-color: #232a36;
+  border-style: solid;
+  flex-wrap: wrap;
+}
+
+#topbar { border-width: 0 0 1px; }
+#hud { border-width: 1px 0 0; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+
+.field, .chip, .forecast span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9aa7b8;
+}
+
+.chip {
+  padding: 3px 8px;
+  border: 1px solid #232a36;
+  border-radius: 3px;
+  background: #0d1016;
+  color: #9aa7b8;
+  font: inherit;
+  font-size: 11px;
+}
+
+b { color: var(--paper); font-weight: 700; }
+
+.forecast { display: flex; gap: 12px; margin-left: auto; }
+
+.meter {
+  position: relative;
+  width: 140px;
+  height: 14px;
+  background: #0d1016;
+  border: 1px solid #232a36;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--ok);
+}
+
+.meter-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--ink);
+}
+
+#board {
+  position: relative;
+  min-height: 0;
+  background: var(--void);
+  touch-action: none;   /* the board owns pinch and pan (SPEC §10.5) */
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+#banner {
+  position: absolute;
+  inset: auto 0 12% 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+#banner-title { font-size: 22px; color: var(--coast); }
+#banner-sub { font-size: 12px; color: #9aa7b8; }
+
+#actionbar { display: flex; gap: 6px; }
+#globals { display: flex; gap: 6px; margin-left: auto; }
+
+button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  color: var(--paper);
+  background: #1b2230;
+  border: 1px solid #2e3849;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--select); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--paper);
+  background: #0d1016;
+  border: 1px solid #232a36;
+  padding: 3px 6px;
+}
+
+#tray {
+  display: grid;
+  place-items: center;
+  min-width: 64px;
+  min-height: 48px;
+  border: 1px dashed #2e3849;
+}
+
+#minimap {
+  border: 1px solid #232a36;
+  background: var(--void);
+  image-rendering: pixelated;
+}
+
+.hidden { display: none !important; }
