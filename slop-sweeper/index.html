@@ -9,40 +9,55 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- HUD is DOM, board is canvas (SPEC §10.3). M3 fills these in; the ids are the contract. -->
+  <!-- HUD is DOM, board is canvas (SPEC §10.3). The ids are the contract with src/ui/hud.js. -->
   <header id="topbar">
-    <label class="field">LEVEL
+    <label class="field"><span class="tiny-hide">LEVEL</span>
       <select id="f-level"></select>
     </label>
-    <button id="seed" class="chip" title="Tap to copy the seed">seed —</button>
+    <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
+    <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
     <span class="chip">TICK <b id="tick">0</b></span>
     <div id="confidence" class="meter" title="Stakeholder confidence">
       <div id="confidence-fill" class="meter-fill"></div>
       <span id="confidence-label" class="meter-label">100</span>
     </div>
+    <!-- The forecast trio is persistent UI (SPEC §6.1); below 560px it keeps the numbers
+         and shortens the words rather than being clipped. -->
     <div id="forecast" class="forecast">
-      <span>REMAINING <b id="fc-remaining">—</b></span>
-      <span>NEXT IN <b id="fc-next">—</b></span>
-      <span>WAITING <b id="fc-waiting">—</b></span>
+      <span title="Users still to be served"><span class="tiny-hide">REMAINING</span><span class="tiny-only">LEFT</span> <b id="fc-remaining">—</b></span>
+      <span title="Turns until the next user arrives"><span class="tiny-hide">NEXT IN</span><span class="tiny-only">NEXT</span> <b id="fc-next">—</b></span>
+      <span title="Users waiting right now"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span> <b id="fc-waiting">—</b></span>
     </div>
   </header>
 
   <main id="board">
     <canvas id="game"></canvas>
+    <div id="notice" class="hidden"></div>
+    <div id="toast" class="hidden"></div>
     <div id="banner" class="hidden">
       <div id="banner-title"></div>
       <div id="banner-sub"></div>
+      <button id="banner-btn">PLAY AGAIN</button>
     </div>
   </main>
 
   <footer id="hud">
-    <div id="tray" class="hidden"></div>
+    <div id="tray" class="hidden">
+      <canvas id="tray-canvas"></canvas>
+      <div class="tray-side">
+        <span id="tray-hint" class="hint"></span>
+        <div class="tray-controls">
+          <button id="btn-rotate" title="Rotate (R)"><span class="narrow-hide">ROTATE</span><span class="narrow-only">ROT</span> <i id="rot-label">1/1</i></button>
+          <button id="btn-confirm" title="Commit the block (Enter)" disabled><span class="narrow-hide">CONFIRM</span><span class="narrow-only">OK</span> <i>1</i></button>
+        </div>
+      </div>
+    </div>
     <div id="actionbar"></div>
     <div id="globals">
-      <button id="btn-generate" disabled>GENERATE</button>
-      <button id="btn-wait" disabled>WAIT</button>
+      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it">GENERATE <i>0</i></button>
+      <button id="btn-wait" title="Let a tick pass">WAIT <i>1</i></button>
     </div>
-    <canvas id="minimap" width="120" height="80"></canvas>
+    <canvas id="minimap" title="Tap to jump"></canvas>
   </footer>
 
   <script type="module" src="./src/ui/main.js"></script>

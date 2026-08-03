@@ -1,16 +1,36 @@
 /* HUD layout and typography only — the board is canvas and lays itself out (SPEC §10.3).
-   Colors track the §11.1 palette so the DOM and the board read as one thing. */
+   Every colour here is a §11.1 palette entry, so the DOM and the board read as one thing. */
 
 :root {
   --ink: #16131c;
   --paper: #f2efe4;
   --void: #0d1016;
   --ocean: #14324f;
+  --ocean-dither: #1a4066;
   --coast: #e8dcc0;
   --hand: #c98f3f;
+  --hidden: #6b4d93;
+  --revealed: #a08cc0;
   --red: #d4405c;
+  --user: #ffd23e;
   --select: #55d6ff;
   --ok: #4ade80;
+
+  --chrome: #11151d;      /* VOID lifted a hair so the bars separate from the board */
+  --edge: #232a36;
+  --dim: #9aa7b8;
+
+  /* Fixed chrome heights — the board is everything left over (see body below). Each
+     breakpoint declares the height its own layout needs; nothing is ever content-driven.
+       ≥900px  topbar 1 row  (44) · footer 1 row  (82)
+       560-899 topbar 2 rows (64) · footer 2 rows (96)
+       ≤559px  topbar 3 rows (96) · footer 2 rows (96)
+     Every element whose text can change length (seed, tick, level, forecast values) is
+     given a fixed width below, so which row an item lands on depends on the viewport and
+     nothing else. */
+  --top-h: 44px;
+  --hud-h: 82px;
+
 }
 
 * { box-sizing: border-box; }
@@ -23,56 +43,95 @@ html, body {
   font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: 0.04em;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
+/* The chrome rows are FIXED height and the board takes the remainder, so board geometry is
+   a pure function of the viewport. Nothing the HUD says — a longer verb label, the tray
+   appearing, a two-digit tick — may resize the canvas: a board that moves under the finger
+   between the tap and the action is how a scarce turn gets spent on the wrong cell. */
 body {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows:
+    var(--top-h)
+    minmax(0, 1fr)
+    calc(var(--hud-h) + env(safe-area-inset-bottom, 0px));
   height: 100dvh;
+  overflow: hidden;
 }
 
 #topbar, #hud {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: #11151d;
-  border-color: #232a36;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--chrome);
+  border-color: var(--edge);
   border-style: solid;
-  flex-wrap: wrap;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
-#topbar { border-width: 0 0 1px; }
-#hud { border-width: 1px 0 0; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+#topbar {
+  border-width: 0 0 1px;
+  flex-wrap: wrap;          /* one row on desktop, two on mobile — both sized by --top-h */
+  align-content: center;
+}
 
-.field, .chip, .forecast span {
+#hud {
+  border-width: 1px 0 0;
+  padding-bottom: max(7px, env(safe-area-inset-bottom));
+  align-items: center;
+  flex-wrap: nowrap;        /* wrapping here used to move the board (see #actionbar) */
+}
+
+.field, .chip, .forecast > span, .hint {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #9aa7b8;
+  color: var(--dim);
 }
 
 .chip {
-  padding: 3px 8px;
-  border: 1px solid #232a36;
+  padding: 4px 8px;
+  border: 1px solid var(--edge);
   border-radius: 3px;
-  background: #0d1016;
-  color: #9aa7b8;
+  background: var(--void);
+  color: var(--dim);
   font: inherit;
   font-size: 11px;
+  cursor: pointer;
+  flex: none;
 }
+
+/* Widths that must not depend on their contents: a ten-digit random seed or a four-digit
+   tick must wrap the top bar exactly the way a one-digit one does. */
+#seed { width: 128px; justify-content: center; overflow: hidden; white-space: nowrap; }
+#tick { display: inline-block; min-width: 30px; text-align: right; }
+.forecast b { display: inline-block; min-width: 22px; text-align: right; }
+
+/* Label variants, swapped by the breakpoints below: `narrow` at ≤899, `tiny` at ≤559. */
+.narrow-only, .tiny-only { display: none; }
+
+.chip:hover { border-color: var(--select); }
 
 b { color: var(--paper); font-weight: 700; }
 
-.forecast { display: flex; gap: 12px; margin-left: auto; }
+.forecast {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
 
 .meter {
   position: relative;
-  width: 140px;
-  height: 14px;
-  background: #0d1016;
-  border: 1px solid #232a36;
+  width: 132px;
+  height: 15px;
+  background: var(--void);
+  border: 1px solid var(--edge);
   overflow: hidden;
 }
 
@@ -80,6 +139,7 @@ b { color: var(--paper); font-weight: 700; }
   height: 100%;
   width: 100%;
   background: var(--ok);
+  transition: width 140ms linear;
 }
 
 .meter-label {
@@ -89,13 +149,20 @@ b { color: var(--paper); font-weight: 700; }
   place-items: center;
   font-size: 10px;
   color: var(--ink);
+  font-weight: 700;
 }
+
+/* --- board ------------------------------------------------------------------ */
 
 #board {
   position: relative;
   min-height: 0;
   background: var(--void);
-  touch-action: none;   /* the board owns pinch and pan (SPEC §10.5) */
+  touch-action: none;         /* the board owns pinch and pan (SPEC §10.5) */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
 
 #game {
@@ -107,53 +174,203 @@ b { color: var(--paper); font-weight: 700; }
 
 #banner {
   position: absolute;
-  inset: auto 0 12% 0;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  justify-items: center;
   text-align: center;
-  pointer-events: none;
+  background: rgba(13, 16, 22, 0.82);
 }
 
-#banner-title { font-size: 22px; color: var(--coast); }
-#banner-sub { font-size: 12px; color: #9aa7b8; }
+#banner-title {
+  font-size: clamp(22px, 6vw, 34px);
+  letter-spacing: 0.18em;
+  color: var(--coast);
+}
 
-#actionbar { display: flex; gap: 6px; }
-#globals { display: flex; gap: 6px; margin-left: auto; }
+#banner-sub { font-size: 12px; color: var(--dim); }
+
+#toast, #notice {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  font-size: 11px;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#toast { bottom: 12px; color: var(--user); border-color: var(--hand); }
+#notice { top: 12px; color: var(--red); border-color: var(--red); }
+
+/* --- bottom bar -------------------------------------------------------------- */
+
+/* The action bar is the one element whose content length changes every tap. It takes the
+   leftover width and scrolls inside itself; it never wraps, never grows the footer, and
+   never pushes the minimap onto a second line. */
+#actionbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+#actionbar::-webkit-scrollbar { display: none; }
+/* Verbs keep their intrinsic width: a squeezed button whose visual centre lands on the
+   button behind it is how a tap on PLACE ends up dispatching GENERATE. */
+#actionbar > button { flex: none; }
+#globals { display: flex; gap: 6px; flex: none; }
 
 button {
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.08em;
-  padding: 6px 12px;
+  padding: 7px 12px;
   color: var(--paper);
   background: #1b2230;
   border: 1px solid #2e3849;
   border-radius: 3px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 button:hover:not(:disabled) { border-color: var(--select); }
-button:disabled { opacity: 0.4; cursor: default; }
+button:disabled { opacity: 0.35; cursor: default; }
+
+button i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--void);
+  background: var(--dim);
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+
+button.verb { border-color: var(--select); color: var(--select); }
+button.verb i { background: var(--select); }
+
+#btn-generate { border-color: var(--hidden); color: var(--revealed); }
+#btn-generate:not(:disabled) i { background: var(--revealed); }
+#banner-btn { border-color: var(--coast); }
 
 select {
   font: inherit;
   font-size: 11px;
   color: var(--paper);
-  background: #0d1016;
-  border: 1px solid #232a36;
-  padding: 3px 6px;
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 4px 6px;
+  width: 92px;              /* fixed: 'caldera' and 'plain' must wrap the bar identically */
+  flex: none;
 }
 
 #tray {
-  display: grid;
-  place-items: center;
-  min-width: 64px;
-  min-height: 48px;
-  border: 1px dashed #2e3849;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--hidden);
+  background: var(--void);
+  flex: none;
+  min-width: 0;
+  max-height: 100%;
 }
 
+#tray-canvas { display: block; image-rendering: pixelated; flex: none; }
+.tray-side { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tray-controls { display: flex; gap: 6px; }
+#tray-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 #minimap {
-  border: 1px solid #232a36;
+  width: 120px;
+  height: 66px;
+  border: 1px solid var(--edge);
   background: var(--void);
   image-rendering: pixelated;
+  touch-action: none;
+  cursor: crosshair;
+  flex: none;
 }
 
 .hidden { display: none !important; }
+
+/* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
+   One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
+   squeezing the action bar to nothing — and a clipped verb button whose centre lands on
+   Generate steals a turn. So the footer becomes a fixed two-row grid: the verbs (or the
+   block tray) get a full row to themselves, Generate/Wait and the minimap get the other.
+   Row heights are fixed, so the board still never moves at runtime.
+       footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
+       topbar row 1 (fixed widths) 133+67+128+83+88 + 4×6 = 523 ≤ 544 at 560px;
+       the forecast takes row 2:   26 + 6 + 16 + 12 + 1 border = 61 ≤ 64 = --top-h
+   Footer widths at the worst case (280px wide, 268px usable):
+       row 1 in play    PLACE 76 + 6 + ANALYZE 91              = 173
+       row 1 placing    tray 2+12+32+6+134                     = 186
+       row 2            GENERATE 99 + 6 + WAIT 69 + 6 + map 60 = 240          */
+@media (max-width: 899px) {
+  :root { --top-h: 64px; --hud-h: 98px; }
+
+  #topbar { gap: 6px; padding: 6px 8px; }
+  .forecast { gap: 8px; width: 100%; margin-left: 0; justify-content: space-between; }
+  .meter { width: 88px; }
+  button { padding: 6px 9px; }
+
+  #hud {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 46px 34px;    /* 46 fits the tray: 2 border + 8 padding + 4×8 cells */
+    grid-template-areas:
+      "main    main"
+      "globals minimap";
+    gap: 6px;
+    padding: 6px 8px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    align-items: center;
+  }
+
+  #tray, #actionbar { grid-area: main; min-width: 0; }
+  #globals { grid-area: globals; }
+  #minimap { grid-area: minimap; width: 60px; height: 34px; }
+  /* Tray: canvas + controls only. The hint line would make the tray 50px of content in a
+     46px row; the board's green anchors say the same thing. */
+  #tray { padding: 4px 6px; gap: 6px; }
+  #tray-hint { display: none; }
+
+  /* The tray IS the placing UI at these widths, and its CONFIRM is the same button the
+     action bar's COMMIT BLOCK would be — gated by the same legalActions() answer. */
+  #hud.placing #actionbar { display: none; }
+
+  .narrow-hide { display: none; }
+  .narrow-only { display: inline; }
+}
+
+/* --- ≤559px: the top bar genuinely needs three rows --------------------------------
+   Row 1 stops fitting level+restart+seed+tick+meter (523px of fixed-width content) below
+   ~539px, so the forecast trio — persistent, spec-mandated UI (SPEC §6.1) — was being cut
+   mid-glyph. Three rows of 26 + two 6px gaps + 12 padding + 1 border = 93 ≤ 96 = --top-h.
+   The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT, 166px total) and is
+   allowed to share a row, so the worst packing in this band is:
+       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [meter 88 + fc 166]
+       320px (308 usable): [field + restart + seed 299] [tick + meter 177] [fc 166]
+   — three rows at every width in the band, and the trio is never clipped. */
+@media (max-width: 559px) {
+  :root { --top-h: 96px; }
+  #topbar, #hud { padding-left: 6px; padding-right: 6px; }
+  .meter { width: 76px; }
+  .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
+  .tiny-hide { display: none; }
+  .tiny-only { display: inline; }
+}

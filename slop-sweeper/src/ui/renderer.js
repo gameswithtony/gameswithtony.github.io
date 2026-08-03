@@ -1,0 +1,431 @@
+// @ts-check
+// The board renderer: atlas blits at integer device offsets into a viewport-sized static
+// cache, plus a dynamic layer on top (SPEC §10.8, PLAN §11.2–§11.5).
+//
+// Two rules run through everything here:
+//   · the static cache is screen-sized, never board-sized, and is rebuilt only when the
+//     state, the camera or artPx changed — the board is motionless between ticks;
+//   · no alpha in world rendering. Every tint is a 50% checkerboard of a palette colour.
+//
+// Zoom tiers are derived from FONT_MIN_DEVICE_PX and nothing else (SPEC §10.8): a 3×5 glyph
+// needs 5 × artPx device px of height to be legible, which is what fixes the mid threshold,
+// and "twice legible" is what fixes near.
+
+import { RULES } from '../core/rules.js';
+import { blockMines, clue } from '../core/reduce.js';
+import { PALETTE } from './palette.js';
+import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
+import { drawText, drawTextCentered, textWidthArt, GLYPH_H } from './font.js';
+import { cellRect, visibleCells } from './camera.js';
+
+/** @typedef {import('../core/state.js').GameState} GameState */
+/** @typedef {import('../core/state.js').Con} Con */
+/** @typedef {import('./camera.js').Camera} Camera */
+/** @typedef {import('./atlas.js').Atlas} Atlas */
+
+/** @typedef {'far' | 'mid' | 'near'} Tier */
+
+/**
+ * @typedef {object} ViewOverlay
+ * @property {number} selected           selected cell index, or -1
+ * @property {number} rot                current rotation index during `placing`
+ * @property {number[] | null} anchors   legal anchors for the current rotation (placing)
+ * @property {{ cells: number[], valid: boolean } | null} ghost
+ * @property {number[] | null} blast     blast preview for a selected confirmed mine
+ */
+
+export const MID_MIN_ARTPX = Math.max(2, Math.ceil(RULES.FONT_MIN_DEVICE_PX / GLYPH_H));
+export const NEAR_MIN_ARTPX = MID_MIN_ARTPX * 2;
+
+/**
+ * @param {number} artPx
+ * @returns {Tier}
+ */
+export function tierOf(artPx) {
+  if (artPx >= NEAR_MIN_ARTPX) return 'near';
+  if (artPx >= MID_MIN_ARTPX) return 'mid';
+  return 'far';
+}
+
+/**
+ * @param {GameState} s
+ * @param {number} x
+ * @param {number} y
+ * @returns {boolean} VOID or outside the array — both are "not board" (SPEC §10.7)
+ */
+function isVoid(s, x, y) {
+  if (x < 0 || y < 0 || x >= s.w || y >= s.h) return true;
+  return s.terrain[y * s.w + x] === 'void';
+}
+
+/**
+ * @param {Con} con
+ * @returns {number} the owning block id, or -1
+ */
+function blockOf(con) {
+  return con.k === 'aiHidden' || con.k === 'aiRevealed' || con.k === 'mineConfirmed' ? con.block : -1;
+}
+
+/**
+ * @param {GameState} s
+ * @param {number} i
+ * @param {number} x
+ * @param {number} y
+ * @returns {string} atlas tile name
+ */
+function tileName(s, i, x, y) {
+  if (i === s.origin) return 'origin';
+  if (i === s.dest) return 'dest';
+  const v = variantOf(x, y, s.seed);
+  switch (s.con[i].k) {
+    case 'hand': return `hand${v}`;
+    case 'aiHidden': return `hidden${v}`;
+    case 'aiRevealed': return 'revealed';
+    case 'mineConfirmed': return 'mine';
+    default: break;
+  }
+  return s.terrain[i] === 'volcano' ? `volcano${v}` : `ocean${v}`;
+}
+
+/**
+ * A digit chip centred on the art grid inside one tile, used for block mine badges and user
+ * stacks. The box is padded until the slack is equal on both sides: eight art pixels of tile
+ * cannot centre a five-wide box, and the leftover sliver of the cell underneath is exactly
+ * what reads as misaligned.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} text
+ * @param {number} x     tile origin in device px
+ * @param {number} y
+ * @param {number} px    artPx
+ * @param {string} color glyph colour; the backing is always INK
+ */
+function drawBadge(ctx, text, x, y, px, color) {
+  const glyph = textWidthArt(text);
+  let w = glyph + 2;
+  let h = GLYPH_H + 2;
+  if ((ART - w) % 2 !== 0 && w < ART) w += 1;
+  if ((ART - h) % 2 !== 0 && h < ART) h += 1;
+  const bx = x + Math.max(0, Math.round((ART - w) / 2)) * px;
+  const by = y + Math.max(0, Math.round((ART - h) / 2)) * px;
+  ctx.fillStyle = PALETTE.INK;
+  ctx.fillRect(bx, by, w * px, h * px);
+  drawText(ctx, text, bx + Math.floor((w - glyph) / 2) * px, by + Math.floor((h - GLYPH_H) / 2) * px, px, color);
+}
+
+/**
+ * @param {HTMLCanvasElement} canvas
+ */
+export function createRenderer(canvas) {
+  const ctx = crisp(/** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d', { alpha: false })));
+  const cache = document.createElement('canvas');
+  const cctx = crisp(/** @type {CanvasRenderingContext2D} */ (cache.getContext('2d')));
+
+  /** @type {Atlas | null} */
+  let atlas = null;
+  let version = 0;          // bumped by invalidate(): the state changed under us
+  let staticKey = '';
+
+  /**
+   * @param {number} artPx
+   * @returns {Atlas}
+   */
+  function atlasFor(artPx) {
+    if (!atlas || atlas.artPx !== artPx) atlas = bakeAtlas(artPx);
+    return atlas;
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {Camera} cam
+   * @param {Atlas} at
+   */
+  function buildStatic(s, cam, at) {
+    if (cache.width !== cam.cw || cache.height !== cam.ch) {
+      cache.width = cam.cw;
+      cache.height = cam.ch;
+      crisp(cctx);
+    }
+    const tier = tierOf(cam.artPx);
+    const t = at.tile;
+    const px = cam.artPx;
+
+    cctx.fillStyle = PALETTE.VOID;
+    cctx.fillRect(0, 0, cam.cw, cam.ch);
+
+    const win = visibleCells(cam, s);
+    // Rectangular *iteration* over the visible window is fine; playability is decided by the
+    // VOID test below, never by the loop bounds (SPEC §10.7).
+    for (let y = win.y0; y <= win.y1; y++) {
+      for (let x = win.x0; x <= win.x1; x++) {
+        const i = y * s.w + x;
+        if (s.terrain[i] === 'void') continue;
+        const dx = cam.ox + x * t;
+        const dy = cam.oy + y * t;
+        at.blit(cctx, tileName(s, i, x, y), dx, dy);
+
+        let side = 0;
+        if (isVoid(s, x, y - 1)) side |= 1;
+        if (isVoid(s, x + 1, y)) side |= 2;
+        if (isVoid(s, x, y + 1)) side |= 4;
+        if (isVoid(s, x - 1, y)) side |= 8;
+        if (side) at.blit(cctx, `coastS${side}`, dx, dy);
+
+        let corner = 0;
+        if (!(side & 1) && !(side & 8) && isVoid(s, x - 1, y - 1)) corner |= 1;
+        if (!(side & 1) && !(side & 2) && isVoid(s, x + 1, y - 1)) corner |= 2;
+        if (!(side & 4) && !(side & 2) && isVoid(s, x + 1, y + 1)) corner |= 4;
+        if (!(side & 4) && !(side & 8) && isVoid(s, x - 1, y + 1)) corner |= 8;
+        if (corner) at.blit(cctx, `coastC${corner}`, dx, dy);
+      }
+    }
+
+    // Block boundaries: edges between differing block ids. State-dependent, so it is drawn
+    // here rather than baked (PLAN §11.2). Present at every tier — it is the topology view.
+    cctx.fillStyle = PALETTE.INK;
+    for (let y = win.y0; y <= win.y1; y++) {
+      for (let x = win.x0; x <= win.x1; x++) {
+        const i = y * s.w + x;
+        const b = blockOf(s.con[i]);
+        if (b < 0) continue;
+        const dx = cam.ox + x * t;
+        const dy = cam.oy + y * t;
+        if (neighborBlock(s, x, y - 1) !== b) cctx.fillRect(dx, dy, t, px);
+        if (neighborBlock(s, x, y + 1) !== b) cctx.fillRect(dx, dy + t - px, t, px);
+        if (neighborBlock(s, x - 1, y) !== b) cctx.fillRect(dx, dy, px, t);
+        if (neighborBlock(s, x + 1, y) !== b) cctx.fillRect(dx + t - px, dy, px, t);
+      }
+    }
+
+    if (tier === 'far') return;
+
+    // Clue digits (mid and near). Derived live from the mine set on every rebuild, so the
+    // never-wrong rule holds with no invalidation logic of its own (PLAN §3.5).
+    for (let y = win.y0; y <= win.y1; y++) {
+      for (let x = win.x0; x <= win.x1; x++) {
+        const i = y * s.w + x;
+        if (s.con[i].k !== 'aiRevealed') continue;
+        const { lo, hi } = clue(s, i);
+        const text = lo === hi ? String(lo) : `${lo}-${hi}`;
+        drawTextCentered(cctx, text, cam.ox + x * t + t / 2, cam.oy + y * t + t / 2, px, PALETTE.INK);
+      }
+    }
+
+    if (tier !== 'near') return;
+
+    // Per-block mine badges at block centroids, live counts (PLAN §11.3).
+    for (const b of s.blocks) {
+      if (b.cells.length === 0) continue;
+      const at2 = centroidCell(s, b.cells);
+      const x = at2 % s.w, y = Math.floor(at2 / s.w);
+      if (x < win.x0 || x > win.x1 || y < win.y0 || y > win.y1) continue;
+      drawBadge(cctx, String(blockMines(s, b.id)), cam.ox + x * t, cam.oy + y * t, px, PALETTE.PAPER);
+    }
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {number} x
+   * @param {number} y
+   * @returns {number}
+   */
+  function neighborBlock(s, x, y) {
+    if (x < 0 || y < 0 || x >= s.w || y >= s.h) return -1;
+    return blockOf(s.con[y * s.w + x]);
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {number[]} cells
+   * @returns {number} the live cell nearest the centroid
+   */
+  function centroidCell(s, cells) {
+    let sx = 0, sy = 0;
+    for (const c of cells) { sx += c % s.w; sy += Math.floor(c / s.w); }
+    const cx = sx / cells.length, cy = sy / cells.length;
+    let best = cells[0], bestD = Infinity;
+    for (const c of cells) {
+      const d = (c % s.w - cx) ** 2 + (Math.floor(c / s.w) - cy) ** 2;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best;
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {Camera} cam
+   * @param {Atlas} at
+   * @param {ViewOverlay} view
+   */
+  function drawDynamic(s, cam, at, view) {
+    const tier = tierOf(cam.artPx);
+    const t = at.tile;
+    const px = cam.artPx;
+
+    /** @param {number} cell @param {string} name */
+    const tint = (cell, name) => {
+      const r = cellRect(cam, s, cell);
+      if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) return;
+      at.blit(ctx, name, r.x, r.y);
+    };
+
+    if (view.anchors) for (const c of view.anchors) tint(c, 'tintOk');
+    if (view.blast) for (const c of view.blast) tint(c, 'tintRed');
+
+    if (view.ghost) {
+      const name = view.ghost.valid ? 'tintOk' : 'tintRed';
+      ctx.fillStyle = view.ghost.valid ? PALETTE.OK : PALETTE.RED;
+      for (const c of view.ghost.cells) {
+        tint(c, name);
+        const r = cellRect(cam, s, c);
+        ctx.fillRect(r.x, r.y, t, px);
+        ctx.fillRect(r.x, r.y + t - px, t, px);
+        ctx.fillRect(r.x, r.y, px, t);
+        ctx.fillRect(r.x + t - px, r.y, px, t);
+      }
+    }
+
+    // Users last but one: they are the thing the player is watching (PLAN §11.5).
+    drawUsers(s, cam, at, tier);
+
+    if (view.selected >= 0) {
+      const r = cellRect(cam, s, view.selected);
+      // One art pixel at every tier — which is already "fatter at near" in device px (1 at
+      // far, 8+ at near) while staying an eighth of the tile, so the cell's own content, the
+      // thing you selected it to read, is never hidden by the ring.
+      const wgt = px;
+      ctx.fillStyle = PALETTE.SELECT;
+      ctx.fillRect(r.x, r.y, t, wgt);
+      ctx.fillRect(r.x, r.y + t - wgt, t, wgt);
+      ctx.fillRect(r.x, r.y, wgt, t);
+      ctx.fillRect(r.x + t - wgt, r.y, wgt, t);
+    }
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {Camera} cam
+   * @param {Atlas} at
+   * @param {Tier} tier
+   */
+  function drawUsers(s, cam, at, tier) {
+    /** @type {Map<number, number>} */
+    const stacks = new Map();
+    for (const u of s.users) {
+      if (u.state === 'arrived') continue;   // served users leave the board
+      stacks.set(u.at, (stacks.get(u.at) ?? 0) + 1);
+    }
+    if (stacks.size === 0) return;
+
+    const t = at.tile;
+    const px = cam.artPx;
+    const dotArt = tier === 'far' ? 3 : tier === 'mid' ? 3 : 4;
+    const dot = dotArt * px;
+
+    for (const [cell, n] of stacks) {
+      const r = cellRect(cam, s, cell);
+      if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
+
+      // A stack becomes the count itself rather than a dot wearing a badge: eight art pixels
+      // of tile cannot hold both, and the pile at the origin is the "you have not shipped"
+      // signal (SPEC §6.2) — it has to read as a number the moment there is more than one.
+      if (n > 1 && tier !== 'far') {
+        const text = n <= 9 ? String(n) : '+';         // exact count lives in the HUD forecast
+        drawBadge(ctx, text, r.x, r.y, px, PALETTE.USER);
+        continue;
+      }
+
+      const cx = r.x + Math.round((t - dot) / (2 * px)) * px;
+      const cy = r.y + Math.round((t - dot) / (2 * px)) * px;
+      ctx.fillStyle = PALETTE.INK;
+      ctx.fillRect(cx - px, cy - px, dot + 2 * px, dot + 2 * px);
+      ctx.fillStyle = PALETTE.USER;
+      ctx.fillRect(cx, cy, dot, dot);
+      if (n > 1) {
+        ctx.fillStyle = PALETTE.PAPER;              // far tier: a corner pip is all that fits
+        ctx.fillRect(cx + dot - px, cy - px, px, px);
+      }
+    }
+  }
+
+  return {
+    /** The state changed: the static cache no longer describes it. */
+    invalidate() { version++; },
+
+    /** @param {number} artPx */
+    atlasFor,
+
+    /**
+     * @param {GameState} s
+     * @param {Camera} cam
+     * @param {ViewOverlay} view
+     */
+    draw(s, cam, view) {
+      const at = atlasFor(cam.artPx);
+      const key = `${version}|${cam.artPx}|${cam.ox}|${cam.oy}|${cam.cw}|${cam.ch}`;
+      if (key !== staticKey) {
+        buildStatic(s, cam, at);
+        staticKey = key;
+      }
+      ctx.drawImage(cache, 0, 0);
+      drawDynamic(s, cam, at, view);
+    },
+  };
+}
+
+/**
+ * Ghost cells for an anchor + rotation offsets, including the illegal case — the renderer
+ * needs somewhere to draw the RED ghost, which `placementCells()` (rightly) refuses to
+ * compute. Off-array offsets are dropped; they simply do not draw.
+ * @param {GameState} s
+ * @param {number} anchor
+ * @param {[number, number][]} offsets
+ * @returns {number[]}
+ */
+export function ghostCells(s, anchor, offsets) {
+  const ax = anchor % s.w, ay = Math.floor(anchor / s.w);
+  /** @type {number[]} */
+  const out = [];
+  for (const [dx, dy] of offsets) {
+    const x = ax + dx, y = ay + dy;
+    if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;
+    out.push(y * s.w + x);
+  }
+  return out;
+}
+
+/**
+ * The block tray (PLAN §11.8): the drawn shape at a fixed CSS size, legible no matter what
+ * the board zoom is doing. Same palette, same fillRect discipline, its own little canvas.
+ * @param {HTMLCanvasElement} canvas
+ * @param {[number, number][]} offsets
+ * @param {number} cssCell
+ * @param {number} dpr
+ */
+export function drawTray(canvas, offsets, cssCell, dpr) {
+  let mx = 0, my = 0;
+  for (const [dx, dy] of offsets) { mx = Math.max(mx, dx); my = Math.max(my, dy); }
+  const cell = Math.max(2, Math.round(cssCell * dpr));
+  canvas.width = (mx + 1) * cell;
+  canvas.height = (my + 1) * cell;
+  canvas.style.width = `${(mx + 1) * cell / dpr}px`;
+  canvas.style.height = `${(my + 1) * cell / dpr}px`;
+  const ctx = crisp(/** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d')));
+  const px = Math.max(1, Math.floor(cell / ART));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const [dx, dy] of offsets) {
+    const x = dx * cell, y = dy * cell;
+    ctx.fillStyle = PALETTE.AI_HIDDEN;
+    ctx.fillRect(x, y, cell, cell);
+    ctx.fillStyle = PALETTE.AI_HIDDEN_DITHER;
+    for (let ay = 0; ay < ART; ay++) {
+      for (let ax = 0; ax < ART; ax++) {
+        if (((ax + ay) & 3) === 0) ctx.fillRect(x + ax * px, y + ay * px, px, px);
+      }
+    }
+    ctx.fillStyle = PALETTE.INK;
+    ctx.fillRect(x, y, cell, px);
+    ctx.fillRect(x, y + cell - px, cell, px);
+    ctx.fillRect(x, y, px, cell);
+    ctx.fillRect(x + cell - px, y, px, cell);
+  }
+}
