@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { RULES } from '../src/core/rules.js';
 import { CON_HAND, CON_NONE } from '../src/core/state.js';
 import { cellAt } from '../src/core/grid.js';
 import { distField } from '../src/core/routing.js';
@@ -84,5 +85,5 @@ test('a user with no legal move stalls in place and counts as waiting', () => {
   assert.equal(r.s.users[0].stalled, true);
   assert.equal(r.s.users[0].state, 'moving');
   assert.equal(r.ev.some((e) => e.t === 'step'), false);
-  assert.equal(r.s.confidence, before - 0.5, 'a stalled user drains like any other waiting user');
+  assert.equal(r.s.confidence, before - RULES.WAIT_DRAIN_PER_USER, 'a stalled user drains like any other waiting user');
 });

@@ -4,11 +4,11 @@
 
 export const RULES = Object.freeze({
   CONFIDENCE_START: 100,
-  WAIT_DRAIN_PER_USER: 0.5,   // per waiting user per tick — continuous, scales (SPEC §8.2)
+  WAIT_DRAIN_PER_USER: 0.75,   // per waiting user per tick — continuous, scales (SPEC §8.2)
   DETONATE_HIT: 10,
   SERVED_BONUS: 0,            // tuning lever only; no confidence regeneration (PLAN §3.11)
   BLAST_RADIUS: 1,            // tile + orthogonals (SPEC §5 baseline)
-  ANALYZE_REVEALS: 4,
+  ANALYZE_REVEALS: 5,
   USER_MOVE_EVERY: 1,         // OPEN #1
   ART_PX_PER_TILE: 8,         // SPEC §10.8
   FONT_MIN_DEVICE_PX: 10,     // zoom tiers derive from this, never tuned apart (SPEC §10.8)

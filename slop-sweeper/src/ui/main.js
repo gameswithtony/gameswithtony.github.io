@@ -40,7 +40,7 @@ try {
   const banner = el('banner');
   if (banner) {
     banner.classList.remove('hidden');
-    set('banner-title', 'M1 — HEADLESS CORE');
+    set('banner-title', 'M2 — HEADLESS CORE');
     set('banner-sub', `${s.w}×${s.h} · ${s.schedule.total} users · the board arrives in M3`);
   }
   console.info(`slop-sweeper: core booted level '${s.level}' at seed ${s.seed}. UI arrives in M3.`);

@@ -86,7 +86,7 @@ test('placement is refused off structure, on non-ocean terrain, on endpoints and
 
 test('legalActions is the single source of truth for the action bar', () => {
   const s = fresh();
-  assert.deepEqual(legalActions(s), ['wait'], 'global verbs when no cell is selected');
+  assert.deepEqual(legalActions(s), ['generate', 'wait'], 'global verbs when no cell is selected');
   assert.deepEqual(legalActions(s, at(s, 2, 1)), [], 'volcano offers nothing');
 
   const done = { ...s, phase: /** @type {const} */ ({ k: 'won' }) };
@@ -98,5 +98,5 @@ test('legalActions is the single source of truth for the action bar', () => {
 test('an unknown action is a hard error, not a silent no-op', () => {
   const s = fresh();
   assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'nonsense' })), /unhandled action/);
-  assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'generate' })), /unhandled action/);
+  assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'flag', cell: 0 })), /unhandled action/);
 });

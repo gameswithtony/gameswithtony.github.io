@@ -4,6 +4,11 @@
 
 import { LEVEL_DEFAULTS } from '../core/rules.js';
 import { plain } from './plain.js';
+import { channel } from './channel.js';
+import { atoll } from './atoll.js';
+import { caldera } from './caldera.js';
+import { strait } from './strait.js';
+import { sprawl } from './sprawl.js';
 
 /**
  * @typedef {object} LevelDef
@@ -75,5 +80,10 @@ export function allLevels() {
   return levelIds().map(getLevel);
 }
 
+// The corpus (PLAN §9). One line each — that is the whole registration cost.
 register(plain);
-// M2: channel, atoll, caldera, strait, sprawl (PLAN §9 roster).
+register(channel);
+register(atoll);
+register(caldera);
+register(strait);
+register(sprawl);

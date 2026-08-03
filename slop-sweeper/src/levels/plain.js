@@ -19,7 +19,7 @@ A##############B
 ################
 ################
 `,
-  arrivals: { count: 8, firstTick: 6, every: 5 },
-  mineDensity: 0.22,
+  arrivals: { count: 10, firstTick: 4, every: 3 },
+  mineDensity: 0.18,
   shapePool: 'compact',
 };

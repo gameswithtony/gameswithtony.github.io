@@ -3,9 +3,12 @@
 A turn-based puzzle about building software under deadline with AI assistance.
 Design spec: [`SPEC.md`](SPEC.md). Implementation plan: [`PLAN.md`](PLAN.md).
 
-**Status: M1 — walking skeleton.** The headless core plays a hand-built game of `plain` to a
-win in Node. The board renderer, camera, and HUD arrive in M3 (PLAN §14); until then
-`index.html` is a shell that boots the core and prints a placeholder.
+**Status: M2 — the whole verb set, instrumented.** The headless core plays complete games of
+all six levels in Node: place, generate (draw / legal set / refund / mine roll), analyze, and
+traversal with flood-fill detonations, plus live clues, a constraint solver, a level
+validator, and a policy-bot sim harness. The economy has had its first tuning pass — per
+SPEC §10.2 it cannot be tuned by playing it. The board renderer, camera, and HUD arrive in M3
+(PLAN §14); until then `index.html` is a shell that boots the core and prints a placeholder.
 
 ## There is no build step, ever
 
@@ -36,19 +39,38 @@ Node ≥ 20 (dev only — players need only a browser):
 
 ```sh
 cd slop-sweeper
-node --test          # the whole suite
-npm test             # same thing
-npm run sim          # the policy-bot harness (arrives in M2)
+node --test                                  # the whole suite
+npm test                                     # same thing
+
+node src/sim/validate.js                     # structural check of every registered level
+node src/sim/validate.js caldera             # …or just one
+
+node src/sim/run.js --all                    # levels x policies, as a markdown table
+node src/sim/run.js --level caldera --policy balanced:0.5 --games 200 --seed 1
+npm run sim -- --all --games 200             # same runner
 ```
+
+Policies: `handOnly`, `genRush`, `balanced:p`, `careful:p`, each optionally suffixed
+`-greedy` (default) or `-edge` to pick the ghost-placement strategy. `--no-solver` skips the
+`guessForced` instrumentation.
 
 ## Layout
 
 ```
 src/core/     zero deps, zero DOM, pure, injected PRNG — the whole game model
 src/levels/   charmap level definitions + registry (one file, one line, per level)
+              README.md is the authoring guide: legend, invariants, defaults, worked example
+src/sim/      policy bots, pure batch runner, Node CLIs, state hash
 src/ui/       canvas board and DOM HUD (M3)
 test/         node:test + node:assert
 ```
 
-**Dependency law:** `core` imports only `core`; `levels` import core; nothing imports `ui`.
-Core touching a DOM global breaks the tests immediately, which is the enforcement.
+**Dependency law:** `core` imports only `core`; `levels` import core; `sim` imports core and
+levels, with everything Node-specific confined to the two CLIs so the browser Level Lab can
+import `batch.js` unchanged; nothing imports `ui`. Core touching a DOM global breaks the
+tests immediately, which is the enforcement.
+
+## Adding a level
+
+One file plus one line in `src/levels/index.js`. `{ id, map }` alone is playable —
+[`src/levels/README.md`](src/levels/README.md) is the complete guide.

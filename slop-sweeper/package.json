@@ -3,10 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Marker file only: makes Node treat src/**/*.js as ES modules for tests and the sim. Zero dependencies, nothing to install, no build step (PLAN §1.2).",
+  "description": "Marker file only: makes Node treat src/**/*.js as ES modules for tests and the sim. Zero dependencies, nothing to install, no build step (PLAN \u00a71.2).",
   "scripts": {
     "test": "node --test",
-    "sim": "node src/sim/run.js"
+    "sim": "node src/sim/run.js",
+    "validate": "node src/sim/validate.js"
   },
   "engines": {
     "node": ">=20"

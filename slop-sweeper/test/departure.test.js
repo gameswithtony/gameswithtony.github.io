@@ -41,13 +41,19 @@ test('the gate is topological: users wait until a path exists, then the whole qu
 
 test('the gate is topological, not safe: a user departs into a mined corridor (SPEC §6.2)', () => {
   const s = queue(init(CORRIDOR, 1), 1);
-  s.con[cellAt(s, 1, 0)] = { k: 'aiHidden', mine: true, block: 0 };
+  const mined = cellAt(s, 1, 0);
+  s.con[mined] = { k: 'aiHidden', mine: true, block: 0 };
   s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: false, block: 0 };
-  assert.equal(gateOpen(s), true);
+  s.blocks = [{ id: 0, cells: [mined, cellAt(s, 2, 0)] }];
+  assert.equal(gateOpen(s), true, 'aiHidden counts as passable, so the route reads as complete');
 
   const { s: s2, ev } = reduce(s, { t: 'wait' });
-  assert.equal(ev.some((e) => e.t === 'departed'), true);
-  assert.equal(s2.users[0].at, cellAt(s, 1, 0));
+  assert.equal(ev.some((e) => e.t === 'departed'), true, 'it walked in willingly');
+  assert.equal(ev.some((e) => e.t === 'step' && /** @type {any} */ (e).to === mined), true);
+  // …and found out the hard way. The trip ends where it started (PLAN §3.4).
+  assert.equal(ev.some((e) => e.t === 'detonate'), true);
+  assert.equal(s2.users[0].state, 'queued');
+  assert.equal(s2.users[0].at, s2.origin);
 });
 
 test('flagged and mine-confirmed tiles close the gate; the path is otherwise passable', () => {

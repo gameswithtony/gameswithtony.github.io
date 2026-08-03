@@ -4,7 +4,14 @@ import assert from 'node:assert/strict';
 
 import { RULES } from '../src/core/rules.js';
 import { init, reduce } from '../src/core/reduce.js';
-import { getLevel } from '../src/levels/index.js';
+
+// Its own board with its own schedule: the drain is a rule, and a rule test must not move
+// when the sim retunes a level's arrival numbers (PLAN §13).
+const DRAIN = {
+  id: 'meters-drain',
+  map: ['##########', 'A########B', '##########'].join('\n'),
+  arrivals: { count: 8, firstTick: 6, every: 5 },
+};
 
 /** @param {import('../src/core/state.js').GameState} s @param {number} n */
 function waits(s, n) {
@@ -19,8 +26,8 @@ function waits(s, n) {
 }
 
 test('the drain scales with the number of waiting users', () => {
-  //  plain: 8 users, first at tick 6, one every 5 ticks. Nothing is built, so they pile up.
-  let s = init(getLevel('plain'), 1);
+  //  8 users, first at tick 6, one every 5 ticks. Nothing is built, so they pile up.
+  let s = init(DRAIN, 1);
   const drain = RULES.WAIT_DRAIN_PER_USER;
 
   s = waits(s, 6).s;      // ticks 0-5: nobody has arrived to wait yet
