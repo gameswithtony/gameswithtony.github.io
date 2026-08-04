@@ -73,7 +73,8 @@ export function caps(t) {
 /**
  * @typedef {object} ConCaps
  * @property {boolean} passable   users may enter (SPEC §6.2)
- * @property {boolean} handFrom   hand placement may branch from it (SPEC §4.1)
+ * @property {boolean} handFrom   hand placement may branch from it (SPEC §4.1, rev. 2026-08-04:
+ *                                true for everything that `occupies` — any structure will do)
  * @property {boolean} genFrom    an AI block may branch from it (SPEC §4.2)
  * @property {boolean} occupies   something is built here, so nothing else may be
  * @property {boolean} holdsMine  can carry a mine, so it counts toward clues (SPEC §7.5)
@@ -101,10 +102,20 @@ export function caps(t) {
 export const CON = {
   none:          { passable: false, handFrom: false, genFrom: false, occupies: false, holdsMine: false },
   hand:          { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
-  aiHidden:      { passable: true,  handFrom: false, genFrom: true,  occupies: true,  holdsMine: true },
+  aiHidden:      { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: true },
   aiRevealed:    { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
-  mineConfirmed: { passable: false, handFrom: false, genFrom: false, occupies: true,  holdsMine: true },   // unreachable today; see above
+  mineConfirmed: { passable: false, handFrom: true,  genFrom: false, occupies: true,  holdsMine: true },   // unreachable today; see above
 };
+
+// Read the `handFrom` column and it is now exactly the `occupies` column: **hand placement
+// branches from any structure at all** (user decision 2026-08-04, overriding SPEC §4.1).
+// `aiHidden` flipped false → true, which is the decision; `mineConfirmed` flipped with it so
+// the column stays a single coherent rule rather than a rule plus an exception. `genFrom`
+// deliberately did *not* move — a generated block still refuses to branch off a confirmed
+// mine — so the two columns are no longer the same shape, which is the point of having two.
+//
+// The flag mask below touches `passable` only, so a flagged tile is still buildable-from: a
+// flag restricts walkers, never builders.
 
 /**
  * What a flag changes, and the complete list of it: users refuse to enter a flagged tile,

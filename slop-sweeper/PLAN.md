@@ -408,7 +408,14 @@ tick, `generateRefunded` event, phase unchanged):
 For each unique rotation, for each anchor: every block cell must land on generatable terrain
 (`TERRAIN[t].generatable`) with `con.k === 'none'`, and at least one block cell must be
 4-adjacent to structure (endpoint, `hand`, `aiRevealed`, **or `aiHidden`** — generation may
-branch from slop; hand placement may not, §4.1). VOID rejection falls out of the capability
+branch from slop). *(Revised 2026-08-04: **so may hand placement** — the §4.1 restriction that
+made this line a contrast between the two verbs was overridden by user decision, and
+`handFrom` in `state.js` is now exactly the `occupies` column. The two branching sets are
+almost the same and the one remaining difference is deliberate: hand placement may branch
+from a `mineConfirmed` tile, generation may not, because `genFrom` did not move. The verbs
+still differ where they always did — generation needs `generatable` terrain and empty `con`
+for **every** cell of the block; hand placement needs one.)*
+VOID rejection falls out of the capability
 table — verified by test, never special-cased (§10.7). Worst case ~1600 cells × 8 block cells ×
 4 rotations ≈ 50k checks; enumerate eagerly at draw time, store in `phase.placing.rots`, and the
 UI highlights anchors per rotation directly from that data.
@@ -957,8 +964,12 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
 - [ ] §2.1 capability table drives buildable/generatable/passable/known-empty/blast — adding a
       terrain row requires no logic edits (test adds a fake feature row)
 - [ ] §3 exactly one turn-consuming action per tick; ticks never advance otherwise
-- [ ] §4.1 hand placement cannot branch from `aiHidden` (test) — and the action bar teaches it
-      by absence
+- [ ] §4.1 (rev. 2026-08-04) hand placement branches from **any** structure, `aiHidden`
+      included, flagged or not (test) — the player can always build a legal path, and pays
+      for building on unread ground in risk rather than in legality. The target-cell rules
+      are unchanged: ocean terrain, nothing built there, not an endpoint, 4-adjacent to the
+      network (test). `handFrom` in `CON` is exactly the `occupies` column; `genFrom` is not
+      (test).
 - [ ] §4.2 no preview / no decline / no reroll are state-machine properties (test: during
       `placing`, only `placeBlock` is legal)
 - [ ] §4.2 empty legal set ⇒ refund, no tick, notice shown (test + UI)

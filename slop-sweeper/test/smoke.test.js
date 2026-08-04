@@ -71,7 +71,15 @@ test('the construction table carries the full SPEC §2.2 union', () => {
     ['aiHidden', 'aiRevealed', 'hand', 'mineConfirmed', 'none'],
   );
   assert.equal(CON.aiHidden.passable, true);
-  assert.equal(CON.aiHidden.handFrom, false);   // SPEC §4.1, the load-bearing rule
+  // Revised 2026-08-04 (user decision, overriding SPEC §4.1): hand placement branches from
+  // any structure, so `handFrom` is now exactly the `occupies` column — one rule, no
+  // exceptions. `genFrom` deliberately did not move with it.
+  for (const k of /** @type {const} */ (['hand', 'aiHidden', 'aiRevealed', 'mineConfirmed'])) {
+    assert.equal(CON[k].handFrom, true, `${k} should be buildable-from`);
+    assert.equal(CON[k].handFrom, CON[k].occupies);
+  }
+  assert.equal(CON.none.handFrom, false, 'open water is not structure');
+  assert.equal(CON.mineConfirmed.genFrom, false, 'but a block still refuses a confirmed mine');
   assert.equal(CON.aiHidden.genFrom, true);     // SPEC §4.2
   assert.equal(CON.mineConfirmed.passable, false);
 });

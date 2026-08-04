@@ -217,6 +217,11 @@ export function legalActions(s, cell) {
 }
 
 /**
+ * Revised 2026-08-04 (user decision, overriding SPEC §4.1): the branch test now accepts
+ * **any** structure — unreviewed slop included, flagged or not. The target-cell rules are
+ * untouched: ocean terrain, nothing built there, not an endpoint, 4-adjacent to the network.
+ * The rule that a hand tile could not branch from `aiHidden` existed to teach AI dependency
+ * by absence; risk now teaches it instead, and the player can always build a legal path.
  * @param {GameState} s
  * @param {number} cell
  * @returns {string} empty when the placement is legal (SPEC §4.1)
@@ -232,7 +237,7 @@ export function placeRejection(s, cell) {
     if (j === s.origin || j === s.dest) return '';
     if (conCaps(s.con[j]).handFrom) return '';
   }
-  return 'must touch an endpoint, a hand tile, or a revealed tile';
+  return 'must touch an endpoint or a tile that is already built';
 }
 
 /**

@@ -61,7 +61,7 @@ test('every placement lands wholly on free generatable terrain and touches struc
   assert.equal(brute.length, 12);
 });
 
-test('a block may branch from unreviewed slop; a hand tile still may not (SPEC §4.1/§4.2)', () => {
+test('a block may branch from unreviewed slop — and since 2026-08-04, so may a hand tile', () => {
   const s = init(OPEN, 1);
   const hidden = cellAt(s, 8, 9);            // far from either endpoint
   s.con[hidden] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
@@ -71,9 +71,12 @@ test('a block may branch from unreviewed slop; a hand tile still may not (SPEC �
   const anchor = cellAt(s, 4, 6);
   assert.equal(anchorSet(s, 'O16').has(anchor), true, 'generation may branch from aiHidden');
 
+  // SPEC §4.2 gave generation this privilege alone; SPEC §4.1's counterpart restriction on
+  // hand placement was overridden by user decision, so the two verbs now branch from the
+  // same set and the difference between them is risk, not legality.
   const target = cellAt(s, 7, 9);            // the only structure it could branch from is slop
-  assert.deepEqual(legalActions(s, target), [], 'hand placement still may not');
-  assert.deepEqual(legalActions(s, hidden), ['analyze', 'flag'], 'but the slop can be reviewed or flagged');
+  assert.deepEqual(legalActions(s, target), ['place'], 'hand placement may branch from it too');
+  assert.deepEqual(legalActions(s, hidden), ['analyze', 'flag'], 'and the slop can be reviewed or flagged');
 });
 
 test('VOID rejection falls out of the capability table, not a special case (SPEC §10.7)', (t) => {

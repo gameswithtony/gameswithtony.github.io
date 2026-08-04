@@ -47,23 +47,59 @@ test('a hand tile may branch from an aiRevealed tile', () => {
   assert.deepEqual(legalActions(s, target), ['place']);
 });
 
-test('a hand tile can NEVER branch from an aiHidden tile (SPEC §4.1)', () => {
+test('a hand tile MAY branch from unreviewed slop, flagged or not (rev. 2026-08-04)', () => {
+  // Overrides SPEC §4.1. The old rule refused this, to teach AI dependency by absence; the
+  // player can now always build a legal path, and pays for building on unread ground in
+  // risk rather than in legality. A flag restricts walkers, never builders.
   const s = fresh();
   const hidden = at(s, 3, 1);
-  s.con[hidden] = { k: 'aiHidden', mine: false, block: 0 };
   const target = at(s, 3, 0);
 
-  assert.deepEqual(legalActions(s, target), [], 'the action bar teaches the rule by absence');
-  const { s: s2, ev } = reduce(s, { t: 'place', cell: target });
-  assert.equal(s2, s, 'a rejected action returns the same state object');
-  assert.equal(s2.tick, 0, 'a rejected action never advances the tick');
-  assert.equal(ev.length, 1);
-  assert.equal(ev[0].t, 'rejected');
-  assert.match(/** @type {any} */ (ev[0]).reason, /must touch an endpoint/);
+  for (const flagged of [false, true]) {
+    s.con[hidden] = { k: 'aiHidden', mine: true, block: 0, flagged };
+    assert.deepEqual(legalActions(s, target), ['place'], `flagged: ${flagged}`);
+    const { s: built, ev } = reduce(s, { t: 'place', cell: target });
+    assert.deepEqual(ev[0], { t: 'placed', cells: [target] });
+    assert.equal(built.con[target].k, 'hand');
+    // …and the tile it branched from is untouched: still hidden, still mined, still flagged.
+    assert.deepEqual(built.con[hidden], { k: 'aiHidden', mine: true, block: 0, flagged });
+  }
 
-  // The same cell becomes legal the moment that neighbour is understood.
+  // Reviewing the neighbour changes nothing — it was already legal.
   s.con[hidden] = { k: 'aiRevealed', block: 0 };
   assert.deepEqual(legalActions(s, target), ['place']);
+});
+
+test('the branch test is "any structure", but the TARGET rules are untouched', () => {
+  const s = fresh();
+  /** @param {number} cell */
+  const why = (cell) => /** @type {any} */ (reduce(s, { t: 'place', cell }).ev[0]).reason;
+
+  // Open water next to nothing but more open water is still refused: "any structure" is not
+  // "anywhere". (3,0) touches (2,0), (4,0) and (3,1), all of them empty ocean.
+  assert.match(why(at(s, 3, 0)), /must touch an endpoint or a tile that is already built/);
+  assert.deepEqual(legalActions(s, at(s, 3, 0)), []);
+
+  // A mine-confirmed tile is structure too, so it is branchable-from even though nothing
+  // produces it any more (state.js keeps the row coherent).
+  const confirmed = { ...s, con: s.con.slice() };
+  confirmed.con[at(s, 3, 1)] = { k: 'mineConfirmed', block: 0 };
+  assert.deepEqual(legalActions(confirmed, at(s, 3, 0)), ['place']);
+
+  // Terrain and occupancy still decide the target.
+  assert.match(why(at(s, 2, 1)), /cannot build on volcano/);
+  assert.match(why(at(s, 0, 0)), /cannot build on void/);
+  assert.match(why(s.origin), /endpoints are not buildable/);
+  assert.match(why(s.dest), /endpoints are not buildable/);
+  assert.match(why(-1), /off the board/);
+  assert.match(why(s.w * s.h), /off the board/);
+  // Slop is structure to build *from*, never ground to build *on*.
+  const slop = { ...s, con: s.con.slice() };
+  slop.con[at(s, 1, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  assert.match(
+    /** @type {any} */ (reduce(slop, { t: 'place', cell: at(s, 1, 1) }).ev[0]).reason,
+    /already built/,
+  );
 });
 
 test('placement is refused off structure, on non-ocean terrain, on endpoints and on built cells', () => {

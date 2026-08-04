@@ -215,6 +215,20 @@ Place a second job besides throughput, and it means a level with room to build *
 route is easier to read than one where every tile you can afford is on it. Narrow channels
 and necks deny that room, which is a real part of why they are hard.
 
+**And hand placement now branches from anything**, unreviewed slop included (2026-08-04,
+overriding SPEC §4.1). The two changes compound: you can hook a reading tile **directly onto
+the block you are reading**, instead of having to own a clean tile next to it first. Slop no
+longer walls a frontier off either, so a level can never trap the player into generating —
+which means the pressure that makes AI worth using has to come from the schedule, not from
+the placement rules. Two consequences when you are authoring:
+
+- **A wide level is now easier than it was**, because open water beside the route is free
+  reconnaissance. If you want a level read blind, deny the shoulder room rather than the
+  legality.
+- **Nothing stops a player hand-building along their own slop and walking users into it.**
+  That path is legal, cheap in turns and occasionally fatal — which is the intended trade,
+  and it is why `mineDensity` is doing more work than it looks like it is.
+
 **Volcanoes pull in two directions at once.** They stop blasts, so building slop against one
 contains the damage it might do — and they delete legal placements, so that is exactly where
 a block will not fit. A cluster in open water is the cheapest way to make placement a real

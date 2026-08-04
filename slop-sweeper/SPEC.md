@@ -120,6 +120,16 @@ Place one `HAND` tile on an ocean cell. Must be orthogonally adjacent to an endp
 
 **Cannot branch from an `AI_HIDDEN` tile.** You may build on ground you understand. Ground you generated and never reviewed is walkable but not buildable. This rule is load-bearing; see §9.3.
 
+*(Revised 2026-08-04 by owner decision — **the branching restriction is removed.** A hand tile may be placed adjacent to **any** structure: endpoint, `HAND`, `AI_REVEALED`, `AI_HIDDEN` (flagged or not), `MINE_CONFIRMED`. Everything about the target cell is unchanged — ocean terrain, nothing built there, not an endpoint, orthogonally adjacent to the network.*
+
+*The old rule was load-bearing when it was written, and what it was carrying is worth naming so it is clear the load did not vanish, it moved. It made unreviewed slop a **wall**: generate carelessly and the frontier locked, and only Analyze could unlock it. That taught AI dependency by absence — the action bar simply refused. Three later decisions took that job over and do it better, with risk instead of prohibition:*
+
+*— **§4.3's analyze-detonation.** Clicking into slop can now crater it. Unreviewed ground is dangerous to touch, which is a stronger lesson than being unable to touch it.*
+*— **§4.5's flags.** The player can mark ground they distrust and steer users off it, so "I do not understand this" has an expression that is not "I cannot build".*
+*— **§7.4's hand clues.** A hand tile reads the defects beside it, so building along a block is how you learn what is in it. Forbidding exactly that placement was working against the newer mechanic.*
+
+*What the player buys with the freedom is a legal path they may not survive: build along slop and users walk it, and §5 decides what happens next. That is the intended cost, and it is a decision rather than a refusal. §9.3's comprehension-debt argument is untouched — debt is now paid in detonations rather than in blocked placements.)*
+
 Increases skill (§7.3).
 
 ### 4.2 Generate — 1 turn — DECIDED

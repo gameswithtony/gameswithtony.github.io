@@ -123,10 +123,14 @@ export function anchorCounts(s) {
  * cell still costs, which is the gradient that actually points at B; a cell *on* a cheapest
  * completion scores exactly `remaining + 1`, because it is counted from both ends.
  *
- * `handOnRoute` false is the signature of SPEC §4.1 biting: the gap is walled in by
- * unreviewed slop, which is walkable but not buildable-from, so the only hand tiles on offer
- * are somewhere else entirely. A policy that reads this and reaches for Analyze is paying
- * down comprehension debt exactly as SPEC §9.3 describes.
+ * `handOnRoute` false means the cheapest hand tile on offer is not on a cheapest completion
+ * — the frontier has nothing useful to build onto. *(Until 2026-08-04 this was the signature
+ * of SPEC §4.1 biting: unreviewed slop was walkable but not buildable-from, so a block could
+ * wall the frontier off and only a review could unlock it. The user decision that let hand
+ * placement branch from any structure removed that failure mode entirely — slop is now
+ * buildable-from — so this flag fires far more rarely, and when it does it means something
+ * duller: void, volcano or already-built cells boxing the frontier in. The Analyze fallback
+ * below is kept because the flag still exists, not because §4.1 still does.)*
  *
  * `plan` marks every cell lying on *some* cheapest completion — the corridor the bot intends
  * its users to walk. It is the answer to the question single-click Analyze made urgent:
@@ -262,11 +266,10 @@ function bookProgress(mem, remaining) {
 function dose(s, mem, v, wantsAi) {
   const canGenerate = !mem.refunded && mem.genStalls < 3;
   if (!v.handOnRoute) {
-    // SPEC §4.1 has walled the frontier off: the route now runs through unreviewed slop, so
-    // no hand tile advances it. Dosage does not apply here — the only ways forward are more
-    // generation or a review that turns the slop back into ground you can build from. This
-    // is the sim's clearest sighting of SPEC §9.3, and it is why a naive p-mix stalls: hand
-    // and AI cannot take turns at the same frontier.
+    // Nothing on the frontier advances the route by hand (see `survey`). Dosage does not
+    // apply: push on with generation, or spend a review, or place wherever is legal. Before
+    // the 2026-08-04 §4.1 override this was the common case and it was slop's doing; now it
+    // is the rare one, and terrain's.
     if (canGenerate && v.remaining > HAND_FINISH) return { t: 'generate' };
     const cell = analyzeTarget(s, null, v.plan);
     if (cell >= 0) return review(s, mem, cell);
@@ -430,8 +433,8 @@ export function makePolicy(spec, seed) {
         if (gateOpen(s)) return { t: 'wait' };
         const v = survey(s);
         bookProgress(mem, v.remaining);
-        // It never reviews, so when §4.1 walls the last gap off it has no way to unlock it
-        // and ends up hand-building a whole parallel route. That is the policy, not a bug.
+        // It never reviews. Before the 2026-08-04 §4.1 override that meant a walled-off gap
+        // sent it hand-building a whole parallel route; now it simply builds along the slop.
         const finish = v.handOnRoute && v.remaining <= HAND_FINISH;
         if (!mem.refunded && !finish && mem.genStalls < 3) return { t: 'generate' };
         return handStep(v) ?? { t: 'wait' };
