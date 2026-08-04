@@ -12,8 +12,13 @@ import { resolvePool } from './shapes.js';
 
 /** @typedef {import('../levels/index.js').LevelDef} LevelDef */
 
-/** SPEC §11 sizes the corpus modestly; 40×40 is the performance ceiling, not the target. */
-export const MAX_DIM = 40;
+/**
+ * A performance ceiling, not a target. Raised 40 → 64 on 2026-08-04 with the board rescale
+ * (PLAN §9): the corpus now runs 32×20 to 50×30, so 40 had become a design constraint
+ * instead of a guard rail. 64×64 is 4096 cells — still nothing for the BFS passes, and
+ * still small enough that a runaway generated map is caught rather than rendered.
+ */
+export const MAX_DIM = 64;
 
 /** Below this a level is a formality rather than a build (warning only). */
 const DEGENERATE_PATH = 4;

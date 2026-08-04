@@ -1,7 +1,18 @@
 // @ts-check
 // The curated block table (SPEC §4.2, PLAN §10) and its rotations. Twelve hand-authored
-// stencils of 4–8 cells, chunky by construction — long thin tendrils destroy deduction.
+// stencils of 12–26 cells, chunky by construction — long thin tendrils destroy deduction.
 // Rotation only, no reflection (OPEN #10); the asymmetric stencils carry the variety.
+//
+// SIZE REVISION, 2026-08-04 (user decision, overrides SPEC §4.2's "4–8 cells"): a generated
+// block must be a genuine mini-minesweeper. At four cells one Analyze cleared the whole
+// thing, so the fantasy — *the AI is fast, but you owe turns to understand what it gave
+// you* — never got to happen. Twelve to twenty-six cells means a block carries several
+// defects, takes two or three reviews to read, and is worth routing around rather than
+// through. Boards grew ~2× linearly to match (PLAN §9).
+//
+// CHUNKINESS RULE: every limb of every stencil is at least two cells wide. A one-cell
+// tendril has almost no 8-neighbourhood overlap with the rest of the block, so its clues
+// constrain nothing and the deduction layer degenerates into guessing.
 
 /** @typedef {[number, number]} Offset  [dx, dy], normalized so both minima are 0 */
 
@@ -18,19 +29,25 @@
  * @type {[string, string[]][]}
  */
 const STENCILS = [
-  ['O4', ['XX', 'XX']],
-  ['L4', ['X.', 'X.', 'XX']],
-  ['S4', ['.XX', 'XX.']],
-  ['T4', ['XXX', '.X.']],
-  ['P5', ['XX', 'XX', 'X.']],
-  ['W5', ['X..', 'XX.', '.XX']],
-  ['U5', ['X.X', 'XXX']],
-  ['Z5', ['XX.', '.X.', '.XX']],
-  ['F5', ['.XX', 'XX.', '.X.']],
-  ['O6', ['XXX', 'XXX']],
-  ['L6', ['XXXX', 'XX..']],
-  ['D8', ['XXX', 'XXX', 'XX.']],
+  // compact — dense rectangles and near-rectangles: easy to place, easy to read.
+  ['R12', ['XXXX', 'XXXX', 'XXXX']],
+  ['P14', ['XXXX', 'XXXX', 'XXXX', 'XX..']],
+  ['O16', ['XXXX', 'XXXX', 'XXXX', 'XXXX']],
+  ['L16', ['XXX..', 'XXX..', 'XXXXX', 'XXXXX']],
+  ['W20', ['XXXXX', 'XXXXX', 'XXXXX', 'XXXXX']],
+  // awkward — irregular blobs: more perimeter per cell, notches, staircases.
+  ['C20', ['XXXX', 'XXXX', 'XX..', 'XX..', 'XXXX', 'XXXX']],
+  ['T14', ['.XX.', 'XXXX', 'XXXX', '.XX.', '.XX.']],
+  ['Y15', ['..XXX', 'XXXXX', 'XXXXX', '..XX.']],
+  ['Z16', ['XXXX..', 'XXXX..', '..XXXX', '..XXXX']],
+  ['U18', ['XX.XX', 'XX.XX', 'XXXXX', 'XXXXX']],
+  // heavy — enormous throughput, enormous exposure.
+  ['H22', ['XX.XX', 'XX.XX', 'XXXXX', 'XXXXX', 'XX.XX']],
+  ['O25', ['XXXXX', 'XXXXX', 'XXXXX', 'XXXXX', 'XXXXX']],
 ];
+
+/** The band SPEC §4.2 is revised to (see the header note); a typo in a stencil trips it. */
+export const SIZE_RANGE = Object.freeze([12, 26]);
 
 /**
  * @param {Offset[]} cells
@@ -73,7 +90,8 @@ export const SHAPES = STENCILS.map(([id, rows]) => {
       if (rows[y][x] === 'X') cells.push([x, y]);
     }
   }
-  if (cells.length < 4 || cells.length > 8) throw new Error(`shape ${id} is ${cells.length} cells; §4.2 says 4–8`);
+  const [lo, hi] = SIZE_RANGE;
+  if (cells.length < lo || cells.length > hi) throw new Error(`shape ${id} is ${cells.length} cells; §4.2 (rev. 2026-08-04) says ${lo}–${hi}`);
   const norm = normalize(cells);
   return Object.freeze({ id, cells: norm, size: norm.length });
 });
@@ -96,8 +114,9 @@ const ROTATIONS = new Map();
 
 /**
  * Distinct rotations, in quarter-turn order. A symmetric shape repeats, so the duplicates
- * are dropped: O4 offers one, S4 and O6 two, the rest four. Because rotational symmetry has
- * a period that divides 4, the surviving turns are always 0…p−1 — so **the array index and
+ * are dropped: the squares O16 and O25 offer one, the 180°-symmetric R12/W20/Z16 two, the
+ * rest four. Because rotational symmetry has a period that divides 4, the surviving turns
+ * are always 0…p−1 — so **the array index and
  * the quarter-turn count are the same number**, which is what lets `Action.placeBlock.rot`
  * be both an index into `phase.rots` and something a renderer can draw.
  * @param {number} shapeIdx
@@ -128,9 +147,9 @@ export function rotationsOf(shapeIdx) {
 
 /** @type {Readonly<Record<string, string[]>>} */
 export const POOLS = Object.freeze({
-  compact: ['O4', 'L4', 'T4', 'P5', 'O6'],
-  awkward: ['S4', 'W5', 'U5', 'Z5', 'F5'],
-  heavy: ['L6', 'D8'],
+  compact: ['R12', 'P14', 'O16', 'L16', 'W20'],
+  awkward: ['C20', 'T14', 'Y15', 'Z16', 'U18'],
+  heavy: ['H22', 'O25'],
 });
 
 /**

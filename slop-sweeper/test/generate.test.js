@@ -12,8 +12,17 @@ import { init, legalActions, reduce } from '../src/core/reduce.js';
 
 const NEVER = { count: 4, firstTick: 9999, every: 9999 };
 
-/** 6×4 of open water with the endpoints on the middle row. */
-const OPEN = { id: 'gen-open', map: ['######', 'A####B', '######', '######'].join('\n'), arrivals: NEVER, shapePool: ['O4'] };
+/**
+ * 16 by 12 of open water with the endpoints on the middle row. Sized for the 2026-08-04
+ * block table (PLAN §10): `O16` is the 4x4 square, the smallest one-rotation stencil there
+ * is, and a board it could only just sit on would test the bounds check, not the rule.
+ */
+const OPEN = {
+  id: 'gen-open',
+  map: [...Array(5).fill('#'.repeat(16)), `A${'#'.repeat(14)}B`, ...Array(6).fill('#'.repeat(16))].join('\n'),
+  arrivals: NEVER,
+  shapePool: ['O16'],
+};
 
 /** @param {import('../src/core/state.js').GameState} s @param {string} id */
 const rots = (s, id) => legalPlacements(s, shapeIndex(id));
@@ -22,7 +31,7 @@ const anchorSet = (s, id) => new Set(rots(s, id).flatMap((r) => r.anchors));
 
 test('every placement lands wholly on free generatable terrain and touches structure', () => {
   const s = init(OPEN, 1);
-  const placements = rots(s, 'O4');
+  const placements = rots(s, 'O16');
   assert.equal(placements.length, 1, 'the square has one rotation');
 
   for (const anchor of placements[0].anchors) {
@@ -49,20 +58,20 @@ test('every placement lands wholly on free generatable terrain and touches struc
   const brute = [];
   for (let i = 0; i < s.w * s.h; i++) if (placementCells(s, i, placements[0].cells)) brute.push(i);
   assert.deepEqual(placements[0].anchors, brute);
-  assert.equal(brute.length, 6);
+  assert.equal(brute.length, 12);
 });
 
 test('a block may branch from unreviewed slop; a hand tile still may not (SPEC §4.1/§4.2)', () => {
   const s = init(OPEN, 1);
-  const hidden = cellAt(s, 3, 3);            // far from either endpoint
+  const hidden = cellAt(s, 8, 9);            // far from either endpoint
   s.con[hidden] = { k: 'aiHidden', mine: false, block: 0 };
 
-  // The square anchored at (1,2) reaches the slop with its (2,3) corner and touches no
+  // The square anchored at (4,6) reaches the slop with its (7,9) corner and touches no
   // other structure, so the slop is the only thing making it legal.
-  const anchor = cellAt(s, 1, 2);
-  assert.equal(anchorSet(s, 'O4').has(anchor), true, 'generation may branch from aiHidden');
+  const anchor = cellAt(s, 4, 6);
+  assert.equal(anchorSet(s, 'O16').has(anchor), true, 'generation may branch from aiHidden');
 
-  const target = cellAt(s, 2, 2);            // the only structure it could branch from is slop
+  const target = cellAt(s, 7, 9);            // the only structure it could branch from is slop
   assert.deepEqual(legalActions(s, target), [], 'hand placement still may not');
   assert.deepEqual(legalActions(s, hidden), ['analyze'], 'but the slop can be reviewed');
 });
@@ -70,27 +79,29 @@ test('a block may branch from unreviewed slop; a hand tile still may not (SPEC �
 test('VOID rejection falls out of the capability table, not a special case (SPEC §10.7)', (t) => {
   t.after(() => { delete TERRAIN.reclaimed; });
 
-  //  x: 0 1 2 3 4
-  //  0  # # # # #
-  //  1  A # . # B     the void column is a hole, not a wall: routes go round it
-  //  2  # # # # #
-  const level = { id: 'gen-void', map: ['#####', 'A#.#B', '#####'].join('\n'), arrivals: NEVER };
+  //  x: 0 1 2 3 4 5 6 7 8
+  //  2  A # # # . # # # B    the void cell is a hole, not a wall: routes go round it
+  const level = {
+    id: 'gen-void',
+    map: ['#########', '#########', 'A###.###B', '#########', '#########'].join('\n'),
+    arrivals: NEVER,
+  };
   const s = init(level, 1);
-  const gap = cellAt(s, 2, 1);
+  const gap = cellAt(s, 4, 2);
   assert.equal(s.terrain[gap], 'void');
-  for (const anchor of anchorSet(s, 'O4')) {
-    const cells = /** @type {number[]} */ (placementCells(s, anchor, SHAPES[shapeIndex('O4')].cells));
+  for (const anchor of anchorSet(s, 'O16')) {
+    const cells = /** @type {number[]} */ (placementCells(s, anchor, SHAPES[shapeIndex('O16')].cells));
     assert.ok(!cells.includes(gap), 'no placement may cover void');
   }
-  assert.equal(anchorSet(s, 'O4').has(cellAt(s, 1, 0)), false, 'the square straddling the gap is refused');
-  assert.equal(anchorSet(s, 'O4').has(cellAt(s, 1, 1)), false);
+  assert.equal(anchorSet(s, 'O16').has(cellAt(s, 1, 0)), false, 'the square straddling the gap is refused');
+  assert.equal(anchorSet(s, 'O16').has(cellAt(s, 1, 1)), false);
 
   // Flip the capability, not the code: a void-shaped feature that IS generatable is placeable.
   defineTerrain('reclaimed', {
     handBuildable: true, generatable: true, passable: false, knownEmpty: true, blastStops: false,
   });
   s.terrain[gap] = /** @type {any} */ ('reclaimed');
-  assert.equal(anchorSet(s, 'O4').has(cellAt(s, 1, 0)), true, 'one table row changed the answer');
+  assert.equal(anchorSet(s, 'O16').has(cellAt(s, 1, 0)), true, 'one table row changed the answer');
 });
 
 test('generate draws, enters placing, and offers nothing but placeBlock (SPEC §4.2)', () => {
@@ -118,9 +129,9 @@ test('generate draws, enters placing, and offers nothing but placeBlock (SPEC §
 
 test('an empty legal set refunds: no tick, no block, phase untouched (SPEC §4.2)', () => {
   // Two ocean cells and no room for anything: A#B with the middle cell already built.
-  const level = { id: 'gen-refund', map: 'A#B', arrivals: NEVER, shapePool: ['O4'] };
+  const level = { id: 'gen-refund', map: 'A#B', arrivals: NEVER, shapePool: ['O16'] };
   const s = reduce(init(level, 1), { t: 'place', cell: 1 }).s;
-  assert.equal(legalPlacements(s, shapeIndex('O4')).every((r) => r.anchors.length === 0), true);
+  assert.equal(legalPlacements(s, shapeIndex('O16')).every((r) => r.anchors.length === 0), true);
 
   const before = s.tick;
   const { s: after, ev } = reduce(s, { t: 'generate' });

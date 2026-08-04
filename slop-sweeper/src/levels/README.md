@@ -35,6 +35,10 @@ register(pond);
 That is a complete, playable, tuned-by-default level. Every other field is optional and
 falls back to `core/rules.js`. State only what deviates.
 
+It is also, at 6×3, very nearly a hand-only level. Of the five `compact` stencils only `R12`
+fits at all, in exactly one position, so four Generates in five refund (§4). Blocks are
+12–26 cells now and they need room: the shipped corpus runs 32×20 to 50×30.
+
 ---
 
 ## 2. The charmap
@@ -72,9 +76,9 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `map` | *(required)* | the charmap above |
 | `name` | `id` | display name |
 | `arrivals` | `{ count: 10, firstTick: 6, every: 4 }` | how many users, when the first one shows up, and the gap between them |
-| `mineDensity` | `0.25` | per-cell probability inside a generated block; the block's total is `Binomial(size, p)` and **zero is possible** |
+| `mineDensity` | `0.14` | per-cell probability inside a generated block; the block's total is `Binomial(size, p)` and **zero is possible** |
 | `shapePool` | `'compact'` | which blocks Generate draws from — see §4 |
-| `analyzeReveals` | `5` (`RULES.ANALYZE_REVEALS`) | tiles one Analyze turns over |
+| `analyzeReveals` | `8` (`RULES.ANALYZE_REVEALS`) | tiles one Analyze turns over |
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 
@@ -84,30 +88,48 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 
 ## 4. Shape pools
 
-Twelve hand-authored stencils, 4–8 cells, chunky on purpose — long thin tendrils destroy the
-deduction layer. Rotation is free and unlimited; there is no reflection.
+Twelve hand-authored stencils, **12–26 cells**, chunky on purpose — long thin tendrils
+destroy the deduction layer, so every limb of every stencil is at least two cells wide (a
+standing test enforces it). Rotation is free and unlimited; there is no reflection.
 
-| pool | shapes | feel |
-| --- | --- | --- |
-| `compact` | `O4 L4 T4 P5 O6` | fits almost anywhere, easy to read |
-| `awkward` | `S4 W5 U5 Z5 F5` | perimeter-heavy pentominoes; harder to place *and* harder to read |
-| `heavy` | `L6 D8` | six and eight cells; enormous throughput, enormous exposure |
+A block is meant to be a small minesweeper in its own right: at `mineDensity: 0.12` a 20-cell
+block carries two or three defects, one Analyze turns over eight tiles, and reading the whole
+thing costs two or three turns. That trade — fast ground now, comprehension debt later — is
+the game. Pick densities that keep it a trade.
+
+| pool | shapes | sizes | feel |
+| --- | --- | --- | --- |
+| `compact` | `R12 P14 O16 L16 W20` | 12–20 | dense rectangles and near-rectangles; fits almost anywhere, easy to read |
+| `awkward` | `T14 Y15 Z16 U18 C20` | 14–20 | irregular blobs with notches and staircases; harder to place *and* harder to read |
+| `heavy` | `H22 O25` | 22–25 | enormous throughput, enormous exposure; both need a clear 5×5 |
 
 Two ways to say it:
 
 ```js
 shapePool: 'awkward'              // one preset
 shapePool: 'compact+awkward'      // union of presets, joined with '+'
-shapePool: ['O4', 'D8']           // explicit shape ids, any mix
+shapePool: ['R12', 'O25']         // explicit shape ids, any mix
 ```
 
 Empty segments in the `+` grammar are ignored, so `'compact+'` is exactly `compact`. (PLAN §9
 writes `channel`'s pool that way; it resolves to `compact`.)
 
-**Bounding boxes matter more than you expect.** Every pentomino except `S4` and `U5` needs a
-3×3 box. A channel two cells wide will refuse most of `awkward` outright, and a level whose
-only route is two cells wide becomes hand-only whether you meant it to or not. Check the
-refund column in the sim before shipping a narrow map.
+**Bounding boxes are now the main thing to design against.** Every stencil is at least three
+rows tall in every rotation, and eight of the twelve need four:
+
+| box needed | stencils |
+| --- | --- |
+| 4×3 | `R12` — the only block that fits a three-row corridor |
+| 4×4 | `P14`, `O16` |
+| 5×4 (or 4×5) | `L16`, `W20`, `Y15`, `U18`, `T14`, `C20` (4×6) |
+| 6×4 | `Z16` |
+| 5×5 | `H22`, `O25` |
+
+So a three-row neck admits exactly one shape from `compact+awkward`, and a four-row lagoon
+refuses all of `heavy`. Both are deliberate in the corpus (`strait`, `atoll`). What you must
+not do by accident is make a level's *only* route narrower than the pool it draws from — it
+silently becomes hand-only, and the arrival cadence will then kill it. Check the `refund`
+column in the sim before shipping a narrow map.
 
 ---
 
@@ -123,7 +145,7 @@ registered level.
 - not exactly one `A` and one `B`
 - an endpoint with no buildable neighbour — nothing could ever connect to it
 - no ocean connectivity from `A` to `B` — unwinnable by construction
-- a board over 40×40
+- a board over 64×64 (a performance ceiling, not a target — the corpus runs 32×20 to 50×30)
 - a nonsense schedule, density, pool, or count
 
 **Warnings** (worth a look, not fatal):
@@ -141,14 +163,24 @@ If this list ever grows an opinion about difficulty, it has turned into a design
 
 **Arrival cadence is the primary dial.** Tightening it raises the *floor* — the minimum AI
 usage below which you lose now. The measured budget is `CONFIDENCE_START /
-WAIT_DRAIN_PER_USER` ≈ 133 waiting-user-ticks for a whole game. Sum the users piled up at the
-origin over the ticks it takes to open a route and you have predicted the level.
+WAIT_DRAIN_PER_USER` ≈ **267 waiting-user-ticks** for a whole game. Sum the users piled up at
+the origin over the ticks it takes to open a route and you have predicted the level.
+
+**Session length has a hard floor you cannot tune away:** `firstTick + (count−1)×every` plus
+the A→B route, because the last user cannot start walking before it spawns and the level is
+not won until it arrives. On a 50-wide board that floor is already ~70 ticks. If a level runs
+long, shorten the *schedule* before you touch anything else — and remember every detonation
+sends users back to the origin to walk the whole route again, which is why detonation-heavy
+levels overshoot by twenty or thirty ticks.
 
 **Route length decides whether AI is worth it at all.** A generated block advances a route by
-about three tiles per turn against hand placement's one, but every block also buys mines,
-reviews and reroutes. On a fourteen-tile route that trade barely pays and hand-only is a real
-strategy. Past twenty-five tiles it stops being one. If you want a level to *require* AI,
-make the route long or the cadence brutal — preferably both.
+four or five tiles per turn against hand placement's one, but every block also buys mines,
+reviews and reroutes — reading a 20-cell block costs two or three Analyzes. On a fifteen-tile
+route that trade barely pays and hand-only is a real strategy. Past thirty tiles it stops
+being one: `plain` (31 tiles) is still hand-only-winnable and is the control for exactly that
+reason, while `channel`, `caldera`, `strait` and `sprawl` (47–52) all measure 0% hand-only.
+If you want a level to *require* AI, make the route long or the cadence brutal — preferably
+both.
 
 **Coastline eases deduction; it does not harden the level.** Ocean, void and volcano all
 count zero for clues, so an irregular coast is a free deduction anchor on every side. Inlets
@@ -179,39 +211,40 @@ export const strait = {
   id: 'strait',
   name: 'The Strait',
   map: `
-#########......#########
-#########......#########
-#########......#########
-#########......#########
-#########......#########
-A#######################
-#######################B
-#########......#########
-#########......#########
-#########......#########
-#########......#########
-#########......#########
+###################........###################
+… nine more rows like it …
+###################........###################
+A#############################################
+##############################################
+#############################################B
+###################........###################
+… nine more rows like it …
+###################........###################
 `,
-  arrivals: { count: 16, firstTick: 0, every: 2 },
-  mineDensity: 0.18,
+  arrivals: { count: 10, firstTick: 1, every: 3 },
+  mineDensity: 0.11,
   shapePool: 'compact+awkward',
 };
 ```
 
+(The real file spells every row out; `src/levels/strait.js` is the copy to read.)
+
 Reading it back:
 
-- **24×12**, two 9-wide basins, a neck two rows tall and six long. `A` and `B` sit on the neck
-  rows at opposite edges, so the shortest route is 24 tiles straight through it.
-- **`arrivals: 16 / 0 / 2`** was found by sim, not by feel. Hand-only takes 23 turns to close
-  that route; at this cadence roughly 134 waiting-user-ticks accumulate in those 23 turns,
-  which is past the ~133 the meter can absorb. Hand-only therefore loses **0%**, and the
-  level has a genuine floor. Loosen `every` to 3 and hand-only wins outright.
-- **`mineDensity: 0.18`.** At 0.25 the review-and-reroute tax cancelled the AI's throughput
-  advantage and every policy converged; 0.18 puts generation clearly on the profitable side
-  without making defects rare.
-- **`shapePool: 'compact+awkward'`** rather than plain `awkward`, because the neck is two
-  cells tall and three of the five awkward pentominoes need three rows. Adding `compact` lets
-  generation cross the neck at all — see the warning in §4.
+- **46×22**, two 19-wide basins, a neck three rows tall and eight long. `A` and `B` sit on the
+  neck rows at opposite edges, so the shortest route is 47 tiles straight through it.
+- **`arrivals: 10 / 1 / 3`** was found by sim, not by feel. Hand-only takes 46 turns to close
+  that route; at this cadence roughly 275 waiting-user-ticks accumulate before it gets there,
+  past the ~267 the meter can absorb. Hand-only therefore loses **0%**, and the level has a
+  genuine floor. `count: 12, every: 2` was the first draft and killed every policy including
+  `careful`; this is the loosest schedule that still keeps the floor.
+- **`mineDensity: 0.11`.** Blocks here are 12–20 cells, so 0.11 still means one to two defects
+  a block — and the neck concentrates them. At 0.14 the review-and-reroute tax on a 47-tile
+  route cancelled the AI's throughput advantage and every policy converged near zero.
+- **`shapePool: 'compact+awkward'`** rather than plain `awkward`, because the neck is three
+  cells tall and only `R12` fits a three-row corridor at all. Adding `compact` lets generation
+  cross the neck at all — see the box table in §4. It crosses *rarely*, which is the point:
+  the neck is where the level makes you build by hand.
 
 The loop that produced those numbers:
 
@@ -221,7 +254,10 @@ node src/sim/run.js --level strait --games 200       # winnable? by whom? how ha
 node --test                                          # nothing else broke
 ```
 
-Targets to aim the third command at: hand-only should lose wherever you intended a floor, the
-best policy should land somewhere in 40–70%, median winning length should sit in 35–70 ticks,
-and winning games should finish on 10–40 confidence. Anything at 100% or 0% across the board
-is a level with no decision in it.
+Targets to aim the second command at: hand-only should lose wherever you intended a floor,
+`balanced:0.4` should land somewhere in 30–70%, median winning length should sit in 35–85
+ticks, and winning games should finish on 10–40 confidence. Anything at 100% or 0% across the
+*whole* policy sweep is a level with no decision in it — but note that `careful:0.4` wins
+90–100% almost everywhere in the current corpus, because reviewing a block before walking
+through it is simply the right play at these block sizes. Read the spread between
+`genRush`, `balanced` and `careful`, not `careful` alone.

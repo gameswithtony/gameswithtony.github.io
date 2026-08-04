@@ -12,7 +12,7 @@ import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
 import { crisp } from './atlas.js';
-import { drawTray } from './renderer.js';
+import { drawTray, stencilDims } from './renderer.js';
 import * as cam from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -42,16 +42,36 @@ const VERBS = {
 };
 
 /**
- * CSS px per tray cell. Mirrors the ≤899px breakpoint in styles.css, where the footer's
- * first row is 44px tall: four cells at 8px plus the tray's own border and padding fit it.
+ * The box the footer already reserves for the stencil, in CSS px, per the two footer layouts
+ * in styles.css. Narrow: the 46px grid row less 2px of tray border and 8px of tray padding
+ * leaves 36. Wide: --hud-h 82 less 14px of footer padding, less that same 12, leaves 56. `cap`
+ * is the cell size the tray has always drawn at, kept as a ceiling so the shapes that fit
+ * before still look exactly as they did.
+ * @returns {{ w: number, h: number, cap: number }}
+ */
+function trayBudget() {
+  try {
+    return window.matchMedia('(max-width: 899px)').matches
+      ? { w: 46, h: 36, cap: 8 }
+      : { w: 64, h: 56, cap: 11 };
+  } catch {
+    return { w: 64, h: 56, cap: 11 };
+  }
+}
+
+/**
+ * CSS px per tray cell, derived from the stencil actually being placed. Blocks are generated
+ * now, not drawn from a table of tetromino-sized stencils, so a rotation can be six cells
+ * tall; the footer row cannot grow (board geometry is a pure function of the viewport — see
+ * styles.css), so the cell shrinks instead. Nothing here caps the shape's size: it reads the
+ * bounds and divides.
+ * @param {[number, number][]} offsets
  * @returns {number}
  */
-function trayCellPx() {
-  try {
-    return window.matchMedia('(max-width: 899px)').matches ? 8 : 11;
-  } catch {
-    return 11;
-  }
+function trayCellPx(offsets) {
+  const { cols, rows } = stencilDims(offsets);
+  const b = trayBudget();
+  return Math.max(3, Math.min(b.cap, Math.floor(Math.min(b.w / cols, b.h / rows))));
 }
 
 /** @param {string} id @returns {HTMLElement} */
@@ -211,13 +231,14 @@ export function createHud(h) {
       const rots = s.phase.rots;                    // the reducer's own rotation data
       const rot = Math.min(view.rot ?? 0, rots.length - 1);
       const dpr = window.devicePixelRatio || 1;
-      const cell = trayCellPx();
+      const cell = trayCellPx(rots[rot].cells);
       dom.tray.classList.remove('hidden');
       const trayNext = `${s.phase.shape}|${rot}|${dpr}|${cell}`;
       if (trayNext !== trayKey) {
         trayKey = trayNext;
-        // The tallest rotation is 4 cells, and the footer row is cut to fit exactly that.
-        // The tray never changes the footer's size, only what is inside it.
+        // The cell size already absorbed however tall this rotation is, so the canvas fits
+        // the row whatever was generated. The tray never changes the footer's size, only
+        // what is inside it.
         drawTray(dom.trayCanvas, rots[rot].cells, cell, dpr);
       }
       dom.rotLabel.textContent = `${rot + 1}/${rots.length}`;

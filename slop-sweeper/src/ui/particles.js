@@ -28,7 +28,13 @@ const FLIP_S = 0.12;            // two frames, 60 ms each
 const POP_S = 0.26;
 const SHAKE_S = 0.38;
 
-/** Ordered 8×8 Bayer thresholds, 0…63 — one per art pixel of a tile. */
+/**
+ * Ordered 8×8 Bayer thresholds, 0…63. It is an 8×8 matrix, not a tile-sized one: the dissolve
+ * walks it in BLOCKS of `ART / 8` art pixels, so the dither stays the size it was tuned at
+ * when the art grid went from 8 to 16 art pixels per tile — and the matrix cannot be indexed
+ * out of range whatever ART becomes.
+ */
+const BAYER_N = 8;
 const BAYER = [
   0, 32, 8, 40, 2, 34, 10, 42,
   48, 16, 56, 24, 50, 18, 58, 26,
@@ -48,6 +54,16 @@ const POP_RAMP = [PALETTE.PAPER, PALETTE.USER, PALETTE.HAND];
 
 /** Screen shake never exceeds this many device px, however deep the zoom. */
 const SHAKE_CAP_PX = 14;
+
+/**
+ * Sizes that were authored against an 8-art-pixel tile — shake throw, debris chips, the pop
+ * ring — are written as multiples of this so the finer art grid did not silently halve every
+ * effect in the file. One art pixel of the old grid is `ART_SCALE` of the new one.
+ */
+const ART_SCALE = Math.max(1, Math.round(ART / 8));
+
+/** Shake amplitude in art pixels, at the 8-art-pixel tile it was tuned on. */
+const SHAKE_AMP_ART = 1.7 * ART_SCALE;
 
 /**
  * What a destroyed tile was made of, as a palette ramp. Debris fades along it and the
@@ -217,7 +233,7 @@ export function createEffects() {
    * @param {number} delay
    */
   function detonate(prev, at, destroyed, area, delay) {
-    shakes.push({ t: 0, amp: 1.7, phase: Math.random() * 6.283, delay });
+    shakes.push({ t: 0, amp: SHAKE_AMP_ART, phase: Math.random() * 6.283, delay });
 
     const gone = new Set(destroyed);
     for (const c of destroyed) {
@@ -257,7 +273,7 @@ export function createEffects() {
         vy: Math.sin(a) * v,
         t: 0,
         life: 0.34 + Math.random() * 0.42,
-        size: 1 + Math.floor(Math.random() * 3),
+        size: (1 + Math.floor(Math.random() * 3)) * ART_SCALE,
         ramp,
         delay,
       });
@@ -384,7 +400,7 @@ export function createEffects() {
         const r = cellOrigin(s, cam, d.cell, t);
         if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
         if (d.delay > 0) {
-          ditherCell(ctx, r, px, d.base, d.dither, 0);       // still standing
+          flatCell(ctx, r, px, d.base, d.dither);            // still standing
         } else if (d.t < FLASH_S) {
           ctx.fillStyle = PALETTE.PAPER;
           ctx.fillRect(r.x, r.y, t, t);
@@ -402,12 +418,13 @@ export function createEffects() {
         if (f.delay > 0) {
           // Not reviewed yet as far as the eye is concerned: hold the hidden face until the
           // user who is walking there actually lands.
-          ditherCell(ctx, r, px, PALETTE.AI_HIDDEN, PALETTE.AI_HIDDEN_DITHER, 0);
+          flatCell(ctx, r, px, PALETTE.AI_HIDDEN, PALETTE.AI_HIDDEN_DITHER);
           continue;
         }
         // Two frames, and only two: edge-on in the old colour, half-open in the new one.
+        // Widths are quarter and five-eighths of the tile, as they were on the 8-px grid.
         const second = f.t >= FLIP_S / 2;
-        const w = second ? 5 : 2;
+        const w = Math.round(ART * (second ? 0.625 : 0.25));
         ctx.fillStyle = PALETTE.INK;
         ctx.fillRect(r.x, r.y, t, t);
         ctx.fillStyle = second ? f.color : PALETTE.AI_HIDDEN;
@@ -442,7 +459,8 @@ export function createEffects() {
         const r = cellOrigin(s, cam, o.cell, t);
         if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
         const k = o.t / POP_S;
-        const rad = Math.round(1 + k * 4);
+        const rad = Math.round((1 + k * 4) * ART_SCALE);
+        const chip = ART_SCALE * px;
         const cx = r.x + (ART / 2) * px;
         const cy = r.y + (ART / 2) * px;
         ctx.fillStyle = rampAt(POP_RAMP, k);
@@ -450,7 +468,7 @@ export function createEffects() {
           const th = (a / 8) * Math.PI * 2;
           const ox = Math.round(Math.cos(th) * rad) * px;
           const oy = Math.round(Math.sin(th) * rad) * px;
-          ctx.fillRect(cx + ox - px, cy + oy - px, px, px);
+          ctx.fillRect(cx + ox - chip, cy + oy - chip, chip, chip);
         }
       }
     },
@@ -492,7 +510,8 @@ function blockedRect(s, x, y, size) {
 
 /**
  * One tile of two-colour checkerboard, thinned by an ordered-dither threshold: 0 paints the
- * whole tile, 64 paints nothing.
+ * whole tile, 64 paints nothing. The grid is 8×8 blocks of art pixels rather than 8×8 art
+ * pixels, so a tile falls apart in the same visible chunks it always did.
  * @param {CanvasRenderingContext2D} ctx
  * @param {{ x: number, y: number }} r  tile origin in device px
  * @param {number} px    artPx
@@ -501,13 +520,39 @@ function blockedRect(s, x, y, size) {
  * @param {number} threshold  0…64
  */
 function ditherCell(ctx, r, px, a, b, threshold) {
-  for (let ay = 0; ay < ART; ay++) {
-    for (let ax = 0; ax < ART; ax++) {
-      if (BAYER[ay * ART + ax] < threshold) continue;
-      ctx.fillStyle = ((ax + ay) & 1) ? a : b;
-      ctx.fillRect(r.x + ax * px, r.y + ay * px, px, px);
+  for (let by = 0; by < BAYER_N; by++) {
+    const y0 = Math.round((by * ART) / BAYER_N);
+    const y1 = Math.round(((by + 1) * ART) / BAYER_N);
+    for (let bx = 0; bx < BAYER_N; bx++) {
+      if (BAYER[by * BAYER_N + bx] < threshold) continue;
+      const x0 = Math.round((bx * ART) / BAYER_N);
+      const x1 = Math.round(((bx + 1) * ART) / BAYER_N);
+      ctx.fillStyle = ((bx + by) & 1) ? a : b;
+      ctx.fillRect(r.x + x0 * px, r.y + y0 * px, (x1 - x0) * px, (y1 - y0) * px);
     }
   }
+}
+
+/**
+ * A tile as the atlas would have drawn it: flat, with a one-art-pixel inset border. Held-back
+ * effects draw the world as it was, and "as it was" has to mean the calm bordered cell the
+ * board is actually made of (PLAN §11 revision 2026-08-04) — a checkerboard here would make
+ * the tile flicker into a different material a frame before it is destroyed.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{ x: number, y: number }} r
+ * @param {number} px
+ * @param {string} base
+ * @param {string} edge
+ */
+function flatCell(ctx, r, px, base, edge) {
+  const t = ART * px;
+  ctx.fillStyle = base;
+  ctx.fillRect(r.x, r.y, t, t);
+  ctx.fillStyle = edge;
+  ctx.fillRect(r.x, r.y, t, px);
+  ctx.fillRect(r.x, r.y + t - px, t, px);
+  ctx.fillRect(r.x, r.y, px, t);
+  ctx.fillRect(r.x + t - px, r.y, px, t);
 }
 
 /**

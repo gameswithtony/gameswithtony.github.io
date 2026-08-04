@@ -8,8 +8,18 @@ import { RULES } from '../core/rules.js';
 import { mulberry32 } from '../core/rng.js';
 import { PALETTE } from './palette.js';
 
-/** Art pixels per tile edge (SPEC §10.8 recommends 8). */
+/**
+ * Art pixels per tile edge. SPEC §10.8 recommends 8; revised to 16 on 2026-08-04 by user
+ * decision — a finer art grid per tile is what lets a tile be mostly flat and still carry a
+ * crisp one-pixel cell border and a large clue digit, instead of reading as chunky noise.
+ */
 export const ART = RULES.ART_PX_PER_TILE;
+
+/**
+ * Coastline stroke weight in art pixels. Two of sixteen is the same eighth of a tile the
+ * one-of-eight stroke was, so the coast reads exactly as heavy as it did.
+ */
+const COAST_W = 2;
 
 /** How many baked variants each dithered tile kind gets. Power of two: selection is a mask. */
 const VARIANTS = 8;
@@ -178,6 +188,21 @@ function paint(ctx, name, ox, oy, px) {
 /** @typedef {(ax: number, ay: number, color: string, w?: number, h?: number) => void} Pen */
 
 /**
+ * The one-art-pixel inset border every *constructed* cell wears (PLAN §11 revision
+ * 2026-08-04). It is the whole reason a block of AI slop reads as a grid of discrete
+ * minesweeper cells rather than as one purple blob: open water has no border, anything
+ * anybody built has one.
+ * @param {Pen} p
+ * @param {string} color
+ */
+function border(p, color) {
+  p(0, 0, color, ART, 1);
+  p(0, ART - 1, color, ART, 1);
+  p(0, 0, color, 1, ART);
+  p(ART - 1, 0, color, 1, ART);
+}
+
+/**
  * Deterministic per-variant noise. Independent of the level seed on purpose: the seed picks
  * *which* variant a cell gets, so the bake survives a level change untouched.
  * @param {number} variant
@@ -188,28 +213,35 @@ function variantRng(variant, salt) {
 }
 
 /**
+ * Open water: flat, with two or three short wave dashes and nothing else — about 4% of the
+ * tile against the old 18%. Water is the calm surface the built cells read against, so the
+ * texture is there to stop a dead flat field, not to be looked at.
  * @param {Pen} p
  * @param {number} v
  */
 function paintOcean(p, v) {
   p(0, 0, PALETTE.OCEAN, ART, ART);
   const r = variantRng(v, 11);
-  for (let k = 0; k < 3; k++) {
-    const len = r.int(2, 3);
-    p(r.int(0, ART - len), r.int(0, ART - 1), PALETTE.OCEAN_DITHER, len, 1);
+  // One to three, not a fixed three: some variants come out flat, and it is the *empty* tiles
+  // scattered through the field that stop a whole ocean of them reading as static.
+  const n = r.int(1, 3);
+  for (let k = 0; k < n; k++) {
+    const len = r.int(3, 4);
+    p(2 + r.int(0, ART - len - 4), 2 + r.int(0, ART - 5), PALETTE.OCEAN_DITHER, len, 1);
   }
-  for (let k = 0; k < 4; k++) p(r.int(0, ART - 1), r.int(0, ART - 1), PALETTE.OCEAN_DITHER);
 }
 
 /**
+ * Dark rock with a few embers. Blobs are 2×2 so a speck is the same physical size it was on
+ * the eight-pixel grid rather than a quarter of it.
  * @param {Pen} p
  * @param {number} v
  */
 function paintVolcano(p, v) {
   p(0, 0, PALETTE.VOLCANO, ART, ART);
   const r = variantRng(v, 23);
-  for (let k = 0; k < 7; k++) p(r.int(0, ART - 1), r.int(0, ART - 1), PALETTE.INK);
-  for (let k = 0; k < 4; k++) p(r.int(1, ART - 2), r.int(1, ART - 2), PALETTE.RED);
+  for (let k = 0; k < 3; k++) p(r.int(1, ART - 3), r.int(1, ART - 3), PALETTE.INK, 2, 2);
+  for (let k = 0; k < 2; k++) p(r.int(2, ART - 4), r.int(2, ART - 4), PALETTE.RED, 2, 2);
 }
 
 /**
@@ -218,75 +250,81 @@ function paintVolcano(p, v) {
  */
 function paintHand(p, v) {
   p(0, 0, PALETTE.HAND, ART, ART);
+  border(p, PALETTE.HAND_DITHER);
   const r = variantRng(v, 37);
-  for (let k = 0; k < 8; k++) p(r.int(0, ART - 1), r.int(0, ART - 1), PALETTE.HAND_DITHER);
-  p(0, ART - 1, PALETTE.HAND_DITHER, ART, 1);
-  p(ART - 1, 0, PALETTE.HAND_DITHER, 1, ART);
+  for (let k = 0; k < 2; k++) p(3 + r.int(0, ART - 7), 3 + r.int(0, ART - 7), PALETTE.HAND_DITHER, 2, 2);
 }
 
 /**
+ * Unreviewed slop. Flat, bordered, and near-textureless: with generated blocks running to two
+ * dozen cells the player reads this tile one cell at a time, and the old 25% ordered dither
+ * made a block of them a field of static.
  * @param {Pen} p
  * @param {number} v
  */
 function paintHidden(p, v) {
   p(0, 0, PALETTE.AI_HIDDEN, ART, ART);
-  // A 25% ordered dither reads as machine texture; the scatter breaks up the regularity.
-  for (let ay = 0; ay < ART; ay++) {
-    for (let ax = 0; ax < ART; ax++) {
-      if (((ax + ay) & 3) === 0) p(ax, ay, PALETTE.AI_HIDDEN_DITHER);
-    }
-  }
+  border(p, PALETTE.AI_HIDDEN_DITHER);
   const r = variantRng(v, 53);
-  for (let k = 0; k < 5; k++) p(r.int(0, ART - 1), r.int(0, ART - 1), PALETTE.AI_HIDDEN_DITHER);
+  for (let k = 0; k < 3; k++) p(3 + r.int(0, ART - 7), 3 + r.int(0, ART - 7), PALETTE.AI_HIDDEN_DITHER);
 }
 
 /** @param {Pen} p */
 function paintRevealed(p) {
   // Flat by design: the clue digit is composited on top and must stay legible.
   p(0, 0, PALETTE.AI_REVEALED, ART, ART);
-  p(0, ART - 1, PALETTE.AI_HIDDEN_DITHER, ART, 1);
-  p(ART - 1, 0, PALETTE.AI_HIDDEN_DITHER, 1, ART);
+  border(p, PALETTE.AI_HIDDEN_DITHER);
 }
 
-/** @param {Pen} p */
+/**
+ * A confirmed defect: one bold X, two art pixels thick, on the same bordered cell as the slop
+ * it replaces — not the edge-to-edge diagonal scribble it used to be.
+ * @param {Pen} p
+ */
 function paintMine(p) {
   p(0, 0, PALETTE.RED, ART, ART);
-  for (let k = 1; k < ART - 1; k++) {
-    p(k, k, PALETTE.INK);
-    p(ART - 1 - k, k, PALETTE.INK);
+  border(p, PALETTE.INK);
+  const a = 4;                       // the X spans the middle half of the tile
+  const n = ART - 2 * a - 2;
+  for (let k = 0; k <= n; k++) {
+    p(a + k, a + k, PALETTE.INK, 2, 2);
+    p(ART - 2 - a - k, a + k, PALETTE.INK, 2, 2);
   }
 }
 
 /**
+ * The two endpoints, at a size that reads without zooming: A is a solid source block, B is a
+ * bullseye. The pair has to be distinguishable at a glance on a 50×30 board, which is what
+ * the sixteen-pixel grid is for.
  * @param {Pen} p
  * @param {boolean} isOrigin
  */
 function paintEndpoint(p, isOrigin) {
   p(0, 0, PALETTE.RED, ART, ART);
-  p(0, 0, PALETTE.INK, ART, 1);
-  p(0, ART - 1, PALETTE.INK, ART, 1);
-  p(0, 0, PALETTE.INK, 1, ART);
-  p(ART - 1, 0, PALETTE.INK, 1, ART);
+  border(p, PALETTE.INK);
+  const c = ART >> 1;
   if (isOrigin) {
-    p(2, 2, PALETTE.PAPER, 4, 4);           // A: a solid source
+    p(c - 3, c - 3, PALETTE.PAPER, 6, 6);              // A: a solid source
   } else {
-    p(2, 2, PALETTE.PAPER, 4, 1);           // B: a ring — the thing users fall into
-    p(2, 5, PALETTE.PAPER, 4, 1);
-    p(2, 3, PALETTE.PAPER, 1, 2);
-    p(5, 3, PALETTE.PAPER, 1, 2);
+    p(c - 4, c - 4, PALETTE.PAPER, 8, 8);              // B: a target — what users fall into
+    p(c - 2, c - 2, PALETTE.RED, 4, 4);
+    p(c - 1, c - 1, PALETTE.PAPER, 2, 2);
   }
 }
 
 /**
- * 50% checkerboard, transparent between: a tint with no alpha blending (PLAN §11.1).
+ * 50% checkerboard, transparent between: a tint with no alpha blending (PLAN §11.1). The
+ * checker is one art pixel, so at sixteen art pixels per tile it is four times finer than it
+ * was and reads as a smooth wash rather than as a coarse grid laid over the board — which is
+ * exactly why no alpha deviation was needed here.
  * @param {Pen} p
  * @param {string} color
  */
 function paintTint(p, color) {
   for (let ay = 0; ay < ART; ay++) {
-    for (let ax = 0; ax < ART; ax++) {
-      if (((ax + ay) & 1) === 0) p(ax, ay, color);
-    }
+    // One fillRect per lit pixel is unavoidable (they alternate), but this is bake-time work:
+    // 128 rects per tint tile, four tint tiles, once per artPx change.
+    for (let ax = ay & 1; ax < ART; ax += 2) p(ax, ay, color);
   }
 }
 
@@ -297,10 +335,10 @@ function paintTint(p, color) {
  * @param {number} mask
  */
 function paintCoastSide(p, mask) {
-  if (mask & 1) p(0, 0, PALETTE.COAST, ART, 1);
-  if (mask & 2) p(ART - 1, 0, PALETTE.COAST, 1, ART);
-  if (mask & 4) p(0, ART - 1, PALETTE.COAST, ART, 1);
-  if (mask & 8) p(0, 0, PALETTE.COAST, 1, ART);
+  if (mask & 1) p(0, 0, PALETTE.COAST, ART, COAST_W);
+  if (mask & 2) p(ART - COAST_W, 0, PALETTE.COAST, COAST_W, ART);
+  if (mask & 4) p(0, ART - COAST_W, PALETTE.COAST, ART, COAST_W);
+  if (mask & 8) p(0, 0, PALETTE.COAST, COAST_W, ART);
 }
 
 /**
@@ -310,8 +348,9 @@ function paintCoastSide(p, mask) {
  * @param {number} mask
  */
 function paintCoastCorner(p, mask) {
-  if (mask & 1) p(0, 0, PALETTE.COAST);
-  if (mask & 2) p(ART - 1, 0, PALETTE.COAST);
-  if (mask & 4) p(ART - 1, ART - 1, PALETTE.COAST);
-  if (mask & 8) p(0, ART - 1, PALETTE.COAST);
+  const w = COAST_W;
+  if (mask & 1) p(0, 0, PALETTE.COAST, w, w);
+  if (mask & 2) p(ART - w, 0, PALETTE.COAST, w, w);
+  if (mask & 4) p(ART - w, ART - w, PALETTE.COAST, w, w);
+  if (mask & 8) p(0, ART - w, PALETTE.COAST, w, w);
 }

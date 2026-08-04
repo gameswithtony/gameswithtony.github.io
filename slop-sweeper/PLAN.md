@@ -437,17 +437,36 @@ structural ones marked SPEC.
 
 ## 9. Level roster (the corpus)
 
-Authored as charmaps in `src/levels/*.js` (SPEC §10.7 legend). Sizes deliberately modest —
-40×40 is the performance ceiling, not the target. Arrival numbers are sim-tuning seeds.
+> **Revised 2026-08-04 (user decision): boards ~2× linear; blocks are 12–26-cell
+> mini-minesweepers.** The old corpus (16×11 to 26×16) was sized for 4–8-cell blocks. With
+> §10's rescaled table a single block would have covered a fifth of `plain`, so every board
+> was redrawn at roughly double linear size, preserving each level's design intent, and every
+> level's schedule and density were re-tuned against the sim. Three consequences worth
+> recording, because they are the whole story of the rescale:
+>
+> - **Routes doubled, so the waiting integral doubled.** `WAIT_DRAIN_PER_USER` drops
+>   0.75 → 0.375 (three eighths — exact in binary, so the meter never drifts). At 0.75 every
+>   level lost on the meter alone whatever the player did. Budget: ~267 waiting-user-ticks.
+> - **Densities drop to 0.10–0.14** (from 0.18–0.24). A 25-cell block at 0.25 carries six
+>   defects; that is not a puzzle. `ANALYZE_REVEALS` rises 5 → 8 for the same reason, and
+>   `MAX_DIM` rises 40 → 64 so the ceiling is a guard rail again rather than a constraint.
+> - **The session got longer and the band moves with it.** Half of a `sprawl` game is now
+>   the fifty-two-tile walk itself, which no amount of tuning removes. §13's
+>   "median winning game 35–70 ticks" gate is relaxed to **35–85**, and `sprawl` still sits
+>   just above it at ~99.
 
-| id | size | shape intent | arrivals (count / first / every) | density | pool | what it tests |
-| --- | --- | --- | --- | --- | --- | --- |
-| `plain` | 16×11 | open rectangle, control | 8 / 6 / 5 | .22 | compact | baseline; generous solve; the fun question in its purest form |
-| `channel` | 22×9 | diagonal 4-wide channel, VOID-heavy | 10 / 6 / 4 | .22 | compact+ | coast anchors everywhere (§7.5: easier deduction, tighter routing) |
-| `atoll` | 18×14 | ring of islets, inner lagoon | 10 / 6 / 4 | .25 | awkward | placement scarcity; exercises the refund path (§4.2) |
-| `caldera` | 20×14 | central volcano cluster | 12 / 6 / 4 | .28 | compact+awkward | blast shields (§5) vs. reduced legal placements — the two opposing pulls |
-| `strait` | 24×12 | two basins, 2-wide neck | 12 / 5 / 3 | .25 | awkward | chokepoint trunk risk; deliberate-detonation temptation |
-| `sprawl` | 26×16 | open water, far endpoints | 16 / 5 / 3 | .30 | awkward+heavy | anchor-poor middle; cadence pressure ceiling — where the §1 thesis bites |
+Authored as charmaps in `src/levels/*.js` (SPEC §10.7 legend). `route` is the A→B path
+length in tiles — with the schedule it sets the floor on session length, since the last
+user's walk cannot start before it spawns. Arrival numbers are sim-tuned, not seeds.
+
+| id | size | route | shape intent | arrivals (count / first / every) | density | pool | what it tests |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `plain` | 32×20 | 31 | open rectangle, control | 10 / 4 / 3 | .12 | compact | baseline; generous solve; the fun question in its purest form |
+| `channel` | 40×16 | 50 | diagonal staircase of landings, VOID-heavy | 10 / 3 / 3 | .12 | compact+ | coast anchors everywhere (§7.5: easier deduction, tighter routing) |
+| `atoll` | 34×26 | 26 | reef ring of islets, inner lagoon | 12 / 4 / 2 | .14 | awkward+heavy | placement scarcity: the lagoon refuses anything five cells tall, so `heavy` is reef-only |
+| `caldera` | 38×26 | 48 | central volcano cluster + two satellites | 10 / 2 / 3 | .12 | compact+awkward | blast shields (§5) vs. reduced legal placements — the two opposing pulls |
+| `strait` | 46×22 | 47 | two basins, 3-tall neck | 10 / 1 / 3 | .11 | compact+awkward | chokepoint trunk risk; deliberate-detonation temptation |
+| `sprawl` | 50×30 | 52 | open water, far endpoints | 10 / 3 / 3 | .10 | awkward+heavy | anchor-poor middle; cadence pressure ceiling — where the §1 thesis bites |
 
 ### 9.1 Authoring pipeline — new levels must be cheap, for humans and AI alike
 
@@ -465,7 +484,8 @@ tune it end-to-end before a human ever plays it.
 - **Validator in core** (`core/validate.js`). `validateLevel(def)` returns
   `{ errors, warnings }`. Errors (level refuses to load; `init()` throws): unknown map
   character, not exactly one `A` / one `B`, an endpoint with zero buildable neighbors, no
-  ocean connectivity from A to B (unwinnable by construction), board over 40×40, nonsense
+  ocean connectivity from A to B (unwinnable by construction), board over 64×64 (40×40 before
+  the 2026-08-04 rescale — see the note at the head of §9), nonsense
   schedule/density/pool. Warnings: degenerate path length, landlocked terrain fragments,
   density outside the tuned range. The validator is deliberately **structural only** — whether
   a level is *good* is the sim's job (§13). Stating the division here so the validator never
@@ -493,24 +513,84 @@ freeze it to a file. Pure DOM overlay; core never knows the Lab exists.
 
 ---
 
-## 10. Shapes (initial 12 — OPEN #9's recommendation)
+## 10. Shapes (12 — OPEN #9's recommendation)
+
+> **Revised 2026-08-04 (user decision): boards ~2× linear; blocks are 12–26-cell
+> mini-minesweepers.** The original table was 4–8 cells, and at that size one Analyze cleared
+> a whole block: the core fantasy — *the AI is fast, but it is dangerous, and you owe turns
+> to understand what it gave you* — never got to happen, because there was nothing to
+> understand. Twelve to twenty-six cells means a block carries two to four defects, takes two
+> or three reviews to read end to end, and is often worth routing **around** rather than
+> through. The sim confirms the change bit: the solver's `guessForced` instrumentation, which
+> read 0% across the whole old corpus, now fires on 20–40% of games — deduction is genuinely
+> hard sometimes, which is what §7.4 was built to measure.
 
 Rotation only, no reflection (OPEN #10); asymmetric shapes do the work. Normalization dedupes
-symmetric rotations. Stencils (`X` = cell):
+symmetric rotations. Stencils (`X` = cell), grouped by pool:
 
-| id | stencil | id | stencil | id | stencil |
+| pool | id | size | bbox | rots | stencil |
 | --- | --- | --- | --- | --- | --- |
-| `O4` | `XX / XX` | `P5` | `XX / XX / X.` | `F5` | `.XX / XX. / .X.` |
-| `L4` | `X. / X. / XX` | `W5` | `X.. / XX. / .XX` | `O6` | `XXX / XXX` |
-| `S4` | `.XX / XX.` | `U5` | `X.X / XXX` | `L6` | `XXXX / XX..` |
-| `T4` | `XXX / .X.` | `Z5` | `XX. / .X. / .XX` | `D8` | `XXX / XXX / XX.` |
+| compact | `R12` | 12 | 4×3 | 2 | `XXXX / XXXX / XXXX` |
+| compact | `P14` | 14 | 4×4 | 4 | `XXXX / XXXX / XXXX / XX..` |
+| compact | `O16` | 16 | 4×4 | 1 | `XXXX / XXXX / XXXX / XXXX` |
+| compact | `L16` | 16 | 5×4 | 4 | `XXX.. / XXX.. / XXXXX / XXXXX` |
+| compact | `W20` | 20 | 5×4 | 2 | `XXXXX / XXXXX / XXXXX / XXXXX` |
+| awkward | `T14` | 14 | 4×5 | 4 | `.XX. / XXXX / XXXX / .XX. / .XX.` |
+| awkward | `Y15` | 15 | 5×4 | 4 | `..XXX / XXXXX / XXXXX / ..XX.` |
+| awkward | `Z16` | 16 | 6×4 | 2 | `XXXX.. / XXXX.. / ..XXXX / ..XXXX` |
+| awkward | `U18` | 18 | 5×4 | 4 | `XX.XX / XX.XX / XXXXX / XXXXX` |
+| awkward | `C20` | 20 | 4×6 | 4 | `XXXX / XXXX / XX.. / XX.. / XXXX / XXXX` |
+| heavy | `H22` | 22 | 5×5 | 4 | `XX.XX / XX.XX / XXXXX / XXXXX / XX.XX` |
+| heavy | `O25` | 25 | 5×5 | 1 | `XXXXX / XXXXX / XXXXX / XXXXX / XXXXX` |
 
-Pools: **compact** {O4, L4, T4, P5, O6} · **awkward** {S4, W5, U5, Z5, F5} · **heavy** {L6, D8}.
-Sizes 4–8, chunky, per §4.2 (thin tendrils destroy deduction).
+Pools: **compact** {R12, P14, O16, L16, W20} — dense rectangles and near-rectangles, 12–20
+cells · **awkward** {T14, Y15, Z16, U18, C20} — irregular blobs with notches and staircases,
+14–20 · **heavy** {H22, O25} — 22–26, enormous throughput and enormous exposure.
+
+**The chunkiness rule is now enforced by test.** Every limb of every stencil is at least two
+cells wide, operationalized as *every cell belongs to some 2×2 block of the shape*. A
+one-cell tendril has almost no 8-neighbourhood overlap with the rest of the block, so its
+clues constrain nothing and deduction degenerates into guessing — which is exactly what §4.2
+curates the table by hand to prevent.
+
+Bounding boxes now matter as much as sizes, because a 5×5 stencil needs five clear rows: the
+`strait` neck (3 tall) admits only `R12` on its side, and the `atoll` lagoon (4 tall) refuses
+both `heavy` squares. That is a design lever, not an accident — see `levels/README.md` §4.
 
 ---
 
 ## 11. Rendering
+
+> **Revised 2026-08-04 (user decision):** **16 art px per tile, calmer low-noise texture, full
+> cell borders on AI tiles, larger clue font.** The prototype's board read as over-pixelated and
+> noisy, and blocks are now generated at 12–26 cells — each one a mini-minesweeper the player
+> reads cell by cell — on maps up to ~50×30, so per-cell legibility matters far more than
+> surface texture does. The pixel-art bones are unchanged (integer artPx, procedural bake-once
+> atlas, the §11.1 palette, `fillRect` only, no alpha in world rendering). What changed, and
+> what it supersedes below:
+>
+> - **§11.2 "Tile = 8 artPx" → 16.** `ART_PX_PER_TILE` 16, `ZOOM_MAX_ARTPX` 12 → 6: the tile
+>   ceiling is still 96 device px, and pinch now steps in sixths of that rather than twelfths.
+> - **Texture pulled back to a fraction of what it was.** Ocean is flat with two or three short
+>   wave dashes (~4% of the tile, was ~18%); hidden AI slop loses its 25% ordered dither
+>   entirely; volcano keeps a few 2×2 embers; hand is near-clean.
+> - **Every *constructed* cell wears a one-art-pixel inset border** in its own darker shade —
+>   hidden, revealed, hand, mine, endpoints. Open water has none. That single rule is what makes
+>   a 20-cell block read as twenty discrete minesweeper cells instead of one purple blob, and it
+>   is the reason the texture could be cut without the board going flat.
+> - **Endpoints and the confirmed mine are redrawn** at the finer grid: A is a solid 6×6 source
+>   block, B a bullseye, and a confirmed mine is one bold 2-px-thick X rather than a corner-to-
+>   corner scribble.
+> - **§11.3's glyph is 5×7, not 3×5**, and the tiers re-derive from it unchanged in form (see
+>   §11.3). Coastline strokes, block boundaries, ghost and selection outlines, user dots and the
+>   badge chip are all restated as the same fraction of a tile they were, so nothing became
+>   comically thin or fat on the finer grid.
+> - **§11.6's art-pixel sizes** (debris chips, shake amplitude, the pop ring, the flip's two
+>   frames) are scaled by `ART / 8` for the same reason; the dissolve's Bayer matrix now walks
+>   the tile in 8×8 *blocks* of art pixels, which keeps the stagger the size it was tuned at.
+> - **Tint overlays stayed checkerboard** — no alpha deviation was needed. At one art pixel out
+>   of sixteen the checker is four times finer than before and reads as a smooth wash.
+> - **§11.8's tray cell is derived, not fixed** (see §11.8).
 
 ### 11.1 Palette (16 — lock early per OPEN #14; starting values, tunable until locked)
 
@@ -549,6 +629,13 @@ mid = + clue digits, thin borders; near = + per-block mine badges (live counts, 
 centroids, fatter selection. `fit()` picks the largest integer artPx whose board bbox fits the
 container, letterboxes the remainder, and is the zoom floor; ceiling `ZOOM_MAX_ARTPX`.
 
+*Revised 2026-08-04:* glyphs are **5×7** art px, so the mid threshold is `7 × artPx ≥
+FONT_MIN_DEVICE_PX` ⇒ `MID_MIN_ARTPX = ceil(10 / 7) = 2`, `NEAR = 4` — **the tier numbers are
+unchanged**, and the derivation is the same expression with `GLYPH_H` substituted, which is the
+property §10.8 actually demands. What did change is what a threshold means in device px: mid now
+starts at a 32-device-px tile rather than 16, and a clue digit is 14 device px tall rather than
+10. Ceiling `ZOOM_MAX_ARTPX` 6 (tile 96 device px, as before).
+
 ### 11.4 Frame model — idle at rest (§10.8)
 
 No continuous RAF. A viewport-sized offscreen **static cache** holds the composited world;
@@ -586,7 +673,11 @@ optional polish). Bottom: contextual action bar fed **only** by `legalActions()`
 never disagree with the reducer, with turn costs shown; global Generate button; Wait button.
 Block tray (during `placing`): the drawn shape at fixed CSS size — legible regardless of board
 zoom (§10.6) — rotate button (+ `R`), confirm button, and the "introduced N defects" toast on
-commit. Banners: won / lost / generate-refunded. End screen shows stats (ticks, verbs used,
+commit. *Revised 2026-08-04:* the tray's **cell** size is derived from the stencil's own bounds
+against a fixed CSS budget (the footer row it has to live in), not fixed — generated blocks run
+to six cells on a side, and the footer may not change height because board geometry is a pure
+function of the viewport. The shapes that fit before still draw at exactly the size they did:
+the old per-breakpoint value is the ceiling. Banners: won / lost / generate-refunded. End screen shows stats (ticks, verbs used,
 detonations, served). The Level Lab (§9.2) rides this same DOM overlay layer, gated behind
 `?lab=1`.
 
@@ -649,7 +740,7 @@ Provisional tuning gates (adjust constants, cadence, density until):
 | `sprawl`/`strait`: `handOnly` win rate | low — the floor is real |
 | `genRush` vs `balanced` on `caldera`/`strait` | genRush loses more, via detonations |
 | edge-hugging vs coverage-greedy | measurable survival gap somewhere in the corpus |
-| median winning game length | 35–70 ticks (a 5–10 minute session) |
+| median winning game length | 35–85 ticks (relaxed from 35–70 on 2026-08-04 — see §9: boards doubled, so the walk itself is half the session) |
 | winning-game final confidence | frequently 10–40% — near-misses are the drama |
 
 Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs as a standing

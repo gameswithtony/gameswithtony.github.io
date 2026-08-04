@@ -147,6 +147,8 @@ Shape source: a **curated table**, not procedural generation. Hand-authored shap
 
 Baseline shape sizes: 4–8 cells.
 
+*(Revised 2026-08-04 by owner decision: **baseline shape sizes are 12–26 cells**, and the boards they land on grew ~2× linearly to match. At 4–8 cells a single Analyze cleared an entire block, so the loop this section describes — take the fast thing, then spend turns understanding it — collapsed into "take the fast thing". A block must be a small minesweeper in its own right for §4.3 and §7 to have anything to bite on. Nothing else in §4.2 changes: still curated, still chunky, still rotation-only, still refunded when nothing fits — and chunkiness is now a tested invariant, since a 20-cell shape has far more room to grow a tendril than a 5-cell one. The table and pools are in `PLAN.md` §10; the boards in §9.)*
+
 Decreases skill (§7.3).
 
 ### 4.3 Analyze — 1 turn
@@ -403,6 +405,8 @@ Three concrete reasons, all specific to this design:
 
 **The solver is needed at generation time, not just for hints.** Ranged clues make deduction a constraint problem: each clue is an inequality over a set of booleans. Enumerate frontier configurations consistent with all constraints; a tile is provably safe only if no consistent configuration places a mine there. Exponential in frontier size, which is exactly why small chunky blocks are load-bearing. At 4–8 cells it is trivially tractable.
 
+*(Revised 2026-08-04, following the §4.2 size change to 12–26 cells: still tractable, and the reason is component splitting rather than block size — the solver enumerates over `AI_HIDDEN` cells only, splits the constraint graph into independent components, and marks any component past its budget `bailed`. Measured cost across the corpus is under a millisecond a game. What did change is the payoff: `guessForced` read 0% on every level of the old corpus and now fires on 20–40% of games, so "the moment deduction became impossible" is finally a signal instead of a constant.)*
+
 The larger payoff: the solver can *measure* solvability at a given skill tier, so the moment the game becomes unwinnable by deduction is instrumented rather than guessed at. That is the ending §8.3 describes.
 
 **Seeded determinism** for bug reports and for a possible daily-board mode.
@@ -417,7 +421,7 @@ Canvas for the board. DOM for HUD, action bar, minimap, and arrival forecast (§
 
 Rationale:
 
-- **Zoom performance.** A 40×40 board is 1600 cells; SVG would mean thousands of nodes to transform during a pinch, which is where SVG falls over on mid-range Android. Canvas redraws at device resolution and does not care.
+- **Zoom performance.** A 40×40 board is 1600 cells; SVG would mean thousands of nodes to transform during a pinch, which is where SVG falls over on mid-range Android. Canvas redraws at device resolution and does not care. *(Board sizes revised 2026-08-04 by owner decision — the corpus now runs 32×20 to 50×30, and `core/validate.js` caps boards at 64×64 rather than 40×40. The argument is unchanged and the arithmetic only moves further in canvas's favour: 1500 cells today, 4096 at the ceiling.)*
 - **Crispness.** Canvas re-rasterizes every frame at any scale. CSS-transformed DOM text goes soft mid-gesture.
 - **Destruction effects.** Blast particles and shake are trivial on canvas and awkward in SVG. Running two rendering models to get them would be worse than running one.
 - **Hit testing is not a problem here.** A uniform grid needs no scene graph: `floor((px - offsetX) / cellSize)`. The thing that normally makes canvas expensive does not apply to this shape of game.
@@ -548,9 +552,11 @@ Particles are **pure view layer**. Core emits `{ type: 'detonate', cells }` (§1
 
 **No asset pipeline.** No image loading, no CORS, no preloader, no build step for art, no missing-texture states. The whole game remains shippable as a small number of source files, and every visual is diffable in version control.
 
-**The board is completely static between ticks.** Nothing animates unless a user steps or a blast fires. So cache the composited world to an offscreen canvas, redraw it **only on state change**, and run a per-frame loop only while particles or step-tweens are alive, then idle. A 40×40 board costs essentially nothing at rest, and the full frame budget is available during the one moment that needs it.
+**The board is completely static between ticks.** Nothing animates unless a user steps or a blast fires. So cache the composited world to an offscreen canvas, redraw it **only on state change**, and run a per-frame loop only while particles or step-tweens are alive, then idle. A 40×40 board costs essentially nothing at rest, and the full frame budget is available during the one moment that needs it. *(Board sizes revised 2026-08-04 — up to 50×30 in the corpus, 64×64 at the validator ceiling; "essentially nothing at rest" is a property of the idle-at-rest frame model, not of the cell count, so it survives the rescale intact.)*
 
 That second point is a direct payoff of the headless-core split (§10.2): because core is time-free and emits discrete events, the renderer knows exactly when to wake.
+
+*(Revised 2026-08-04 by owner decision: **16 art px per tile, calmer low-noise texture, full cell borders on AI tiles, larger clue font.** The three constraints above — quantized art grid, sixteen-colour palette, hard edges only — are unchanged and are what the look still rests on; what changed is how much texture sits inside a tile. The recommended 8 becomes 16, so a tile can be mostly flat and still carry a crisp one-art-pixel cell border and a legible clue; ocean texture drops from ~18% coverage to ~4%; the 25% ordered dither on hidden AI tiles is gone; the clue font is 5×7 rather than 3×5 (a range tightens to a zero gap to stay inside its tile). The derived-from-one-constant rule for the tier thresholds and the legibility floor is untouched — the "5px glyph" arithmetic above is now read with GLYPH_H = 7, giving far 1 · mid 2–3 · near ≥4 with `ZOOM_MAX_ARTPX` 6, the same 96 device-px tile ceiling as before. Particle sizes are stated in art pixels and were rescaled with the grid so nothing shrank. Details in `PLAN.md` §11.)*
 
 ### 10.9 Accessibility — DEFERRED
 

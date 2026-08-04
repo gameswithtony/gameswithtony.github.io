@@ -10,8 +10,8 @@ import { getLevel } from '../src/levels/index.js';
 test('a hand-only playthrough of plain reaches phase won', () => {
   const level = getLevel('plain');
   let s = init(level, 1);
-  assert.equal(s.w, 16);
-  assert.equal(s.h, 11);
+  assert.equal(s.w, 32);
+  assert.equal(s.h, 20);
 
   const a = cellXY(s, s.origin);
   const b = cellXY(s, s.dest);

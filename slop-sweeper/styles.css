@@ -366,7 +366,10 @@ select {
   #hud {
     display: grid;
     grid-template-columns: 1fr auto;
-    grid-template-rows: 46px 34px;    /* 46 fits the tray: 2 border + 8 padding + 4×8 cells */
+    grid-template-rows: 46px 34px;    /* 46 fits the tray: 2 border + 8 padding + 36 of cells.
+                                         Blocks are generated, so a rotation can be six cells
+                                         tall; trayCellPx() in hud.js divides that 36 by the
+                                         stencil's own height rather than the row growing. */
     grid-template-areas:
       "main    main"
       "globals minimap";

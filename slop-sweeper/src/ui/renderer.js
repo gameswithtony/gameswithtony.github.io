@@ -7,15 +7,15 @@
 //     state, the camera or artPx changed — the board is motionless between ticks;
 //   · no alpha in world rendering. Every tint is a 50% checkerboard of a palette colour.
 //
-// Zoom tiers are derived from FONT_MIN_DEVICE_PX and nothing else (SPEC §10.8): a 3×5 glyph
-// needs 5 × artPx device px of height to be legible, which is what fixes the mid threshold,
-// and "twice legible" is what fixes near.
+// Zoom tiers are derived from FONT_MIN_DEVICE_PX and the glyph height, and from nothing else
+// (SPEC §10.8): a GLYPH_H-tall glyph needs GLYPH_H × artPx device px to clear the legibility
+// floor, which is what fixes the mid threshold, and "twice legible" is what fixes near.
 
 import { RULES } from '../core/rules.js';
 import { blockMines, clue } from '../core/reduce.js';
 import { PALETTE } from './palette.js';
 import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
-import { drawText, drawTextCentered, textWidthArt, GLYPH_H } from './font.js';
+import { drawText, drawTextCentered, textWidthArt, GLYPH_H, GLYPH_GAP } from './font.js';
 import { cellRect, visibleCells } from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -40,8 +40,21 @@ import { cellRect, visibleCells } from './camera.js';
  * @typedef {import('./particles.js').Effects} Effects
  */
 
+/**
+ * Mid tier starts where a glyph clears the legibility floor: GLYPH_H × artPx ≥
+ * FONT_MIN_DEVICE_PX. At 7 art px and a 10 device-px floor that is artPx 2 — far is artPx 1,
+ * mid is 2–3, near is 4 and up (ceiling ZOOM_MAX_ARTPX 6). Re-derived, never re-tuned: change
+ * the glyph or the floor and the tiers move by themselves.
+ */
 export const MID_MIN_ARTPX = Math.max(2, Math.ceil(RULES.FONT_MIN_DEVICE_PX / GLYPH_H));
 export const NEAR_MIN_ARTPX = MID_MIN_ARTPX * 2;
+
+/**
+ * Line weight for everything the renderer strokes on top of the atlas — block boundaries,
+ * ghost outlines, the selection ring. Two of sixteen art pixels is the same eighth of a tile
+ * the old one-of-eight was, so nothing got thinner or fatter when the grid got finer.
+ */
+const STROKE_ART = 2;
 
 /**
  * @param {number} artPx
@@ -95,9 +108,9 @@ function tileName(s, i, x, y) {
 
 /**
  * A digit chip centred on the art grid inside one tile, used for block mine badges and user
- * stacks. The box is padded until the slack is equal on both sides: eight art pixels of tile
- * cannot centre a five-wide box, and the leftover sliver of the cell underneath is exactly
- * what reads as misaligned.
+ * stacks. The box is padded until the slack is equal on both sides: an odd-width glyph run
+ * cannot centre inside an even-width tile, and the leftover sliver of the cell underneath is
+ * exactly what reads as misaligned.
  * @param {CanvasRenderingContext2D} ctx
  * @param {string} text
  * @param {number} x     tile origin in device px
@@ -107,8 +120,8 @@ function tileName(s, i, x, y) {
  */
 function drawBadge(ctx, text, x, y, px, color) {
   const glyph = textWidthArt(text);
-  let w = glyph + 2;
-  let h = GLYPH_H + 2;
+  let w = glyph + 4;                 // two art pixels of INK either side of the glyph
+  let h = GLYPH_H + 4;
   if ((ART - w) % 2 !== 0 && w < ART) w += 1;
   if ((ART - h) % 2 !== 0 && h < ART) h += 1;
   const bx = x + Math.max(0, Math.round((ART - w) / 2)) * px;
@@ -187,6 +200,7 @@ export function createRenderer(canvas) {
 
     // Block boundaries: edges between differing block ids. State-dependent, so it is drawn
     // here rather than baked (PLAN §11.2). Present at every tier — it is the topology view.
+    const wgt = STROKE_ART * px;
     cctx.fillStyle = PALETTE.INK;
     for (let y = win.y0; y <= win.y1; y++) {
       for (let x = win.x0; x <= win.x1; x++) {
@@ -195,10 +209,10 @@ export function createRenderer(canvas) {
         if (b < 0) continue;
         const dx = cam.ox + x * t;
         const dy = cam.oy + y * t;
-        if (neighborBlock(s, x, y - 1) !== b) cctx.fillRect(dx, dy, t, px);
-        if (neighborBlock(s, x, y + 1) !== b) cctx.fillRect(dx, dy + t - px, t, px);
-        if (neighborBlock(s, x - 1, y) !== b) cctx.fillRect(dx, dy, px, t);
-        if (neighborBlock(s, x + 1, y) !== b) cctx.fillRect(dx + t - px, dy, px, t);
+        if (neighborBlock(s, x, y - 1) !== b) cctx.fillRect(dx, dy, t, wgt);
+        if (neighborBlock(s, x, y + 1) !== b) cctx.fillRect(dx, dy + t - wgt, t, wgt);
+        if (neighborBlock(s, x - 1, y) !== b) cctx.fillRect(dx, dy, wgt, t);
+        if (neighborBlock(s, x + 1, y) !== b) cctx.fillRect(dx + t - wgt, dy, wgt, t);
       }
     }
 
@@ -212,7 +226,11 @@ export function createRenderer(canvas) {
         if (s.con[i].k !== 'aiRevealed') continue;
         const { lo, hi } = clue(s, i);
         const text = lo === hi ? String(lo) : `${lo}-${hi}`;
-        drawTextCentered(cctx, text, cam.ox + x * t + t / 2, cam.oy + y * t + t / 2, px, PALETTE.INK);
+        // A range is three glyphs — 17 art px at the default gap, one wider than the tile.
+        // Tighten to gap 0 (15) rather than let a clue bleed onto the cell next door; the
+        // hyphen is drawn with blank columns either side so the three marks stay separate.
+        const gap = textWidthArt(text) > ART ? 0 : GLYPH_GAP;
+        drawTextCentered(cctx, text, cam.ox + x * t + t / 2, cam.oy + y * t + t / 2, px, PALETTE.INK, gap);
       }
     }
 
@@ -280,14 +298,15 @@ export function createRenderer(canvas) {
 
     if (view.ghost) {
       const name = view.ghost.valid ? 'tintOk' : 'tintRed';
+      const wgt = STROKE_ART * px;
       ctx.fillStyle = view.ghost.valid ? PALETTE.OK : PALETTE.RED;
       for (const c of view.ghost.cells) {
         tint(c, name);
         const r = cellRect(cam, s, c);
-        ctx.fillRect(r.x, r.y, t, px);
-        ctx.fillRect(r.x, r.y + t - px, t, px);
-        ctx.fillRect(r.x, r.y, px, t);
-        ctx.fillRect(r.x + t - px, r.y, px, t);
+        ctx.fillRect(r.x, r.y, t, wgt);
+        ctx.fillRect(r.x, r.y + t - wgt, t, wgt);
+        ctx.fillRect(r.x, r.y, wgt, t);
+        ctx.fillRect(r.x + t - wgt, r.y, wgt, t);
       }
     }
 
@@ -299,10 +318,10 @@ export function createRenderer(canvas) {
 
     if (view.selected >= 0) {
       const r = cellRect(cam, s, view.selected);
-      // One art pixel at every tier — which is already "fatter at near" in device px (1 at
-      // far, 8+ at near) while staying an eighth of the tile, so the cell's own content, the
+      // Two art pixels at every tier — which is already "fatter at near" in device px (2 at
+      // far, 12 at near) while staying an eighth of the tile, so the cell's own content, the
       // thing you selected it to read, is never hidden by the ring.
-      const wgt = px;
+      const wgt = STROKE_ART * px;
       ctx.fillStyle = PALETTE.SELECT;
       ctx.fillRect(r.x, r.y, t, wgt);
       ctx.fillRect(r.x, r.y + t - wgt, t, wgt);
@@ -345,16 +364,20 @@ export function createRenderer(canvas) {
     }
     if (stacks.size === 0) return;
 
-    const dotArt = tier === 'far' ? 3 : tier === 'mid' ? 3 : 4;
+    // Three eighths of the tile below near, half at near — the same proportions the dot had
+    // on the eight-art-pixel grid, restated for sixteen.
+    const dotArt = Math.round(tier === 'near' ? ART / 2 : (ART * 3) / 8);
     const dot = dotArt * px;
+    const ring = STROKE_ART * px;      // the INK outline that keeps a dot off its own tile
 
     for (const { x, y, n } of stacks.values()) {
       const r = { x, y };
       if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
 
-      // A stack becomes the count itself rather than a dot wearing a badge: eight art pixels
-      // of tile cannot hold both, and the pile at the origin is the "you have not shipped"
-      // signal (SPEC §6.2) — it has to read as a number the moment there is more than one.
+      // A stack becomes the count itself rather than a dot wearing a badge: one tile cannot
+      // hold both at a readable size, and the pile at the origin is the "you have not
+      // shipped" signal (SPEC §6.2) — it has to read as a number the moment there is more
+      // than one.
       if (n > 1 && tier !== 'far') {
         const text = n <= 9 ? String(n) : '+';         // exact count lives in the HUD forecast
         drawBadge(ctx, text, r.x, r.y, px, PALETTE.USER);
@@ -364,12 +387,12 @@ export function createRenderer(canvas) {
       const cx = r.x + Math.round((t - dot) / (2 * px)) * px;
       const cy = r.y + Math.round((t - dot) / (2 * px)) * px;
       ctx.fillStyle = PALETTE.INK;
-      ctx.fillRect(cx - px, cy - px, dot + 2 * px, dot + 2 * px);
+      ctx.fillRect(cx - ring, cy - ring, dot + 2 * ring, dot + 2 * ring);
       ctx.fillStyle = PALETTE.USER;
       ctx.fillRect(cx, cy, dot, dot);
       if (n > 1) {
         ctx.fillStyle = PALETTE.PAPER;              // far tier: a corner pip is all that fits
-        ctx.fillRect(cx + dot - px, cy - px, px, px);
+        ctx.fillRect(cx + dot - ring, cy - ring, ring, ring);
       }
     }
   }
@@ -433,38 +456,54 @@ export function ghostCells(s, anchor, offsets) {
 }
 
 /**
- * The block tray (PLAN §11.8): the drawn shape at a fixed CSS size, legible no matter what
- * the board zoom is doing. Same palette, same fillRect discipline, its own little canvas.
+ * The stencil's bounding box in cells. Rotations arrive normalized to a zero minimum, so the
+ * maxima are the dimensions — but this reads them off the offsets rather than assuming a
+ * maximum size, because the shape table is not this module's to hold still.
+ * @param {[number, number][]} offsets
+ * @returns {{ cols: number, rows: number }}
+ */
+export function stencilDims(offsets) {
+  let cols = 1, rows = 1;
+  for (const [dx, dy] of offsets) {
+    cols = Math.max(cols, dx + 1);
+    rows = Math.max(rows, dy + 1);
+  }
+  return { cols, rows };
+}
+
+/**
+ * The block tray (PLAN §11.8): the drawn shape at a caller-chosen CSS cell size, legible no
+ * matter what the board zoom is doing. Same palette, same fillRect discipline, its own little
+ * canvas. The cell size is the caller's to pick because the tray's budget is a fixed footer
+ * row, and a six-by-six stencil has to fit the same row a two-by-two one does — `trayCellPx()`
+ * in hud.js does that arithmetic. Drawn flat with a hard border, which is what the atlas'
+ * hidden tile now looks like.
  * @param {HTMLCanvasElement} canvas
  * @param {[number, number][]} offsets
  * @param {number} cssCell
  * @param {number} dpr
  */
 export function drawTray(canvas, offsets, cssCell, dpr) {
-  let mx = 0, my = 0;
-  for (const [dx, dy] of offsets) { mx = Math.max(mx, dx); my = Math.max(my, dy); }
-  const cell = Math.max(2, Math.round(cssCell * dpr));
-  canvas.width = (mx + 1) * cell;
-  canvas.height = (my + 1) * cell;
-  canvas.style.width = `${(mx + 1) * cell / dpr}px`;
-  canvas.style.height = `${(my + 1) * cell / dpr}px`;
+  const { cols, rows } = stencilDims(offsets);
+  const cell = Math.max(3, Math.round(cssCell * dpr));
+  canvas.width = cols * cell;
+  canvas.height = rows * cell;
+  canvas.style.width = `${cols * cell / dpr}px`;
+  canvas.style.height = `${rows * cell / dpr}px`;
   const ctx = crisp(/** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d')));
-  const px = Math.max(1, Math.floor(cell / ART));
+  // One art pixel of border at whatever a tray cell's art pixel would be — the same
+  // one-of-sixteen the board's hidden tile wears, so the tray reads as the thing you are
+  // about to commit rather than as a different material.
+  const bw = Math.max(1, Math.round(cell / ART));
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const [dx, dy] of offsets) {
     const x = dx * cell, y = dy * cell;
     ctx.fillStyle = PALETTE.AI_HIDDEN;
     ctx.fillRect(x, y, cell, cell);
-    ctx.fillStyle = PALETTE.AI_HIDDEN_DITHER;
-    for (let ay = 0; ay < ART; ay++) {
-      for (let ax = 0; ax < ART; ax++) {
-        if (((ax + ay) & 3) === 0) ctx.fillRect(x + ax * px, y + ay * px, px, px);
-      }
-    }
     ctx.fillStyle = PALETTE.INK;
-    ctx.fillRect(x, y, cell, px);
-    ctx.fillRect(x, y + cell - px, cell, px);
-    ctx.fillRect(x, y, px, cell);
-    ctx.fillRect(x + cell - px, y, px, cell);
+    ctx.fillRect(x, y, cell, bw);
+    ctx.fillRect(x, y + cell - bw, cell, bw);
+    ctx.fillRect(x, y, bw, cell);
+    ctx.fillRect(x + cell - bw, y, bw, cell);
   }
 }
