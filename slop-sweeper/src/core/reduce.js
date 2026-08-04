@@ -5,7 +5,7 @@
 
 import { RULES, LEVEL_DEFAULTS } from './rules.js';
 import {
-  CON_HAND, CON_NONE, conCaps, isHandBuildable, levelParams, setLevelParams, stopsBlast,
+  CON_HAND, CON_NONE, conCaps, isFlagged, isHandBuildable, levelParams, setLevelParams, stopsBlast,
 } from './state.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
 import { distField, gateOpen, stepCandidates } from './routing.js';
@@ -35,7 +35,6 @@ export function init(def, seed) {
     arrivals: def.arrivals ?? LEVEL_DEFAULTS.arrivals,
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
-    analyzeReveals: def.analyzeReveals ?? LEVEL_DEFAULTS.analyzeReveals,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
   };
@@ -120,7 +119,7 @@ export function reduce(s, a) {
       const mines = rollMines(gen, cells, levelParams(d).mineDensity);
       d.rng.gen = gen.getState();
       const block = d.blocks.length;
-      for (const c of cells) d.con[c] = { k: 'aiHidden', mine: mines.has(c), block };
+      for (const c of cells) d.con[c] = { k: 'aiHidden', mine: mines.has(c), block, flagged: false };
       d.blocks.push({ id: block, cells: cells.slice() });
       d.phase = { k: 'play' };
       d.stats.generated++;
@@ -135,27 +134,38 @@ export function reduce(s, a) {
       const reason = analyzeRejection(s, a.cell);
       if (reason) return rejected(s, reason);
       const d = draft(s);
+      const target = /** @type {{ k: 'aiHidden', mine: boolean, block: number }} */ (d.con[a.cell]);
       /** @type {number[]} */
       const revealed = [];
       /** @type {number[]} */
       const minesFound = [];
-      for (const c of analyzeOrder(d, a.cell, levelParams(d).analyzeReveals)) {
-        const con = /** @type {{ k: 'aiHidden', mine: boolean, block: number }} */ (d.con[c]);
-        if (con.mine) {
-          // A mined tile can never become AI_REVEALED (SPEC §2.2 defines that state safe),
-          // and skipping it silently would leak by omission — so it is confirmed, and it
-          // does not blast (PLAN §3.1).
-          d.con[c] = { k: 'mineConfirmed', block: con.block };
-          minesFound.push(c);
-        } else {
-          d.con[c] = { k: 'aiRevealed', block: con.block };
-          revealed.push(c);
-        }
+      if (target.mine) {
+        // A mined tile can never become AI_REVEALED (SPEC §2.2 defines that state safe),
+        // and skipping it silently would leak by omission — so it is confirmed, and it does
+        // not blast (PLAN §3.1). No cascade: the click ends here.
+        d.con[a.cell] = { k: 'mineConfirmed', block: target.block };
+        minesFound.push(a.cell);
+      } else {
+        revealTile(d, a.cell, revealed);
+        cascade(d, a.cell, revealed);
       }
       d.stats.analyzed++;
       /** @type {Ev[]} */
       const ev = [{ t: 'analyzed', revealed, minesFound }];
       return { s: runTick(d, ev), ev };
+    }
+    case 'flag': {
+      // The one free verb (SPEC §4.5). Like the generate *draw*, it changes the board
+      // without running the tick pipeline: no movement, no spawn, no drain, no tick++.
+      // Flagging is therefore never a tempo cost — its cost is that users refuse to walk
+      // through the flag, which can close the gate you were relying on.
+      const reason = flagRejection(s, a.cell);
+      if (reason) return rejected(s, reason);
+      const d = draft(s);
+      const con = /** @type {{ k: 'aiHidden', mine: boolean, block: number, flagged: boolean }} */ (d.con[a.cell]);
+      const on = !con.flagged;
+      d.con[a.cell] = { k: 'aiHidden', mine: con.mine, block: con.block, flagged: on };
+      return { s: d, ev: [{ t: 'flagged', cell: a.cell, on }] };
     }
     case 'wait': {
       // Not even waiting is on offer once a block is drawn (SPEC §4.2: no decline).
@@ -195,6 +205,7 @@ export function legalActions(s, cell) {
   }
   if (!placeRejection(s, cell)) out.push('place');
   if (!analyzeRejection(s, cell)) out.push('analyze');
+  if (!flagRejection(s, cell)) out.push('flag');
   return out;
 }
 
@@ -226,6 +237,21 @@ export function analyzeRejection(s, cell) {
   if (s.phase.k !== 'play') return `cannot analyze during phase '${s.phase.k}'`;
   if (!Number.isInteger(cell) || cell < 0 || cell >= s.w * s.h) return `cell ${cell} is off the board`;
   if (s.con[cell].k !== 'aiHidden') return 'only unreviewed AI tiles can be analyzed';
+  // Classic misclick protection: your own flag says "I believe this is a defect", so the
+  // game makes you withdraw the claim before it will spend a turn testing it.
+  if (isFlagged(s.con[cell])) return 'this tile is flagged — unflag it first';
+  return '';
+}
+
+/**
+ * @param {GameState} s
+ * @param {number} cell
+ * @returns {string} empty when the flag can be toggled (SPEC §4.5)
+ */
+export function flagRejection(s, cell) {
+  if (s.phase.k !== 'play') return `cannot flag during phase '${s.phase.k}'`;
+  if (!Number.isInteger(cell) || cell < 0 || cell >= s.w * s.h) return `cell ${cell} is off the board`;
+  if (s.con[cell].k !== 'aiHidden') return 'only unreviewed AI tiles can be flagged';
   return '';
 }
 
@@ -508,39 +534,69 @@ function meters(d, ev) {
 // --- helpers ------------------------------------------------------------------------
 
 /**
- * BFS 4-way from the chosen target across the contiguous `aiHidden` region only — "you
- * review this module", never the one next door (PLAN §3.2). Each frontier is walked in
- * ascending cell order so the budget cuts the same way every time. The region is fixed
- * before any tile changes, so a mine confirmed mid-walk does not wall off the rest of it.
- * @param {GameState} s
- * @param {number} target
- * @param {number} budget
- * @returns {number[]}
+ * Flip one unmined `aiHidden` tile to `aiRevealed` and book it.
+ * @param {GameState} d
+ * @param {number} cell
+ * @param {number[]} revealed
  */
-function analyzeOrder(s, target, budget) {
-  /** @type {number[]} */
-  const order = [];
+function revealTile(d, cell, revealed) {
+  const con = /** @type {{ k: 'aiHidden', mine: boolean, block: number }} */ (d.con[cell]);
+  d.con[cell] = { k: 'aiRevealed', block: con.block };
+  revealed.push(cell);
+}
+
+/**
+ * The classic minesweeper zero-cascade (SPEC §4.3, revised 2026-08-04).
+ *
+ * Analyze is now one click on one tile. If that tile's clue is exactly zero it has no mined
+ * 8-neighbour *by definition of the clue*, so every hidden neighbour is provably safe and
+ * may be opened for free; a neighbour that is itself a zero repeats the argument. That is
+ * the entire proof, and it is why the cascade needs no solver and can never blow up: it is
+ * a closure over cells whose safety is a theorem, not a guess.
+ *
+ * Flagged tiles are skipped, exactly as minesweeper does — the flag is the player's claim
+ * that the tile is a defect, and the cascade honours it rather than overruling it. (A flag
+ * on a safe tile therefore *stops* a cascade that would have opened it. That is the player's
+ * mistake to make; unflag and click again.)
+ *
+ * Frontiers are walked in ascending cell order so the reveal list is a pure function of the
+ * board. The cascade never leaves the contiguous hidden region because it only ever steps
+ * onto `aiHidden` cells.
+ *
+ * @param {GameState} d
+ * @param {number} from  a tile already revealed this turn
+ * @param {number[]} revealed
+ */
+function cascade(d, from, revealed) {
+  if (clue(d, from).hi !== 0) return;
   /** @type {Set<number>} */
-  const seen = new Set([target]);
-  let frontier = [target];
-  while (frontier.length && order.length < budget) {
-    for (const c of frontier) {
-      if (order.length >= budget) break;
-      order.push(c);
-    }
+  const opened = new Set([from]);
+  let frontier = [from];
+  while (frontier.length) {
     /** @type {number[]} */
-    const next = [];
+    const found = [];
     for (const c of frontier) {
-      for (const j of n4(s, c)) {
-        if (seen.has(j) || s.con[j].k !== 'aiHidden') continue;
-        seen.add(j);
-        next.push(j);
+      for (const j of n8(d, c)) {
+        const con = d.con[j];
+        if (opened.has(j) || con.k !== 'aiHidden' || isFlagged(con)) continue;
+        // The theorem above, enforced rather than trusted: a zero clue cannot neighbour a
+        // mine, so reaching one here means the clue and the mine set have diverged.
+        if (con.mine) throw new Error(`cascade: cell ${j} is mined but neighbours the zero clue at ${c}`);
+        opened.add(j);
+        found.push(j);
       }
     }
-    next.sort((a, b) => a - b);
+    found.sort((a, b) => a - b);
+    /** @type {number[]} */
+    const next = [];
+    for (const j of found) {
+      // Revealing an unmined tile cannot change any clue — it held no mine before and holds
+      // none after — so the zero test below is stable no matter when it runs.
+      revealTile(d, j, revealed);
+      if (clue(d, j).hi === 0) next.push(j);
+    }
     frontier = next;
   }
-  return order;
 }
 
 /**

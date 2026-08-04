@@ -13,6 +13,7 @@
 
 import { RULES } from '../core/rules.js';
 import { blockMines, clue } from '../core/reduce.js';
+import { isFlagged } from '../core/state.js';
 import { PALETTE } from './palette.js';
 import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
 import { drawText, drawTextCentered, textWidthArt, GLYPH_H, GLYPH_GAP } from './font.js';
@@ -195,6 +196,11 @@ export function createRenderer(canvas) {
         if (!(side & 4) && !(side & 2) && isVoid(s, x + 1, y + 1)) corner |= 4;
         if (!(side & 4) && !(side & 8) && isVoid(s, x - 1, y + 1)) corner |= 8;
         if (corner) at.blit(cctx, `coastC${corner}`, dx, dy);
+
+        // The player's own mark, over the cell rather than instead of it. Present at EVERY
+        // tier — a flag is a decision the player made and it may not vanish when they zoom
+        // out to look at the route (SPEC §4.3); only its drawing changes.
+        if (isFlagged(s.con[i])) at.blit(cctx, tier === 'far' ? 'flagFar' : 'flag', dx, dy);
       }
     }
 

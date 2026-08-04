@@ -98,5 +98,5 @@ test('legalActions is the single source of truth for the action bar', () => {
 test('an unknown action is a hard error, not a silent no-op', () => {
   const s = fresh();
   assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'nonsense' })), /unhandled action/);
-  assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'flag', cell: 0 })), /unhandled action/);
+  assert.throws(() => reduce(s, /** @type {any} */ ({ t: 'overwrite', cell: 0 })), /unhandled action/);
 });

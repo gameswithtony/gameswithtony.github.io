@@ -9,7 +9,7 @@
 // backing store (gorillas' self-heal).
 
 import { RULES } from '../core/rules.js';
-import { blastArea, init, reduce } from '../core/reduce.js';
+import { blastArea, init, legalActions, reduce } from '../core/reduce.js';
 import { randomSeed } from '../core/rng.js';
 import { getLevel, levelIds } from '../levels/index.js';
 import * as cam from './camera.js';
@@ -104,6 +104,7 @@ function boot() {
         case 'wait': return dispatch({ t: 'wait' });
         case 'place': return view.selected >= 0 && dispatch({ t: 'place', cell: view.selected });
         case 'analyze': return view.selected >= 0 && dispatch({ t: 'analyze', cell: view.selected });
+        case 'flag': return toggleFlag();
         case 'placeBlock': return confirmBlock();
         default: return undefined;
       }
@@ -126,6 +127,7 @@ function boot() {
     onRotate: rotate,
     onConfirm: confirmBlock,
     onEscape: () => select(-1),
+    onFlag: toggleFlag,
     wake: selfHeal,
   });
 
@@ -229,6 +231,23 @@ function boot() {
     dispatch({ t: 'placeBlock', cell: view.selected, rot: /** @type {0|1|2|3} */ (rot.rot) });
   }
 
+  /**
+   * Toggle the flag on the selected cell. The selection deliberately survives: UNFLAG exists
+   * because you changed your mind about a cell, and the next thing you want on that same cell
+   * is ANALYZE — `dispatch` never touches `view.selected`, so this is a promise kept by not
+   * writing code rather than by writing it.
+   *
+   * Asks `legalActions` first because this is also the keyboard path, and the keyboard has no
+   * action bar filtering it. A `rejected` event here would be a genuine UI bug, and main.js
+   * treats it as one (it console.warns), so the guard has to sit in front of the dispatch and
+   * not behind it.
+   */
+  function toggleFlag() {
+    if (view.selected < 0) return;
+    if (!legalActions(s, view.selected).includes('flag')) return;
+    dispatch({ t: 'flag', cell: view.selected });
+  }
+
   /** Derived overlay state — recomputed from the reducer's data, never accumulated. */
   function syncView() {
     if (s.phase.k === 'placing') {
@@ -294,6 +313,12 @@ function boot() {
   bus.on('reveal', (/** @type {{ cell: number }} */ ev) => {
     fx.flip(ev.cell, PALETTE.AI_REVEALED, walkDelay(ev.cell));
   });
+  // A flag changes the board's appearance and its routing, so it invalidates the static cache
+  // like any other board mutation. `dispatch` already does that for the player's own toggle;
+  // this subscription is what makes it true for a `flagged` emitted as a CONSEQUENCE of some
+  // other action — a blast clearing the flag off a cell it destroyed, say — which arrives on
+  // the same drain but is nobody's button press.
+  bus.on('flagged', () => { renderer.invalidate(); requestDraw(); });
   bus.on('arrived', (/** @type {{ user: number }} */ ev) => {
     fx.pop(s.dest, fx.remaining(ev.user));
   });

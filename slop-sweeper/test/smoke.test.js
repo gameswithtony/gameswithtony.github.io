@@ -11,12 +11,16 @@ import { init } from '../src/core/reduce.js';
 test('rules.js carries every PLAN §8 constant', () => {
   for (const k of [
     'CONFIDENCE_START', 'WAIT_DRAIN_PER_USER', 'DETONATE_HIT', 'SERVED_BONUS', 'BLAST_RADIUS',
-    'ANALYZE_REVEALS', 'USER_MOVE_EVERY', 'ART_PX_PER_TILE', 'FONT_MIN_DEVICE_PX',
+    'USER_MOVE_EVERY', 'ART_PX_PER_TILE', 'FONT_MIN_DEVICE_PX',
     'ZOOM_MAX_ARTPX', 'TAP_SLOP_CSS', 'TAP_MS', 'STEP_TWEEN_MS', 'FF_INTERVAL_MS',
   ]) {
     assert.equal(typeof RULES[k], 'number', `missing constant ${k}`);
   }
   assert.equal(RULES.CONFIDENCE_START, 100);
+  // Removed 2026-08-04 with single-click Analyze: a per-level reveal budget has nothing
+  // left to budget, and a stale constant is how a dead rule comes back to life.
+  assert.equal('ANALYZE_REVEALS' in RULES, false);
+  assert.equal('analyzeReveals' in LEVEL_DEFAULTS, false);
   assert.equal(LEVEL_DEFAULTS.arrivals.count, 10);
   assert.equal(LEVEL_DEFAULTS.userMoveEvery, RULES.USER_MOVE_EVERY);
 });
@@ -64,7 +68,7 @@ test('the terrain table has a complete row per SPEC §2.1 feature', () => {
 test('the construction table carries the full SPEC §2.2 union', () => {
   assert.deepEqual(
     Object.keys(CON).sort(),
-    ['aiHidden', 'aiRevealed', 'flagged', 'hand', 'mineConfirmed', 'none'],
+    ['aiHidden', 'aiRevealed', 'hand', 'mineConfirmed', 'none'],
   );
   assert.equal(CON.aiHidden.passable, true);
   assert.equal(CON.aiHidden.handFrom, false);   // SPEC §4.1, the load-bearing rule

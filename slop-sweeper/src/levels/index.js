@@ -18,7 +18,6 @@ import { sprawl } from './sprawl.js';
  * @property {{ count: number, firstTick: number, every: number }} [arrivals]
  * @property {number} [mineDensity]
  * @property {'compact' | 'awkward' | 'heavy' | string[]} [shapePool]
- * @property {number} [analyzeReveals]
  * @property {number} [userMoveEvery]
  * @property {number} [blastRadius]
  */
@@ -54,7 +53,6 @@ export function resolveLevel(def) {
     arrivals: { ...LEVEL_DEFAULTS.arrivals, ...(def.arrivals ?? {}) },
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
-    analyzeReveals: def.analyzeReveals ?? LEVEL_DEFAULTS.analyzeReveals,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
   };

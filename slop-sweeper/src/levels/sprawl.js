@@ -16,6 +16,11 @@
 // tiles, and 52 of the session's ticks are the walk no matter how well you build. `count` and
 // `every` are chosen so the last user spawns by tick 30 — the sim still medians around 99,
 // the highest in the corpus and the one level that sits above PLAN §13's relaxed band.
+//
+// RETUNED 2026-08-04 (Analyze became one minesweeper click, SPEC §4.3): reading a block now
+// costs several turns instead of one, so every level in the corpus got a looser schedule and
+// a lower defect density. See PLAN §9 for the measured trade-off — the hand-only floor and
+// the AI path now pull against each other much harder than they did.
 
 /** @type {import('./index.js').LevelDef} */
 export const sprawl = {
@@ -53,7 +58,7 @@ A#################################################
 ##################################################
 ##################################################
 `,
-  arrivals: { count: 10, firstTick: 3, every: 3 },
-  mineDensity: 0.10,
+  arrivals: { count: 9, firstTick: 3, every: 3 },
+  mineDensity: 0.11,
   shapePool: 'awkward+heavy',
 };

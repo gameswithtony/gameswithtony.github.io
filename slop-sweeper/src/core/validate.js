@@ -109,7 +109,7 @@ function checkNumbers(def, errors, warnings) {
     errors.push(String(/** @type {Error} */ (err).message));
   }
 
-  for (const k of /** @type {const} */ (['analyzeReveals', 'userMoveEvery', 'blastRadius'])) {
+  for (const k of /** @type {const} */ (['userMoveEvery', 'blastRadius'])) {
     const v = def[k];
     if (v === undefined) continue;
     const floor = k === 'blastRadius' ? 0 : 1;

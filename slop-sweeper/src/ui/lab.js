@@ -94,7 +94,6 @@ export function createLab(h) {
         <label for="lab-every">EVERY</label><input id="lab-every" type="number" min="1" step="1">
         <label for="lab-density">DENSITY</label><input id="lab-density" type="number" min="0" max="1" step="0.01">
         <label for="lab-pool">POOL</label><select id="lab-pool"></select>
-        <label for="lab-analyze">ANALYZE</label><input id="lab-analyze" type="number" min="1" step="1">
         <label for="lab-move">MOVE EVERY</label><input id="lab-move" type="number" min="1" step="1">
         <label for="lab-blast">BLAST R</label><input id="lab-blast" type="number" min="0" step="1">
       </div>
@@ -126,7 +125,7 @@ export function createLab(h) {
   const fields = {
     id: $('lab-id'), name: $('lab-name'),
     count: $('lab-count'), first: $('lab-first'), every: $('lab-every'),
-    density: $('lab-density'), analyze: $('lab-analyze'), move: $('lab-move'), blast: $('lab-blast'),
+    density: $('lab-density'), move: $('lab-move'), blast: $('lab-blast'),
   };
 
   // --- draft --------------------------------------------------------------------------
@@ -140,7 +139,6 @@ export function createLab(h) {
     fields.every.value = String(LEVEL_DEFAULTS.arrivals.every);
     fields.density.value = String(LEVEL_DEFAULTS.mineDensity);
     pool.value = String(LEVEL_DEFAULTS.shapePool);
-    fields.analyze.value = String(LEVEL_DEFAULTS.analyzeReveals);
     fields.move.value = String(LEVEL_DEFAULTS.userMoveEvery);
     fields.blast.value = String(LEVEL_DEFAULTS.blastRadius);
   }
@@ -151,7 +149,7 @@ export function createLab(h) {
       id: fields.id.value, name: fields.name.value,
       count: fields.count.value, first: fields.first.value, every: fields.every.value,
       density: fields.density.value, pool: pool.value,
-      analyze: fields.analyze.value, move: fields.move.value, blast: fields.blast.value,
+      move: fields.move.value, blast: fields.blast.value,
     }));
   }
 
@@ -182,7 +180,6 @@ export function createLab(h) {
     const p = String(def.shapePool ?? LEVEL_DEFAULTS.shapePool);
     // `'compact+'` and friends are legal but not offered; they resolve to the trimmed name.
     pool.value = POOL_CHOICES.includes(p) ? p : (POOL_CHOICES.find((c) => c === p.replace(/\+$/, '')) ?? 'compact');
-    fields.analyze.value = String(def.analyzeReveals ?? LEVEL_DEFAULTS.analyzeReveals);
     fields.move.value = String(def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery);
     fields.blast.value = String(def.blastRadius ?? LEVEL_DEFAULTS.blastRadius);
     saveDraft();
@@ -218,7 +215,6 @@ export function createLab(h) {
       // The '+' union grammar is wider than the typedef's literals, exactly as the authored
       // levels already are (caldera is 'compact+awkward'); resolvePool() is the real check.
       shapePool: /** @type {LevelDef['shapePool']} */ (pool.value),
-      analyzeReveals: num(fields.analyze, LEVEL_DEFAULTS.analyzeReveals),
       userMoveEvery: num(fields.move, LEVEL_DEFAULTS.userMoveEvery),
       blastRadius: num(fields.blast, LEVEL_DEFAULTS.blastRadius),
     };
@@ -363,7 +359,6 @@ export function createLab(h) {
       lines.push(`  shapePool: '${def.shapePool}',`);
     }
     for (const [key, value, fallback] of /** @type {[string, number | undefined, number][]} */ ([
-      ['analyzeReveals', def.analyzeReveals, LEVEL_DEFAULTS.analyzeReveals],
       ['userMoveEvery', def.userMoveEvery, LEVEL_DEFAULTS.userMoveEvery],
       ['blastRadius', def.blastRadius, LEVEL_DEFAULTS.blastRadius],
     ])) {

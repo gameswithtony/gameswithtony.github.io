@@ -94,6 +94,7 @@ function tileNames() {
     for (let v = 0; v < VARIANTS; v++) names.push(`${kind}${v}`);
   }
   names.push('revealed', 'mine', 'origin', 'dest', 'tintOk', 'tintRed', 'tintSelect', 'tintUser');
+  names.push('flag', 'flagFar');
   for (let m = 0; m < 16; m++) names.push(`coastS${m}`);
   for (let m = 0; m < 16; m++) names.push(`coastC${m}`);
   return names;
@@ -177,6 +178,8 @@ function paint(ctx, name, ox, oy, px) {
     case 'mine': return paintMine(p);
     case 'origin': return paintEndpoint(p, true);
     case 'dest': return paintEndpoint(p, false);
+    case 'flag': return paintFlag(p);
+    case 'flagFar': return paintFlagFar(p);
     case 'tintOk': return paintTint(p, PALETTE.OK);
     case 'tintRed': return paintTint(p, PALETTE.RED);
     case 'tintSelect': return paintTint(p, PALETTE.SELECT);
@@ -310,6 +313,34 @@ function paintEndpoint(p, isOrigin) {
     p(c - 2, c - 2, PALETTE.RED, 4, 4);
     p(c - 1, c - 1, PALETTE.PAPER, 2, 2);
   }
+}
+
+/**
+ * The flag a player plants on a cell they believe holds a defect (SPEC §4.3). Both flag tiles
+ * are OVERLAYS — they paint only their own pixels and leave the rest of the tile transparent,
+ * so a flagged cell keeps the hidden tile's own variant and its inset border underneath and
+ * still reads as the same discrete minesweeper cell it was before it was marked.
+ *
+ * A pennant: two-art-pixel INK pole with a foot, and a stepped RED triangle. Diagonals are
+ * runs of rects, never anti-aliased strokes (SPEC §10.8).
+ * @param {Pen} p
+ */
+function paintFlag(p) {
+  p(5, 3, PALETTE.INK, 2, 10);          // pole
+  p(3, 12, PALETTE.INK, 6, 2);          // foot — without it the pole reads as a stray line
+  for (let k = 0; k < 6; k++) p(7, 3 + k, PALETTE.RED, 6 - k, 1);
+}
+
+/**
+ * The far tier cannot render a pennant — at one device pixel per art pixel the pole is a hair
+ * and the triangle is mush. What has to survive zoomed out is *where the flags are*: a line of
+ * them along a route is a read of the board. So far tier gets a bold chip instead, on the same
+ * art grid, in the same RED.
+ * @param {Pen} p
+ */
+function paintFlagFar(p) {
+  p(4, 4, PALETTE.INK, 8, 8);
+  p(5, 5, PALETTE.RED, 6, 6);
 }
 
 /**

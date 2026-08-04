@@ -69,9 +69,11 @@ progression, level-select *screen* (dropdown + `?level=` param only, as §11 all
 accessibility layer (§10.9 deferred — but the coordinate-tuple invariant is enforced from day
 one).
 
-Full §2.2 construction-state union (including `FLAGGED`) is implemented in types and in the
-table-driven passability/buildability predicates, because it costs a few lines and keeps the
-schema honest; no prototype action produces the unused states.
+Full §2.2 construction-state union is implemented in types and in the table-driven
+passability/buildability predicates, because it costs a few lines and keeps the schema
+honest. *(Revised 2026-08-04: `FLAGGED` is no longer one of those states — flag ships as a
+real verb, encoded as `aiHidden.flagged`, see §3 ruling 2 and SPEC §4.5. The union now has
+no unused members.)*
 
 ---
 
@@ -82,9 +84,18 @@ schema honest; no prototype action produces the unused states.
    analysis refused to reveal is a mine" — and `AI_REVEALED` is defined safe (§2.2), so a mined
    tile can never become it. Cost is real: with Overwrite absent, a confirmed mine is a permanent
    wall the player must route around, which makes analyze targeting a weighty choice.
-2. **Analyze spread:** from the player-chosen `AI_HIDDEN` target, BFS 4-way across the contiguous
-   `AI_HIDDEN` region, revealing up to `ANALYZE_REVEALS` tiles in BFS order (deterministic
-   tie-break by cell index). No spill beyond the contiguous region — "you review this module."
+2. ~~**Analyze spread:** from the player-chosen `AI_HIDDEN` target, BFS 4-way across the
+   contiguous `AI_HIDDEN` region, revealing up to `ANALYZE_REVEALS` tiles in BFS order.~~
+   **SUPERSEDED 2026-08-04 (user decision), and this ruling is why.** Playtest found the exact
+   failure the ruling invited: a bulk reveal *does the deduction for you, risk-free*, so there
+   was never a moment where clicking a tile was a decision. **Analyze is now one minesweeper
+   click** — it opens the targeted tile, and if that tile's clue is zero the classic cascade
+   runs (every hidden 8-neighbour opens, recursing through further zeros, skipping flagged
+   tiles). The cascade needs no solver and can never be wrong: a zero clue has no mined
+   8-neighbour by the definition of a clue, so the closure it opens is provably safe, and
+   `reduce.js` throws rather than trusts that. `ANALYZE_REVEALS` and `LevelDef.analyzeReveals`
+   are **deleted**, not defaulted. Ruling 1 above is untouched and now covers the whole mined
+   case: a mined target is confirmed, does not blast, and does not cascade. See SPEC §4.3.
 3. **Win/loss (resolves OPEN #8 for the prototype only):** win when every scheduled user has
    arrived at B; lose when confidence ≤ 0.
 4. **Users caught in a blast:** any user standing inside the destroyed area returns to origin and
@@ -233,12 +244,11 @@ export interface TerrainCaps {
 }
 export const TERRAIN: Record<Terrain, TerrainCaps>    // adding a feature = adding a row
 
-export type Con =                                     // §2.2, complete (flagged unused for now)
+export type Con =                                     // §2.2, complete
   | { k: 'none' }
   | { k: 'hand' }
-  | { k: 'aiHidden'; mine: boolean; block: number }
+  | { k: 'aiHidden'; mine: boolean; block: number; flagged: boolean }   // rev. 2026-08-04
   | { k: 'aiRevealed'; block: number }
-  | { k: 'flagged' }
   | { k: 'mineConfirmed'; block: number }
 
 export interface User {
@@ -272,6 +282,7 @@ export type Action =
   | { t: 'generate' }
   | { t: 'placeBlock'; cell: number; rot: 0 | 1 | 2 | 3 }
   | { t: 'analyze'; cell: number }
+  | { t: 'flag'; cell: number }                       // free: no tick runs (rev. 2026-08-04)
   | { t: 'wait' }
 
 export type Ev =
@@ -281,6 +292,7 @@ export type Ev =
   | { t: 'placed'; cells: number[] }                  // hand tile or committed block cells
   | { t: 'blockPlaced'; block: number; cells: number[]; mines: number }  // count → toast
   | { t: 'analyzed'; revealed: number[]; minesFound: number[] }
+  | { t: 'flagged'; cell: number; on: boolean }
   | { t: 'reveal'; cell: number }                     // traversal reveal (§5)
   | { t: 'detonate'; at: number; destroyed: number[]; minesLost: number[] }
   | { t: 'step'; user: number; from: number; to: number }
@@ -336,7 +348,6 @@ export interface LevelDef {
   arrivals?: { count: number; firstTick: number; every: number }   // default 10 / 6 / 4
   mineDensity?: number    // Binomial p per block cell (§3.6); default 0.25
   shapePool?: 'compact' | 'awkward' | 'heavy' | string[]           // preset name or ids (§10); default 'compact'
-  analyzeReveals?: number // default rules.ANALYZE_REVEALS
   userMoveEvery?: number  // default 1 (OPEN #1: parameterized)
   blastRadius?: number    // default 1 = tile + orthogonals (§5)
 }
@@ -424,7 +435,7 @@ structural ones marked SPEC.
 | `DETONATE_HIT` | 10 | |
 | `SERVED_BONUS` | 0 | tuning lever only (§3.11) |
 | `BLAST_RADIUS` | 1 | tile + orthogonals (SPEC §5 baseline); per-level override |
-| `ANALYZE_REVEALS` | 4 | per-level override |
+| ~~`ANALYZE_REVEALS`~~ | — | **deleted 2026-08-04**: Analyze is one click (§3 ruling 2) |
 | `USER_MOVE_EVERY` | 1 | per-level override (OPEN #1) |
 | `ART_PX_PER_TILE` | 8 | SPEC §10.8 recommended |
 | `FONT_MIN_DEVICE_PX` | 10 | glyph legibility floor; **tiers derive from this** (SPEC §10.8) |
@@ -447,13 +458,35 @@ structural ones marked SPEC.
 > - **Routes doubled, so the waiting integral doubled.** `WAIT_DRAIN_PER_USER` drops
 >   0.75 → 0.375 (three eighths — exact in binary, so the meter never drifts). At 0.75 every
 >   level lost on the meter alone whatever the player did. Budget: ~267 waiting-user-ticks.
-> - **Densities drop to 0.10–0.14** (from 0.18–0.24). A 25-cell block at 0.25 carries six
->   defects; that is not a puzzle. `ANALYZE_REVEALS` rises 5 → 8 for the same reason, and
->   `MAX_DIM` rises 40 → 64 so the ceiling is a guard rail again rather than a constraint.
+> - **Densities drop** (from 0.18–0.24). A 25-cell block at 0.25 carries six defects; that is
+>   not a puzzle. `MAX_DIM` rises 40 → 64 so the ceiling is a guard rail again rather than a
+>   constraint.
 > - **The session got longer and the band moves with it.** Half of a `sprawl` game is now
 >   the fifty-two-tile walk itself, which no amount of tuning removes. §13's
->   "median winning game 35–70 ticks" gate is relaxed to **35–85**, and `sprawl` still sits
->   just above it at ~99.
+>   "median winning game 35–70 ticks" gate is relaxed to **35–85**.
+
+> **Revised again 2026-08-04 (user decision): Analyze is one minesweeper click (§3 ruling 2),
+> and Flag ships (SPEC §4.5).** This is the larger of the two revisions for the corpus, and
+> the numbers below are its output. The finding, stated plainly so nobody re-derives it:
+>
+> - **Reading a block went from one turn to three or four.** Under the old bulk reveal a
+>   competent build on `plain` cost ~28 turns against hand-only's 30, so AI paid. Now the same
+>   build costs ~35 turns, and on the four long-route levels it costs *more than hand-only
+>   would* if hand-only could afford the wait. Every schedule and density in the table below
+>   was re-tuned against that, three passes deep.
+> - **The hand-only floor and the AI path now pull hard against each other.** Loosening a
+>   schedule enough to pay for the review turns also pays for hand-building: at
+>   `count 8 / every 4` on the long levels, `handOnly` went from 0% to **100%** — SPEC §1's
+>   one forbidden outcome. The schedules below are therefore the *tightest* that leave the AI
+>   path any oxygen, not the most comfortable, and `every` is pinned at 3 on the four levels
+>   whose floor is load-bearing.
+> - **`careful` overtook `balanced` decisively.** With one click per turn, reviewing what your
+>   users are about to walk on is worth far more than a review cadence; `balanced:0.4` now
+>   eats 5–6 detonations a game where `careful` eats 1–2. That is the intended shape of the
+>   change, and it is the first time the corpus has separated the two policies this cleanly.
+> - **The sim measures the pessimistic end.** The bots never flag (see `sim/policies.js`), and
+>   flagging is exactly the tool that answers "I have deduced a defect and cannot afford to
+>   clear it". Read the long levels' 10–30% best-policy rates with that in mind.
 
 Authored as charmaps in `src/levels/*.js` (SPEC §10.7 legend). `route` is the A→B path
 length in tiles — with the schedule it sets the floor on session length, since the last
@@ -461,12 +494,29 @@ user's walk cannot start before it spawns. Arrival numbers are sim-tuned, not se
 
 | id | size | route | shape intent | arrivals (count / first / every) | density | pool | what it tests |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `plain` | 32×20 | 31 | open rectangle, control | 10 / 4 / 3 | .12 | compact | baseline; generous solve; the fun question in its purest form |
-| `channel` | 40×16 | 50 | diagonal staircase of landings, VOID-heavy | 10 / 3 / 3 | .12 | compact+ | coast anchors everywhere (§7.5: easier deduction, tighter routing) |
+| `plain` | 32×20 | 31 | open rectangle, control | 9 / 6 / 4 | .12 | compact | baseline; generous solve; **no floor to protect**, so this is the level that could absorb the Analyze change |
+| `channel` | 40×16 | 50 | diagonal staircase of landings, VOID-heavy | 9 / 3 / 3 | .11 | compact+ | coast anchors everywhere (§7.5: easier deduction, tighter routing) |
 | `atoll` | 34×26 | 26 | reef ring of islets, inner lagoon | 12 / 4 / 2 | .14 | awkward+heavy | placement scarcity: the lagoon refuses anything five cells tall, so `heavy` is reef-only |
-| `caldera` | 38×26 | 48 | central volcano cluster + two satellites | 10 / 2 / 3 | .12 | compact+awkward | blast shields (§5) vs. reduced legal placements — the two opposing pulls |
-| `strait` | 46×22 | 47 | two basins, 3-tall neck | 10 / 1 / 3 | .11 | compact+awkward | chokepoint trunk risk; deliberate-detonation temptation |
-| `sprawl` | 50×30 | 52 | open water, far endpoints | 10 / 3 / 3 | .10 | awkward+heavy | anchor-poor middle; cadence pressure ceiling — where the §1 thesis bites |
+| `caldera` | 38×26 | 48 | central volcano cluster + two satellites | 9 / 2 / 3 | .11 | compact+awkward | blast shields (§5) vs. reduced legal placements — the two opposing pulls |
+| `strait` | 46×22 | 47 | two basins, 3-tall neck | 9 / 1 / 3 | .11 | compact+awkward | chokepoint trunk risk; deliberate-detonation temptation |
+| `sprawl` | 50×30 | 52 | open water, far endpoints | 9 / 3 / 3 | .11 | awkward+heavy | anchor-poor middle; cadence pressure ceiling — where the §1 thesis bites |
+
+Measured 2026-08-04, 60 games/cell, seed 1 (win % — `handOnly` / `genRush` / `balanced:0.4` /
+`careful:0.4`, then the best policy's median winning length):
+
+| level | handOnly | genRush | balanced | careful | med ticks |
+| --- | --- | --- | --- | --- | --- |
+| `plain` | 100% | 20% | 42% | **67%** | 93 |
+| `channel` | **0%** | 7% | 17% | 20% | 114 |
+| `atoll` | 100% | 10% | 43% | **60%** | 69 |
+| `caldera` | **0%** | 5% | 32% | 32% | 124 |
+| `strait` | **0%** | 0% | 15% | 8% | 116 |
+| `sprawl` | **0%** | 3% | 12% | 3% | 165 |
+
+The floors hold on all four levels that have one, and `genRush` detonates roughly 1.5× as
+often as `balanced` everywhere. What the corpus no longer has is a comfortable middle: the
+long-route levels sit at 10–30% for the best bot where they were 80–100% before the change.
+`plain` and `atoll` carry the "is this fun" question now; the other four are the ceiling.
 
 ### 9.1 Authoring pipeline — new levels must be cheap, for humans and AI alike
 
@@ -681,6 +731,22 @@ the old per-breakpoint value is the ceiling. Banners: won / lost / generate-refu
 detonations, served). The Level Lab (§9.2) rides this same DOM overlay layer, gated behind
 `?lab=1`.
 
+*Revised 2026-08-04 (spec-owner decision — Analyze becomes a single-cell click, `flag` joins the
+verb set):*
+
+- The action bar gains **FLAG / UNFLAG** for `aiHidden` cells, labelled off the cell's own flag
+  state and carrying a `0` cost badge. Free verbs (`generate`, `flag`) now wear GENERATE's
+  colours rather than a verb's, so "this one is free" reads before the number does.
+- A selected unreviewed cell gets a **one-line hint** after the buttons — `ANALYZE REVEALS THIS
+  CELL · A ZERO CASCADES · FLAG IS FREE`, or `FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO
+  ANALYZE`. The cascade is the rule nobody guesses from a button label. Hidden below 900px for
+  the same reason the tray's hint is: the narrow footer row has no prose budget.
+- Flagged cells get an atlas **overlay** tile (§11.2), not a construction state of their own, so
+  the hidden tile's variant and inset border survive underneath: a pennant at mid/near, a bold
+  RED chip at far — a flag is a decision the player made and may not vanish when they zoom out.
+- `F` toggles the flag on the selected cell (§12). It is the only keyboard verb, and only
+  because it is the only one that spends no turn; everything else stays behind select→act.
+
 ---
 
 ## 12. Input & camera
@@ -785,6 +851,20 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
 - [ ] §4.2 no preview / no decline / no reroll are state-machine properties (test: during
       `placing`, only `placeBlock` is legal)
 - [ ] §4.2 empty legal set ⇒ refund, no tick, notice shown (test + UI)
+- [ ] §4.3 (rev. 2026-08-04) Analyze opens **exactly one tile**; a zero clue cascades and a
+      numbered clue does not; the cascade skips flagged tiles, never leaves the contiguous
+      hidden region, and **never opens a mine** — asserted directly and again as a property
+      over real generated blocks (tests). A mined target is confirmed and does not cascade.
+- [ ] §4.3 `ANALYZE_REVEALS` / `analyzeReveals` are gone from `rules.js`, `levels/index.js`
+      and the validator (standing test asserts they are absent from `RULES` and
+      `LEVEL_DEFAULTS`), and the Level Lab no longer offers the field.
+- [ ] §4.5 (rev. 2026-08-04) Flag is **free**: it emits `flagged`, changes `con` and nothing
+      else — no tick, no drain, no stats, no user movement (test compares `hashState` before
+      and after a toggle pair). Illegal during `placing`, off-board, and on non-slop.
+- [ ] §4.5 a flag masks exactly one capability, `passable` — a flagged tile still counts for
+      clues, still anchors generation, and a blast still destroys it and clears the flag
+      (tests). A flag wall closes the gate; unflagging reopens it; flagging behind a walker
+      strands it and the stranded user drains (§6.4).
 - [ ] §4.2 legal anchors highlighted per rotation; mine-count toast on commit
 - [ ] §5 blast flood fill stops at `VOLCANO` and `VOID` via the same table path — no
       special-case (tests); `HAND` tiles destroyed; no chains; in-area users requeue; others

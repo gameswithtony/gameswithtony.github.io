@@ -76,13 +76,26 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `map` | *(required)* | the charmap above |
 | `name` | `id` | display name |
 | `arrivals` | `{ count: 10, firstTick: 6, every: 4 }` | how many users, when the first one shows up, and the gap between them |
-| `mineDensity` | `0.14` | per-cell probability inside a generated block; the block's total is `Binomial(size, p)` and **zero is possible** |
+| `mineDensity` | `0.16` | per-cell probability inside a generated block; the block's total is `Binomial(size, p)` and **zero is possible** |
 | `shapePool` | `'compact'` | which blocks Generate draws from — see §4 |
-| `analyzeReveals` | `8` (`RULES.ANALYZE_REVEALS`) | tiles one Analyze turns over |
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 
 `arrivals` is the difficulty dial. Everything else is texture.
+
+There is no `analyzeReveals` any more (removed 2026-08-04). **Analyze is one minesweeper
+click**: it opens the tile you point at, and if that tile's clue is zero the classic cascade
+runs. How much a review turns over is now a property of the board — of `mineDensity`, mostly
+— not a number a level sets. **Flag** is the other new verb: free, no tick, and a flagged
+tile is impassable to users, so a flag wall can close your own route.
+
+Two consequences for authoring, both learned the hard way in the 2026-08-04 tuning pass:
+
+- **Reading a block costs three or four turns now, not one.** Budget for it. A level tuned
+  against the old bulk reveal will be roughly ten turns too tight.
+- **Loosening the schedule to pay for those turns pays for hand-building too.** On the long
+  levels, going from `every: 3` to `every: 4` took `handOnly` from 0% to 100% — the one
+  outcome SPEC §1 forbids. If your level has a floor, `every` is not the dial; density is.
 
 ---
 
@@ -221,7 +234,7 @@ A#############################################
 … nine more rows like it …
 ###################........###################
 `,
-  arrivals: { count: 10, firstTick: 1, every: 3 },
+  arrivals: { count: 9, firstTick: 1, every: 3 },
   mineDensity: 0.11,
   shapePool: 'compact+awkward',
 };
@@ -233,14 +246,16 @@ Reading it back:
 
 - **46×22**, two 19-wide basins, a neck three rows tall and eight long. `A` and `B` sit on the
   neck rows at opposite edges, so the shortest route is 47 tiles straight through it.
-- **`arrivals: 10 / 1 / 3`** was found by sim, not by feel. Hand-only takes 46 turns to close
-  that route; at this cadence roughly 275 waiting-user-ticks accumulate before it gets there,
+- **`arrivals: 9 / 1 / 3`** was found by sim, not by feel. Hand-only takes 46 turns to close
+  that route; at this cadence roughly 297 waiting-user-ticks accumulate before it gets there,
   past the ~267 the meter can absorb. Hand-only therefore loses **0%**, and the level has a
-  genuine floor. `count: 12, every: 2` was the first draft and killed every policy including
-  `careful`; this is the loosest schedule that still keeps the floor.
+  genuine floor. Loosen `every` to 4 and hand-only wins outright at 100% — that one step is
+  the whole margin, which is why the floor levels all sit at `every: 3`.
 - **`mineDensity: 0.11`.** Blocks here are 12–20 cells, so 0.11 still means one to two defects
   a block — and the neck concentrates them. At 0.14 the review-and-reroute tax on a 47-tile
-  route cancelled the AI's throughput advantage and every policy converged near zero.
+  route cancelled the AI's throughput advantage and every policy converged near zero. Since
+  the schedule cannot loosen without handing the level to `handOnly` (above), density is the
+  only dial left on a level with a floor.
 - **`shapePool: 'compact+awkward'`** rather than plain `awkward`, because the neck is three
   cells tall and only `R12` fits a three-row corridor at all. Adding `compact` lets generation
   cross the neck at all — see the box table in §4. It crosses *rarely*, which is the point:
@@ -257,7 +272,8 @@ node --test                                          # nothing else broke
 Targets to aim the second command at: hand-only should lose wherever you intended a floor,
 `balanced:0.4` should land somewhere in 30–70%, median winning length should sit in 35–85
 ticks, and winning games should finish on 10–40 confidence. Anything at 100% or 0% across the
-*whole* policy sweep is a level with no decision in it — but note that `careful:0.4` wins
-90–100% almost everywhere in the current corpus, because reviewing a block before walking
-through it is simply the right play at these block sizes. Read the spread between
+*whole* policy sweep is a level with no decision in it — but note that `careful:0.4` is the strongest bot on
+four of the six levels, because reviewing what your users are about to walk on is simply the
+right play now — but note the bots never flag, so every number the sim prints is the
+pessimistic end of the range. Read the spread between
 `genRush`, `balanced` and `careful`, not `careful` alone.

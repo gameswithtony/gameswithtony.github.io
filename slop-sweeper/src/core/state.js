@@ -65,9 +65,8 @@ export function caps(t) {
 /**
  * @typedef {{ k: 'none' }
  *   | { k: 'hand' }
- *   | { k: 'aiHidden', mine: boolean, block: number }
+ *   | { k: 'aiHidden', mine: boolean, block: number, flagged: boolean }
  *   | { k: 'aiRevealed', block: number }
- *   | { k: 'flagged' }
  *   | { k: 'mineConfirmed', block: number }} Con
  */
 
@@ -81,8 +80,14 @@ export function caps(t) {
  */
 
 /**
- * The full §2.2 union including the states no prototype action produces yet — the schema
- * stays honest and the predicates below never grow a special case (PLAN §2).
+ * The full §2.2 union. The predicates below never grow a special case (PLAN §2).
+ *
+ * Revised 2026-08-04 (user decision): the standalone `flagged` state is gone. A flag is an
+ * *annotation on an unreviewed AI tile*, not a construction state of its own — it has to
+ * remember the tile's mine and block, and it has to keep counting for clues exactly as the
+ * unflagged tile did (flagging is a claim, not knowledge). Making it a separate row would
+ * have duplicated that payload and quietly changed clue arithmetic. It lives as
+ * `aiHidden.flagged` and masks exactly one capability, below.
  * @type {Record<Con['k'], ConCaps>}
  */
 export const CON = {
@@ -90,13 +95,35 @@ export const CON = {
   hand:          { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
   aiHidden:      { passable: true,  handFrom: false, genFrom: true,  occupies: true,  holdsMine: true },
   aiRevealed:    { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
-  flagged:       { passable: false, handFrom: false, genFrom: false, occupies: true,  holdsMine: false },
   mineConfirmed: { passable: false, handFrom: false, genFrom: false, occupies: true,  holdsMine: true },
 };
+
+/**
+ * What a flag changes, and the complete list of it: users refuse to enter a flagged tile,
+ * which is the whole mechanic (SPEC §4.5 — flags steer traffic). Everything else about the
+ * tile is untouched, so a flag still counts for clues, still anchors generation, and is
+ * still destroyed by a blast. Written as a table rather than a branch so `routing.js` never
+ * learns the word "flag" — it asks `isPassable` like it asks about everything else.
+ * @type {Partial<ConCaps>}
+ */
+const FLAG_MASK = Object.freeze({ passable: false });
+
+/** One frozen masked row per maskable kind, built once. */
+const FLAGGED_CAPS = Object.freeze(
+  Object.fromEntries(Object.entries(CON).map(([k, row]) => [k, Object.freeze({ ...row, ...FLAG_MASK })])),
+);
 
 /** Shared immutable singletons: Con values are replaced, never mutated. */
 export const CON_NONE = /** @type {Con} */ (Object.freeze({ k: 'none' }));
 export const CON_HAND = /** @type {Con} */ (Object.freeze({ k: 'hand' }));
+
+/**
+ * @param {Con} con
+ * @returns {boolean} the player has marked this tile as a suspected defect
+ */
+export function isFlagged(con) {
+  return con.k === 'aiHidden' && con.flagged;
+}
 
 /**
  * @param {Con} con
@@ -105,7 +132,7 @@ export const CON_HAND = /** @type {Con} */ (Object.freeze({ k: 'hand' }));
 export function conCaps(con) {
   const row = CON[con.k];
   if (!row) throw new Error(`unknown construction state '${/** @type {any} */ (con).k}'`);
-  return row;
+  return isFlagged(con) ? FLAGGED_CAPS[con.k] : row;
 }
 
 // --- Two-layer predicates: the only readers of the tables above -------------------
@@ -217,10 +244,13 @@ export function stopsBlast(terrain) {
  */
 
 /**
+ * `flag` is the one action that costs nothing: it toggles an annotation and no tick runs
+ * (SPEC §4.5, revised 2026-08-04). Everything else here consumes the turn.
  * @typedef {{ t: 'place', cell: number }
  *   | { t: 'generate' }
  *   | { t: 'placeBlock', cell: number, rot: 0 | 1 | 2 | 3 }
  *   | { t: 'analyze', cell: number }
+ *   | { t: 'flag', cell: number }
  *   | { t: 'wait' }} Action
  */
 
@@ -233,6 +263,7 @@ export function stopsBlast(terrain) {
  *   | { t: 'placed', cells: number[] }
  *   | { t: 'blockPlaced', block: number, cells: number[], mines: number }
  *   | { t: 'analyzed', revealed: number[], minesFound: number[] }
+ *   | { t: 'flagged', cell: number, on: boolean }
  *   | { t: 'reveal', cell: number }
  *   | { t: 'detonate', at: number, destroyed: number[], minesLost: number[] }
  *   | { t: 'step', user: number, from: number, to: number }

@@ -42,8 +42,8 @@ test('the gate is topological: users wait until a path exists, then the whole qu
 test('the gate is topological, not safe: a user departs into a mined corridor (SPEC §6.2)', () => {
   const s = queue(init(CORRIDOR, 1), 1);
   const mined = cellAt(s, 1, 0);
-  s.con[mined] = { k: 'aiHidden', mine: true, block: 0 };
-  s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[mined] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [mined, cellAt(s, 2, 0)] }];
   assert.equal(gateOpen(s), true, 'aiHidden counts as passable, so the route reads as complete');
 
@@ -56,13 +56,18 @@ test('the gate is topological, not safe: a user departs into a mined corridor (S
   assert.equal(s2.users[0].at, s2.origin);
 });
 
-test('flagged and mine-confirmed tiles close the gate; the path is otherwise passable', () => {
+test('flagged slop and mine-confirmed tiles close the gate; the path is otherwise passable', () => {
   const s = queue(init(CORRIDOR, 1), 1);
   s.con[cellAt(s, 1, 0)] = CON_HAND;
   s.con[cellAt(s, 2, 0)] = CON_HAND;
   assert.equal(gateOpen(s), true);
 
-  s.con[cellAt(s, 2, 0)] = { k: 'flagged' };
+  // Unreviewed slop is passable: the gate is topological, not safe (SPEC §6.2).
+  s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  assert.equal(gateOpen(s), true, 'users walk into mined corridors willingly');
+
+  // A flag on that same tile is the player refusing to let them, and it shuts the route.
+  s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: true, block: 0, flagged: true };
   assert.equal(gateOpen(s), false);
 
   s.con[cellAt(s, 2, 0)] = { k: 'mineConfirmed', block: 0 };

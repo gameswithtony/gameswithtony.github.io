@@ -72,7 +72,7 @@ Terrain features are defined by a **capability table**, not by hardcoded per-fea
 - `HAND` — player-placed. Always safe. Always buildable-from.
 - `AI_HIDDEN` — AI-generated, unrevealed. Passable. Not buildable-from. May contain a mine.
 - `AI_REVEALED` — AI tile whose clue is visible. Passable, safe, buildable-from.
-- `FLAGGED` — player-marked. Impassable to users. Not buildable-from.
+- `FLAGGED` — player-marked. Impassable to users. Not buildable-from. *(Revised 2026-08-04: represented as a `flagged` flag on `AI_HIDDEN` rather than as a separate state — see §4.5. The behaviour described here is unchanged; only the encoding is.)*
 - `MINE_CONFIRMED` — revealed to contain a mine. Impassable.
 
 ### 2.3 Future features — NOT YET BUILT
@@ -159,6 +159,10 @@ Reveals clue numbers on some `AI_HIDDEN` tiles, converting them to `AI_REVEALED`
 - **Precision of the revealed clues is governed by current skill** (§7.2).
 - **OPEN:** does the player choose which tiles/region to analyze? Player-chosen is more interesting and more thematically accurate (you choose what to review). Recommend the player selects a target tile and analysis radiates from it.
 
+*(Revised 2026-08-04 by owner decision. **Analyze is one minesweeper click.** It opens the single tile the player pointed at; if that tile's clue is exactly zero it cascades classically — every hidden 8-neighbour opens, recursing through further zeros — and the cascade is free because a zero clue cannot, by the definition of a clue, neighbour a mine. A mined target becomes `MINE_CONFIRMED` and does not cascade (the ruling in `PLAN.md` §3.1 stands). A flagged target is refused outright — unflag it first — and the cascade skips flagged tiles, both exactly as minesweeper behaves.*
+
+*"Quantity revealed per analysis: per-level parameter" is therefore **withdrawn**: the constant `ANALYZE_REVEALS` and the `analyzeReveals` level override are deleted, not defaulted. The reason is the whole point of the change: a bulk reveal did the deduction **for** the player, risk-free, so the minesweeper layer had no play in it. One click at a time is a decision — where do you probe, and is this tile the one that ends your turn. The cost is real and measured: reading a block costs several turns now instead of one, which is why the corpus was re-tuned (PLAN §9) and why `4.5 Flag` is no longer omitted from the prototype.)*
+
 ### 4.4 Overwrite — 1 or 2 turns
 
 Replace an existing tile with a `HAND` tile.
@@ -175,6 +179,10 @@ Toggle a tile to `FLAGGED`. Flagged tiles are impassable to users and unbuildabl
 Free with no supply cap. It self-balances: flag your only route and users pile up and drain confidence. No arbitrary flag limit is needed.
 
 **OPEN:** confirm free-and-uncapped survives playtest. If players spam-flag to stall, first try steepening the confidence drain rather than adding a cap.
+
+*(Revised 2026-08-04 by owner decision: **Flag ships in the prototype**, reversing §11's omission table. With Analyze reduced to a single click (§4.3) the player needed a way to *act* on a deduction — without it, working out that a tile is a defect changed nothing you could do. It is implemented exactly as this section describes: a free toggle, no cap, self-balancing because a flag wall closes your own route and the pile-up drains you.*
+
+*One representation change: `FLAGGED` is **not** a construction state of its own (§2.2). A flag is an annotation on an `AI_HIDDEN` tile — `{ k: 'aiHidden', mine, block, flagged }` — because it has to remember the mine and the block underneath, and because a flagged tile must keep counting for clues exactly as it did unflagged: flagging is a claim, not knowledge, and the board never confirms your guess by moving a number. The flag masks exactly one capability, `passable`. Everything else — clue arithmetic, generate-adjacency, destruction by blast — is unchanged, and a blast takes the flag with the cell.)*
 
 ### 4.6 Pass — 1 turn
 
@@ -580,7 +588,7 @@ Scope per level:
 
 - **Two endpoints only, A → B.** No multi-point networks, no mid-level requirements.
 - **Terrain:** `OCEAN`, `VOID`, `VOLCANO`. No future features from §2.3.
-- **Three actions:** place, generate (block placement with free rotation), analyze. No flag, no overwrite, no pass.
+- **Three actions:** place, generate (block placement with free rotation), analyze. No flag, no overwrite, no pass. *(Revised 2026-08-04: **flag is in** — see §4.5. Single-click Analyze left the player able to deduce a defect and unable to do anything about it; flag is the verb that acts on the deduction. Overwrite and pass-as-strategy remain omitted.)*
 - **Fixed skill.** Exact clues only. No degradation, no persistence, no skill meter in the HUD.
 - **One meter:** stakeholder confidence, draining from waiting users.
 - **Full arrival forecast** (§6.1) and **departure gating** (§6.2). Both required even here — without the forecast the player cannot budget turns, and without gating the waiting pile-up never reads correctly.
@@ -598,7 +606,7 @@ If the primary question is not answered yes, the rest of the design is a lecture
 | Omitted | Reason |
 | --- | --- |
 | Skill degradation (§7) | Meaningless across disconnected levels; needs a campaign to land |
-| Flag (§4.5) | Its balancing property only matters under real pressure |
+| ~~Flag (§4.5)~~ | ~~Its balancing property only matters under real pressure~~ — **reversed 2026-08-04**: with Analyze reduced to one click, a deduction the player cannot act on is not a mechanic. Flag ships. |
 | Overwrite (§4.4) | Repair economics are a tuning concern, not a fun concern |
 | Multiple endpoints (§9.2.2) | The trunk decision needs a working single path first |
 | Regulated zones (§2.3) | Strong feature, but it only pays off once skill regeneration exists |

@@ -15,9 +15,10 @@ function conToken(c) {
   switch (c.k) {
     case 'none': return '.';
     case 'hand': return 'H';
-    case 'aiHidden': return `${c.mine ? 'X' : 'h'}${c.block}`;
+    // The flag rides in the token: toggling one is a free action, so it changes nothing
+    // else about the state, and a hash that ignored it could not tell two boards apart.
+    case 'aiHidden': return `${c.mine ? 'X' : 'h'}${c.flagged ? 'F' : ''}${c.block}`;
     case 'aiRevealed': return `R${c.block}`;
-    case 'flagged': return 'F';
     case 'mineConfirmed': return `M${c.block}`;
     default: throw new Error(`hashState: unhandled construction state ${JSON.stringify(c)}`);
   }

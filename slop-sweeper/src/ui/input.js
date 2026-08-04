@@ -22,6 +22,7 @@ import * as cam from './camera.js';
  * @property {() => void} onRotate
  * @property {() => void} onConfirm
  * @property {() => void} onEscape
+ * @property {() => void} [onFlag]                  toggle the flag on the selected cell
  * @property {() => void} [wake]                    re-verify the backing store on activity
  */
 
@@ -218,6 +219,10 @@ export function createInput(el, camera, h) {
     const center = { x: camera.cw / 2, y: camera.ch / 2 };
     switch (e.key) {
       case 'r': case 'R': h.onRotate(); break;
+      // The one keyboard verb, and only because it is the one that costs nothing: every other
+      // action spends a scarce turn and stays behind the two-step select→act rule (SPEC §10.6).
+      // The handler re-checks legality — this path has no action bar in front of it.
+      case 'f': case 'F': h.onFlag?.(); break;
       case 'Enter': h.onConfirm(); break;
       case 'Escape': h.onEscape(); break;
       case '+': case '=': if (cam.zoomBy(camera, s, 1, center.x, center.y)) h.onViewChange(); break;

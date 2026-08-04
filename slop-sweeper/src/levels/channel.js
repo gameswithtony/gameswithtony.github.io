@@ -14,6 +14,11 @@
 // 14–17 wide and 6–7 tall, which is the smallest that admits the 5×5 stencils. The
 // staircase overlaps by two rows rather than one, so the junctions are chunky enough to
 // build across instead of being single-tile hinges.
+//
+// RETUNED 2026-08-04 (Analyze became one minesweeper click, SPEC §4.3): reading a block now
+// costs several turns instead of one, so every level in the corpus got a looser schedule and
+// a lower defect density. See PLAN §9 for the measured trade-off — the hand-only floor and
+// the AI path now pull against each other much harder than they did.
 
 /** @type {import('./index.js').LevelDef} */
 export const channel = {
@@ -37,8 +42,8 @@ A#############..........................
 .......................#################
 .......................#################
 `,
-  arrivals: { count: 10, firstTick: 3, every: 3 },
-  mineDensity: 0.12,
+  arrivals: { count: 9, firstTick: 3, every: 3 },
+  mineDensity: 0.11,
   // PLAN §9 writes this pool as 'compact+'; empty segments resolve to nothing, so it is
   // exactly `compact` — see levels/README.md for the pool grammar.
   shapePool: 'compact+',

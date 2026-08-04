@@ -59,7 +59,7 @@ test('error: a nonsense schedule, density or pool', () => {
   assert.match(errors({ mineDensity: /** @type {any} */ ('lots') }), /mineDensity must be a probability/);
   assert.match(errors({ shapePool: /** @type {any} */ ('gentle') }), /unknown pool 'gentle'/);
   assert.match(errors({ shapePool: ['Q9'] }), /unknown shape 'Q9'/);
-  assert.match(errors({ analyzeReveals: 0 }), /analyzeReveals must be an integer ≥ 1/);
+  assert.match(errors({ userMoveEvery: 0 }), /userMoveEvery must be an integer ≥ 1/);
   assert.match(errors({ blastRadius: -1 }), /blastRadius must be an integer ≥ 0/);
 });
 

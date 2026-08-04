@@ -8,6 +8,7 @@
 
 import { RULES } from '../core/rules.js';
 import { legalActions } from '../core/reduce.js';
+import { isFlagged } from '../core/state.js';
 import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
@@ -35,11 +36,40 @@ import * as cam from './camera.js';
 /** @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>} */
 const VERBS = {
   place: { label: 'PLACE', cost: '1', title: 'Build one tile by hand (SPEC §4.1)' },
-  analyze: { label: 'ANALYZE', cost: '1', title: 'Review this module' },
+  analyze: { label: 'ANALYZE', cost: '1', title: 'Review this cell — a zero opens its neighbours too' },
   placeBlock: { label: 'COMMIT BLOCK', cost: '1', title: 'Commit the generated block here' },
   generate: { label: 'GENERATE', cost: '0', title: 'Draw a block — the turn is charged when you commit it' },
+  flag: { label: 'FLAG', cost: '0', title: 'Mark a suspected defect — costs no turn, and users refuse to walk through it' },
   wait: { label: 'WAIT', cost: '1', title: 'Let a tick pass' },
 };
+
+/** Verbs that spend no turn. They get GENERATE's colouring, which is what "free" looks like here. */
+const FREE_VERBS = new Set(['generate', 'flag']);
+
+/**
+ * @param {GameState} s
+ * @param {number} cell  -1 when nothing is selected
+ * @returns {boolean}
+ */
+function flaggedAt(s, cell) {
+  return cell >= 0 && isFlagged(s.con[cell]);
+}
+
+/**
+ * What the selected cell is offering, in one line. Unreviewed slop is the only cell that needs
+ * saying out loud: the two verbs it carries do very different things and one of them is free,
+ * and the cascade is the rule a new player will not guess from a button label.
+ * @param {GameState} s
+ * @param {number} cell
+ * @returns {string} '' when the buttons already say everything
+ */
+function cellHint(s, cell) {
+  if (cell < 0 || s.phase.k !== 'play') return '';
+  if (s.con[cell].k !== 'aiHidden') return '';
+  return flaggedAt(s, cell)
+    ? 'FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO ANALYZE'
+    : 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · FLAG IS FREE';
+}
 
 /**
  * The box the footer already reserves for the stencil, in CSS px, per the two footer layouts
@@ -193,7 +223,11 @@ export function createHud(h) {
     dom.waiting.textContent = String(waiting);
 
     // Action bar — rebuilt only when what it offers changes, so buttons stay clickable.
-    const key = `${offered.join(',')}|${view.selected >= 0}`;
+    // The flag state is part of the key: FLAG and UNFLAG are the same verb wearing different
+    // words, and a toggle that leaves the old word on the button is a toggle nobody trusts.
+    const flagged = flaggedAt(s, view.selected);
+    const hintText = cellHint(s, view.selected);
+    const key = `${offered.join(',')}|${view.selected >= 0}|${flagged}|${hintText}`;
     if (key !== barKey) {
       barKey = key;
       dom.actionbar.innerHTML = '';
@@ -201,9 +235,9 @@ export function createHud(h) {
         const v = VERBS[kind];
         if (!v) continue;
         const b = document.createElement('button');
-        b.className = 'verb';
+        b.className = FREE_VERBS.has(kind) ? 'verb free' : 'verb';
         b.title = v.title;
-        b.innerHTML = `${v.label} <i>${v.cost}</i>`;
+        b.innerHTML = `${kind === 'flag' && flagged ? 'UNFLAG' : v.label} <i>${v.cost}</i>`;
         b.addEventListener('click', () => h.onAction(kind));
         dom.actionbar.append(b);
       }
@@ -211,6 +245,14 @@ export function createHud(h) {
         const hint = document.createElement('span');
         hint.className = 'hint';
         hint.textContent = view.selected >= 0 ? 'NO LEGAL ACTION HERE' : 'TAP A CELL';
+        dom.actionbar.append(hint);
+      } else if (hintText) {
+        // Rides after the buttons and takes the leftover width. styles.css hides it below
+        // 900px, by the same reasoning that hides the tray's hint there: the narrow footer
+        // row has no prose budget, and the verbs must never be squeezed to make room for one.
+        const hint = document.createElement('span');
+        hint.className = 'hint cell-hint';
+        hint.textContent = hintText;
         dom.actionbar.append(hint);
       }
     }

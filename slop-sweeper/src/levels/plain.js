@@ -6,6 +6,11 @@
 // the 12–26-cell blocks of the revised shape table (PLAN §10) landed on the old board like
 // furniture in a doll's house. The route is now 31 tiles rather than 15, so hand-only is a
 // thirty-turn build — still winnable here, which is what makes this the control.
+//
+// RETUNED 2026-08-04 (Analyze became one minesweeper click, SPEC §4.3): reading a generated
+// block costs several turns now instead of one, so the schedule loosened to 9/6/4 and the
+// density fell to 0.12. `plain` is the level with no floor to protect — hand-only is *meant*
+// to win here — so it is the one that could absorb the change cleanly.
 
 /** @type {import('./index.js').LevelDef} */
 export const plain = {
@@ -33,7 +38,7 @@ A##############################B
 ################################
 ################################
 `,
-  arrivals: { count: 10, firstTick: 4, every: 3 },
+  arrivals: { count: 9, firstTick: 6, every: 4 },
   mineDensity: 0.12,
   shapePool: 'compact',
 };

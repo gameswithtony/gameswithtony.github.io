@@ -286,6 +286,24 @@ button i {
 button.verb { border-color: var(--select); color: var(--select); }
 button.verb i { background: var(--select); }
 
+/* A verb that spends no turn wears GENERATE's colours rather than a verb's. The cost badge
+   already reads 0, but in a game whose whole scarcity is turns, "this one is free" has to be
+   legible before you read the number. */
+button.verb.free { border-color: var(--hidden); color: var(--revealed); }
+button.verb.free i { background: var(--revealed); }
+
+/* The selected cell's one-line explanation. It takes what is left after the verbs — which
+   keep their intrinsic width above — and truncates rather than scrolling out of reach. */
+#actionbar > .cell-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  line-height: 32px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #btn-generate { border-color: var(--hidden); color: var(--revealed); }
 #btn-generate:not(:disabled) i { background: var(--revealed); }
 #banner-btn { border-color: var(--coast); }
@@ -386,6 +404,9 @@ select {
      46px row; the board's green anchors say the same thing. */
   #tray { padding: 4px 6px; gap: 6px; }
   #tray-hint { display: none; }
+  /* Same call for the selected cell's hint: at 268px of usable row the verbs are the row,
+     and a truncated line of prose next to them would be an ellipsis and nothing else. */
+  #actionbar > .cell-hint { display: none; }
 
   /* The tray IS the placing UI at these widths, and its CONFIRM is the same button the
      action bar's COMMIT BLOCK would be — gated by the same legalActions() answer. */

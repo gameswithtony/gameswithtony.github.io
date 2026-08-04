@@ -28,7 +28,7 @@ test('a clue counts mines in all eight neighbours; movement stays four-way (SPEC
 
   // Two diagonals and one orthogonal — all three count.
   for (const [x, y] of /** @type {[number, number][]} */ ([[5, 0], [3, 2], [4, 2]])) {
-    s.con[cellAt(s, x, y)] = { k: 'aiHidden', mine: true, block: 0 };
+    s.con[cellAt(s, x, y)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   }
   assert.deepEqual(clue(s, centre), { lo: 3, hi: 3 }, 'diagonals count');
   assert.equal(clue(s, centre).lo, clue(s, centre).hi, 'the prototype ships the exact tier');
@@ -42,15 +42,14 @@ test('ocean, void, volcano, hand, revealed and endpoints all count zero (SPEC §
   const centre = cellAt(s, 1, 1);
   s.con[cellAt(s, 0, 0)] = CON_HAND;
   s.con[cellAt(s, 1, 0)] = { k: 'aiRevealed', block: 0 };
-  s.con[cellAt(s, 2, 0)] = { k: 'flagged' };
   // (2,2) is void and (0,1) is the origin endpoint; (2,1) is left as open ocean.
   assert.equal(s.terrain[cellAt(s, 2, 2)], 'void');
   assert.deepEqual(clue(s, centre), { lo: 0, hi: 0 });
 
   // The one state that does hold a mine changes the answer, and only that one.
-  s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: true, block: 0 };
+  s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   assert.deepEqual(clue(s, centre), { lo: 1, hi: 1 });
-  s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   assert.deepEqual(clue(s, centre), { lo: 0, hi: 0 }, 'unmined slop counts zero too');
 });
 
@@ -58,7 +57,7 @@ test('a confirmed mine keeps counting while it exists (PLAN §3.10)', () => {
   const s = init(BOARD, 1);
   const centre = cellAt(s, 4, 1);
   const mined = cellAt(s, 5, 1);
-  s.con[mined] = { k: 'aiHidden', mine: true, block: 0 };
+  s.con[mined] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [mined] }];
   assert.deepEqual(clue(s, centre), { lo: 1, hi: 1 });
 
@@ -76,9 +75,9 @@ test('silent mine destruction lowers the clues around it and the block badge (PL
   const trigger = cellAt(s, 3, 1);
   const doomed = cellAt(s, 4, 1);
   const survivor = cellAt(s, 5, 0);
-  s.con[trigger] = { k: 'aiHidden', mine: true, block: 0 };
-  s.con[doomed] = { k: 'aiHidden', mine: true, block: 0 };
-  s.con[survivor] = { k: 'aiHidden', mine: true, block: 0 };
+  s.con[trigger] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[doomed] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[survivor] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [survivor, trigger, doomed] }];
   s.users = [{ id: 0, at: cellAt(s, 2, 1), state: 'moving', visited: [s.origin, cellAt(s, 2, 1)], stalled: false }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
@@ -108,7 +107,7 @@ test('clue() is derived, not stored: it moves the instant the board does', () =>
   const centre = cellAt(s, 4, 1);
   const neighbour = cellAt(s, 4, 2);
   const snapshot = clue(s, centre);
-  s.con[neighbour] = { k: 'aiHidden', mine: true, block: 0 };
+  s.con[neighbour] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   assert.notDeepEqual(clue(s, centre), snapshot);
   assert.deepEqual(Object.keys(s).filter((k) => /clue/i.test(k)), [], 'nothing clue-shaped is in the state');
 });

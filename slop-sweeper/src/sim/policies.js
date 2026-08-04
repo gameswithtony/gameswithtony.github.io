@@ -15,7 +15,7 @@ import { mulberry32 } from '../core/rng.js';
 import { isHandBuildable, isKnownEmpty } from '../core/state.js';
 import { n4, n8 } from '../core/grid.js';
 import { distField, gateOpen, passable } from '../core/routing.js';
-import { legalActions, placeRejection } from '../core/reduce.js';
+import { clue, legalActions, placeRejection } from '../core/reduce.js';
 import { placementCells } from '../core/generate.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -40,7 +40,12 @@ export const ANALYZE_EVERY = 3;
  */
 export const EDGE_SLACK = 2;
 
-/** Safety net; the natural loop always terminates because analyze consumes hidden cells. */
+/**
+ * Safety net *and* the bots' budget discipline: turns are the whole economy, and a policy
+ * that reads a block to the last cell has spent more than the block was worth. Four clicks
+ * into fresh ground usually cascade most of a block open; past that the marginal tile costs
+ * a full turn for one square of information.
+ */
 const MAX_ANALYZES_PER_BLOCK = 4;
 
 /**
@@ -123,8 +128,15 @@ export function anchorCounts(s) {
  * are somewhere else entirely. A policy that reads this and reaches for Analyze is paying
  * down comprehension debt exactly as SPEC §9.3 describes.
  *
+ * `plan` marks every cell lying on *some* cheapest completion — the corridor the bot intends
+ * its users to walk. It is the answer to the question single-click Analyze made urgent:
+ * *which* slop is worth a turn. Slop off the plan is scenery; slop on it is what a user is
+ * about to stand on. Before the gate opens there is no live route to measure, so this is
+ * built from build cost rather than from the distance field, and it is legal information —
+ * it reads terrain, construction kinds and nothing else.
+ *
  * @param {GameState} s
- * @returns {{ remaining: number, handCell: number, handOnRoute: boolean }}
+ * @returns {{ remaining: number, handCell: number, handOnRoute: boolean, plan: Uint8Array }}
  */
 export function survey(s) {
   const toDest = buildCost(s, s.dest);
@@ -132,14 +144,16 @@ export function survey(s) {
   const remaining = toDest[s.origin];
   let handCell = -1;
   let bestCost = INF;
+  const plan = new Uint8Array(s.con.length);
   for (let i = 0; i < s.con.length; i++) {
     const cost = toDest[i] >= INF || fromOrigin[i] >= INF ? INF : toDest[i] + fromOrigin[i];
+    if (cost <= remaining + 1) plan[i] = 1;
     if (cost >= bestCost) continue;
     if (placeRejection(s, i)) continue;
     bestCost = cost;
     handCell = i;
   }
-  return { remaining, handCell, handOnRoute: handCell >= 0 && bestCost <= remaining + 1 };
+  return { remaining, handCell, handOnRoute: handCell >= 0 && bestCost <= remaining + 1, plan };
 }
 
 /**
@@ -254,7 +268,7 @@ function dose(s, mem, v, wantsAi) {
     // is the sim's clearest sighting of SPEC §9.3, and it is why a naive p-mix stalls: hand
     // and AI cannot take turns at the same frontier.
     if (canGenerate && v.remaining > HAND_FINISH) return { t: 'generate' };
-    const cell = analyzeTarget(s, null);
+    const cell = analyzeTarget(s, null, v.plan);
     if (cell >= 0) return review(s, mem, cell);
     return handStep(v) ?? { t: 'wait' };
   }
@@ -281,13 +295,16 @@ function remember(mem, evs) {
 }
 
 /**
- * Blocks still worth reviewing: the toast said they carried defects and not all of them
- * have surfaced yet. Everything read here is on screen.
+ * Blocks still worth reviewing: the toast said they carried defects, not all of them have
+ * surfaced, and — the rule single-click Analyze forced — **the planned route runs through
+ * the block**. Reading slop nobody will walk on used to be merely wasteful; at one turn per
+ * tile it is how a policy loses. Everything read here is on screen.
  * @param {GameState} s
  * @param {Memory} mem
+ * @param {Uint8Array} plan  cells on some cheapest completion (see survey)
  * @returns {number[]} block ids
  */
-function suspectBlocks(s, mem) {
+function suspectBlocks(s, mem, plan) {
   /** @type {number[]} */
   const out = [];
   for (const b of s.blocks) {
@@ -296,32 +313,62 @@ function suspectBlocks(s, mem) {
     if ((mem.analyzed.get(b.id) ?? 0) >= MAX_ANALYZES_PER_BLOCK) continue;
     let hidden = 0;
     let confirmed = 0;
+    let onPlan = false;
     for (const c of b.cells) {
-      if (s.con[c].k === 'aiHidden') hidden++;
+      if (s.con[c].k === 'aiHidden') { hidden++; if (plan[c]) onPlan = true; }
       else if (s.con[c].k === 'mineConfirmed') confirmed++;
     }
-    if (hidden > 0 && confirmed < announced) out.push(b.id);
+    if (onPlan && hidden > 0 && confirmed < announced) out.push(b.id);
   }
   return out;
 }
 
 /**
- * The tile to review: unreviewed slop on the route users are about to walk, hit as early in
- * their trip as possible. Restricted to `block` when the caller has one in mind.
+ * The tile to review. Analyze is one minesweeper click now (SPEC §4.3, revised
+ * 2026-08-04), so the choice of *which* tile is the whole skill of the verb, and the bots
+ * approximate what a competent player does:
+ *
+ * 1. **On the planned route first.** A tile users will never cross is not worth a turn.
+ * 2. **Away from anything that says "mine".** A tile touching a confirmed mine, or touching
+ *    a revealed tile whose clue is positive, is both likelier to kill the click and certain
+ *    not to cascade — its own clue cannot be zero. Avoiding those is the single biggest
+ *    difference between a good click and a bad one, and it is all legal information.
+ * 3. **Deep in unread ground.** Among the tiles left, the one with the most hidden
+ *    8-neighbours: the interior of a fresh block is where a zero pays off biggest.
+ * 4. **Early in the trip.** Largest distance-to-destination among route tiles — a defect
+ *    found near the origin costs a shorter re-walk than one found near B.
+ *
+ * Ties fall through to cell index, so the choice stays a pure function of the board.
+ * Restricted to `block` when the caller has one in mind.
+ *
+ * The bots never flag. Flagging is free and purely defensive — it steers users away from a
+ * tile a *human* suspects — and modelling that well needs the solver, which the information
+ * discipline at the top of this file forbids. The sim therefore measures the game as played
+ * by someone who never flags, which is the pessimistic end of the range.
+ *
  * @param {GameState} s
  * @param {number | null} block
+ * @param {Uint8Array} plan
  * @returns {number} cell index, or -1
  */
-function analyzeTarget(s, block) {
+function analyzeTarget(s, block, plan) {
   const dist = distField(s);
   let best = -1;
-  let bestKey = [INF, INF];
+  let bestKey = [INF, INF, INF, INF, INF];
   for (let i = 0; i < s.con.length; i++) {
     const con = s.con[i];
-    if (con.k !== 'aiHidden') continue;
+    if (con.k !== 'aiHidden' || con.flagged) continue;
     if (block !== null && con.block !== block) continue;
-    // On a live route first (users cross it), then whatever they reach soonest.
-    const key = dist[i] >= 0 ? [0, -dist[i]] : [1, i];
+    let risky = 0;
+    let unread = 0;
+    for (const j of n8(s, i)) {
+      const nb = s.con[j];
+      if (nb.k === 'aiHidden') unread++;
+      else if (nb.k === 'mineConfirmed') risky = 1;
+      else if (nb.k === 'aiRevealed' && clue(s, j).hi > 0) risky = 1;
+    }
+    const onRoute = plan[i] ? 0 : 1;
+    const key = [onRoute, risky, -unread, dist[i] >= 0 ? -dist[i] : 0, i];
     if (less(key, bestKey)) { bestKey = key; best = i; }
   }
   return best;
@@ -398,8 +445,8 @@ export function makePolicy(spec, seed) {
         // Cadence, but only against generations that admitted to defects. Reviewing clean
         // ground is a turn spent on nothing, and turns are the whole economy.
         if (mem.sinceAnalyze >= ANALYZE_EVERY) {
-          for (const id of suspectBlocks(s, mem)) {
-            const cell = analyzeTarget(s, id);
+          for (const id of suspectBlocks(s, mem, v.plan)) {
+            const cell = analyzeTarget(s, id, v.plan);
             if (cell >= 0) return review(s, mem, cell);
           }
         }
@@ -413,8 +460,8 @@ export function makePolicy(spec, seed) {
         const v = survey(s);
         bookProgress(mem, v.remaining);
         // Review every generation that admitted to defects before building past it.
-        for (const id of suspectBlocks(s, mem)) {
-          const cell = analyzeTarget(s, id);
+        for (const id of suspectBlocks(s, mem, v.plan)) {
+          const cell = analyzeTarget(s, id, v.plan);
           if (cell >= 0) return review(s, mem, cell);
         }
         return dose(s, mem, v, rng() < p);

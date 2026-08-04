@@ -26,7 +26,10 @@ function replay(levelId, seed, policy = 'balanced:0.5') {
   const actions = [];
   let guard = 0;
   while ((s.phase.k === 'play' || s.phase.k === 'placing') && guard++ < 400) {
-    const a = bot.act(s);
+    // The bots never flag (see policies.js), but flag *is* a reducer action and it must ride
+    // the determinism contract like every other one — so the harness injects a toggle on a
+    // fixed cadence, on a cell chosen from the board rather than from a random source.
+    const a = guard % 7 === 0 ? (flagTarget(s) ?? bot.act(s)) : bot.act(s);
     actions.push(a);
     const r = reduce(s, a);
     bot.observe(r.ev);
@@ -34,6 +37,18 @@ function replay(levelId, seed, policy = 'balanced:0.5') {
     hashes.push(hashState(s));
   }
   return { hashes, actions, final: s };
+}
+
+/**
+ * @param {import('../src/core/state.js').GameState} s
+ * @returns {import('../src/core/state.js').Action | null}
+ */
+function flagTarget(s) {
+  if (s.phase.k !== 'play') return null;
+  for (let i = 0; i < s.con.length; i++) {
+    if (s.con[i].k === 'aiHidden') return { t: 'flag', cell: i };
+  }
+  return null;
 }
 
 test('the same level, seed and actions produce the same hash at every tick', () => {

@@ -9,6 +9,11 @@
 // records. The flat is now six cells wide and the lagoon twelve by four, so placement is
 // *constrained* rather than impossible: the reef takes any stencil, the lagoon takes
 // nothing five cells tall, and `heavy`'s two squares are reef-only.
+//
+// RETUNED 2026-08-04 (Analyze became one minesweeper click, SPEC §4.3): reading a block now
+// costs several turns instead of one, so every level in the corpus got a looser schedule and
+// a lower defect density. See PLAN §9 for the measured trade-off — the hand-only floor and
+// the AI path now pull against each other much harder than they did.
 
 /** @type {import('./index.js').LevelDef} */
 export const atoll = {

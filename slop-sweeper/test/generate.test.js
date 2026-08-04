@@ -64,7 +64,7 @@ test('every placement lands wholly on free generatable terrain and touches struc
 test('a block may branch from unreviewed slop; a hand tile still may not (SPEC §4.1/§4.2)', () => {
   const s = init(OPEN, 1);
   const hidden = cellAt(s, 8, 9);            // far from either endpoint
-  s.con[hidden] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[hidden] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
 
   // The square anchored at (4,6) reaches the slop with its (7,9) corner and touches no
   // other structure, so the slop is the only thing making it legal.
@@ -73,7 +73,7 @@ test('a block may branch from unreviewed slop; a hand tile still may not (SPEC �
 
   const target = cellAt(s, 7, 9);            // the only structure it could branch from is slop
   assert.deepEqual(legalActions(s, target), [], 'hand placement still may not');
-  assert.deepEqual(legalActions(s, hidden), ['analyze'], 'but the slop can be reviewed');
+  assert.deepEqual(legalActions(s, hidden), ['analyze', 'flag'], 'but the slop can be reviewed or flagged');
 });
 
 test('VOID rejection falls out of the capability table, not a special case (SPEC §10.7)', (t) => {

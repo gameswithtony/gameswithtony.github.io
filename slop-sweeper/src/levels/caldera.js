@@ -8,6 +8,11 @@
 // open and exactly three where a satellite squats on them, which is the interesting number:
 // three rows admit `R12` on its side and nothing else in the pool, so the pinch is a real
 // decision (crawl through by hand, or spend turns going the long way round with blocks).
+//
+// RETUNED 2026-08-04 (Analyze became one minesweeper click, SPEC §4.3): reading a block now
+// costs several turns instead of one, so every level in the corpus got a looser schedule and
+// a lower defect density. See PLAN §9 for the measured trade-off — the hand-only floor and
+// the AI path now pull against each other much harder than they did.
 
 /** @type {import('./index.js').LevelDef} */
 export const caldera = {
@@ -41,7 +46,7 @@ A#######^^^^^^^^^^^^^^^^^^^^^^########
 #####################^^^^^^^^^^^######
 ######################^^^^^^^^^#######
 `,
-  arrivals: { count: 10, firstTick: 2, every: 3 },
-  mineDensity: 0.12,
+  arrivals: { count: 9, firstTick: 2, every: 3 },
+  mineDensity: 0.11,
   shapePool: 'compact+awkward',
 };
