@@ -421,16 +421,66 @@ endpoints — contributes zero (§7.5). Always computed from current state (§3.
 formatting lives in the renderer: `lo === hi → "3"`, else `"2-3"` / `"2+"` — the [lo,hi]
 plumbing and the `+`/`-` glyphs ship now so skill tiers are purely additive later.
 
+> **Revised 2026-08-04 (user decision): hand tiles display their clue.** Structure you built
+> yourself senses the defects next to it, so a hand tile adjacent to unreviewed slop shows
+> its count exactly as a reviewed tile does. This makes hand placement a **safe, slow
+> information source**: build alongside a generated block and read its edge, instead of
+> clicking into the block and risking the crater §3 ruling 1 now produces. It is the counter-
+> weight the verb set was missing — Place had been pure throughput, and is now throughput
+> *plus* reconnaissance, which is the reason to interleave it with Generate rather than
+> alternating on a dosage.
+>
+> **`clue()` did not change, and that is the point.** It has always counted the mine set
+> around a cell *index*, with no opinion about what is built on that cell — the sentence
+> above already said "hand … contributes zero", meaning a hand tile contributes zero *as a
+> neighbour*, never that it has no count of its own. What changed is only which cells put
+> their count on screen. A standing test now pins the cell-agnosticism so a future refactor
+> cannot quietly make clues revealed-only.
+>
+> Display note: the renderer leaves a hand tile blank below 1 rather than drawing a `0`. That
+> is a rendering choice about visual noise, not an information difference — blank means zero,
+> and the solver reads the same board either way (§7.4).
+
 ### 7.4 Solver (§10.2)
 
-Constraints: each revealed clue is `lo ≤ Σ(mines in its hidden 8-neighbors) ≤ hi`; each live
-block contributes an exact total over its remaining hidden cells; known-empty cells are excluded
+Constraints: each **displayed** clue is `lo ≤ Σ(mines in its hidden 8-neighbors) ≤ hi`; each
+live block contributes an exact total over its remaining hidden cells; known-empty cells are excluded
 by construction (the solver never enumerates over a rectangle — it enumerates over `aiHidden`
 cells only, which handles coastlines for free). Split the constraint graph into independent
 components; enumerate each (≤ 2^24 states, else mark the component `bailed`/unknown — metrics
 only, never gameplay). A cell is safe iff no consistent assignment mines it; a board state is
 `guessForced` iff users must cross cells that are neither provably safe nor avoidable. Used by
 tests and the sim; not surfaced in-game in the prototype.
+
+> **Revised 2026-08-04 with §7.3: hand tiles are clue sources on the same footing as revealed
+> tiles** (`showsClue()` in `solver.js`). The solver has to see the board the player sees or
+> `guessForced` measures a game nobody is playing: a route provable only via a hand-tile clue
+> is not a forced guess. Endpoints stay out — they display nothing. Component splitting and
+> the bail budget are unchanged.
+>
+> Measured on 40 games/cell at the moments `batch.js` samples the solver (after `placeBlock`
+> or `analyze`), revealed-only → with-hand:
+>
+> | level × policy | provably safe / sample | provable mines | unknown | guessForced |
+> | --- | --- | --- | --- | --- |
+> | `plain` × balanced | 10.80 → **12.23** | 1.91 → 2.00 | 33.44 → 31.92 | 43% → 40% |
+> | `plain` × careful | 7.06 → **7.81** | 1.52 → 1.63 | 8.67 → 7.81 | 25% → 25% |
+> | `caldera` × balanced | 15.64 → **17.50** | 2.21 → 2.36 | 46.02 → 44.00 | 50% → 50% |
+> | `caldera` × careful | 9.31 → **10.18** | 1.77 → 1.98 | 9.70 → 8.63 | 13% → 13% |
+> | `sprawl` × balanced | 16.54 → **18.04** | 2.31 → 2.44 | 64.53 → 62.90 | 70% → 70% |
+> | `sprawl` × careful | 9.93 → **10.67** | 2.24 → 2.53 | 10.72 → 9.69 | 3% → 3% |
+>
+> So the deduction really did get stronger — **7–13% more cells provably safe, 5–11% fewer
+> unknowns** — while `guessForced` barely moved. That is not a contradiction, it is what the
+> metric is: an all-or-nothing property of a whole route. Proving one or two more cells safe
+> rarely converts every cell of every remaining route at once. Read the safe/unknown columns
+> for deduction power and `guessForced` for "was there a moment with no safe way through".
+>
+> One honest side effect: a hand tile between two blocks couples their hidden cells, which
+> merges components that used to be independent, which pushes a few more of them past
+> `MAX_COMPONENT_CELLS`. Bail rate rose in three of the six cells measured (worst:
+> `caldera` × balanced 48% → 55%). Bailed components go to `unknown`, so this pulls the
+> metric the *pessimistic* way and cannot manufacture a false "deducible".
 
 ### 7.5 RNG streams
 
@@ -740,6 +790,13 @@ property §10.8 actually demands. What did change is what a threshold means in d
 starts at a 32-device-px tile rather than 16, and a clue digit is 14 device px tall rather than
 10. Ceiling `ZOOM_MAX_ARTPX` 6 (tile 96 device px, as before).
 
+*Revised 2026-08-04 (user decision):* mid/near "clue digits" now means **revealed AI cells and
+hand tiles alike** — a hand tile shows the mine count around it, so building a causeway next to
+a generated block is a way of solving it. One asymmetry: a hand tile draws nothing when its
+clue is 0, because the tile type already says "player-built" and a causeway of zeros is noise;
+inside a block, "0" versus "not opened yet" is the whole signal, so revealed AI cells keep
+theirs. Digits are INK on both bases (6.5:1 on HAND, 6.1:1 on AI_REVEALED).
+
 ### 11.4 Frame model — idle at rest (§10.8)
 
 No continuous RAF. A viewport-sized offscreen **static cache** holds the composited world;
@@ -934,7 +991,10 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
 - [ ] §6.3 movement: monotone toward dest, seeded random tie-break, no revisit, stall-in-place
       (tests)
 - [ ] §7.4 clues count 8-way; movement is 4-way
-- [ ] §7.5 ocean/void/volcano/hand/revealed all count zero (test)
+- [ ] §7.5 ocean/void/volcano/hand/revealed all count zero *as neighbours* (test)
+- [ ] §7.4 (rev. 2026-08-04) `clue()` is cell-agnostic: a hand tile counts its 8-neighbourhood
+      exactly as any other cell does, flags and confirmed mines included (test). The solver
+      reads hand clues on the same footing as revealed ones and endpoints on neither (tests).
 - [ ] §10.2 core never touches DOM globals (`node src/sim/run.js` is the proof); no gameplay
       question is ever answered by reading pixels (grep: no `getImageData` outside
       particles/tests)

@@ -37,6 +37,42 @@ test('a clue counts mines in all eight neighbours; movement stays four-way (SPEC
   assert.deepEqual(clue(s, cellAt(s, 3, 1)), { lo: 2, hi: 2 });
 });
 
+test('A HAND TILE SENSES THE DEFECTS BESIDE IT: clue() is cell-agnostic (SPEC §7.4)', () => {
+  // Revised 2026-08-04 (user decision): hand tiles display their count, so building
+  // alongside a generated block is a safe, slow way to read its edge. `clue()` never needed
+  // changing — it has always counted the mine set around a cell index with no opinion about
+  // what is built there — and this test exists so a future refactor cannot quietly make it
+  // revealed-only. The renderer's choice to leave a hand tile blank below 1 is display; the
+  // information here is identical to a reviewed tile's.
+  const s = init(BOARD, 1);
+  const sensor = cellAt(s, 4, 1);
+  s.con[sensor] = CON_HAND;
+  assert.deepEqual(clue(s, sensor), { lo: 0, hi: 0 }, 'nothing next to it yet');
+
+  // Unreviewed slop counts, diagonally as well as orthogonally…
+  s.con[cellAt(s, 5, 0)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[cellAt(s, 4, 2)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  // …a flag on the tile is a claim and changes nothing…
+  s.con[cellAt(s, 3, 2)] = { k: 'aiHidden', mine: true, block: 0, flagged: true };
+  // …and a confirmed mine keeps counting while it exists (PLAN §3.10).
+  s.con[cellAt(s, 5, 2)] = { k: 'mineConfirmed', block: 0 };
+  assert.deepEqual(clue(s, sensor), { lo: 4, hi: 4 });
+
+  // Everything that cannot hold a mine contributes zero, from a hand tile's point of view
+  // exactly as from anywhere else.
+  s.con[cellAt(s, 3, 0)] = CON_HAND;
+  s.con[cellAt(s, 4, 0)] = { k: 'aiRevealed', block: 0 };
+  s.con[cellAt(s, 5, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  s.con[cellAt(s, 3, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: true };
+  assert.deepEqual(clue(s, sensor), { lo: 4, hi: 4 }, 'hand, revealed and clean slop add nothing');
+
+  // The same neighbourhood read from an unbuilt ocean cell gives the same number: the cell's
+  // own construction state is not an input.
+  const bare = { ...s, con: s.con.slice() };
+  bare.con[sensor] = { k: 'none' };
+  assert.deepEqual(clue(bare, sensor), clue(s, sensor));
+});
+
 test('ocean, void, volcano, hand, revealed and endpoints all count zero (SPEC §7.5)', () => {
   const s = init(BOARD, 1);
   const centre = cellAt(s, 1, 1);

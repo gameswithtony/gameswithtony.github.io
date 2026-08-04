@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { CON_HAND } from '../src/core/state.js';
 import { cellAt } from '../src/core/grid.js';
 import { MAX_COMPONENT_CELLS, solve } from '../src/core/solver.js';
-import { init } from '../src/core/reduce.js';
+import { clue, init } from '../src/core/reduce.js';
 
 const NEVER = { count: 4, firstTick: 9999, every: 9999 };
 
@@ -25,7 +25,7 @@ const BOARD = {
  */
 function block(s, id, cells) {
   const idx = cells.map(([x, y]) => cellAt(s, x, y));
-  cells.forEach(([x, y, mine], i) => { s.con[idx[i]] = { k: 'aiHidden', mine, block: id }; });
+  cells.forEach(([x, y, mine], i) => { s.con[idx[i]] = { k: 'aiHidden', mine, block: id, flagged: false }; });
   s.blocks[id] = { id, cells: idx };
   return idx;
 }
@@ -63,8 +63,8 @@ test('the solver never enumerates over a rectangle, so coastlines are free (SPEC
   const s = init(level, 1);
   const west = cellAt(s, 1, 0);
   const east = cellAt(s, 3, 0);
-  s.con[west] = { k: 'aiHidden', mine: true, block: 0 };
-  s.con[east] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[west] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[east] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [west, east] }];
 
   // (1,1) is walled in by void on five of its eight sides, so its clue is a statement about
@@ -122,8 +122,8 @@ test('guessForced: the gate is open and every route crosses ground nobody can cl
 
   // Both corridor cells are slop from one two-cell block carrying one defect: a coin flip
   // on the only route there is.
-  s.con[1] = { k: 'aiHidden', mine: true, block: 0 };
-  s.con[2] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[1] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[2] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [1, 2] }];
   const forced = solve(s);
   assert.equal(forced.guessForced, true);
@@ -131,8 +131,8 @@ test('guessForced: the gate is open and every route crosses ground nobody can cl
 
   // Hand-build a parallel route and there is nothing left to guess about.
   const wide = init({ id: 'solver-parallel', map: ['A##B', '####'].join('\n'), arrivals: NEVER }, 1);
-  wide.con[1] = { k: 'aiHidden', mine: true, block: 0 };
-  wide.con[2] = { k: 'aiHidden', mine: false, block: 0 };
+  wide.con[1] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  wide.con[2] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   wide.blocks = [{ id: 0, cells: [1, 2] }];
   assert.equal(solve(wide).guessForced, true, 'the bypass is not built yet');
   for (const c of [cellAt(wide, 0, 1), cellAt(wide, 1, 1), cellAt(wide, 2, 1), cellAt(wide, 3, 1)]) {
@@ -145,10 +145,71 @@ test('provably safe slop on the route is not a forced guess', () => {
   const level = { id: 'solver-safe-route', map: ['A##B', '####'].join('\n'), arrivals: NEVER };
   const s = init(level, 1);
   // Two cells, zero defects announced: the block total proves both safe.
-  s.con[1] = { k: 'aiHidden', mine: false, block: 0 };
-  s.con[2] = { k: 'aiHidden', mine: false, block: 0 };
+  s.con[1] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  s.con[2] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [1, 2] }];
   const r = solve(s);
   assert.deepEqual(r.safe, [1, 2]);
   assert.equal(r.guessForced, false);
+});
+
+test('a HAND tile is a clue source: structure senses the defects beside it', () => {
+  // Revised 2026-08-04 (user decision). The block total says "one of these two", and nothing
+  // else on the board narrows it — except a hand tile the player built alongside, which
+  // touches exactly one of the pair and reads zero.
+  const s = init(BOARD, 1);
+  const [mined, clean] = block(s, 0, [[2, 2, true], [4, 2, false]]);
+
+  const blind = solve(s);
+  assert.deepEqual(blind.unknown, [mined, clean].sort((a, b) => a - b), 'a coin flip so far');
+  assert.deepEqual(blind.safe, []);
+
+  // (5,1) is 8-adjacent to (4,2) and to nothing else hidden. Its clue is 0.
+  const sensor = cellAt(s, 5, 1);
+  s.con[sensor] = CON_HAND;
+  assert.deepEqual(clue(s, sensor), { lo: 0, hi: 0 });
+
+  const r = solve(s);
+  assert.deepEqual(r.safe, [clean], 'the hand tile clears the cell it touches');
+  assert.deepEqual(r.mines, [mined], 'and the block total forces the other one');
+  assert.deepEqual(r.unknown, []);
+  assert.equal(r.bailed, false);
+});
+
+test('a hand clue can flip guessForced off — the deduction is real, not decorative', () => {
+  //  x: 0 1 2 3
+  //  0  A o o B      the only route is two cells of slop carrying one defect
+  //  1  # # # #
+  const level = { id: 'solver-hand-route', map: ['A##B', '####'].join('\n'), arrivals: NEVER };
+  const s = init(level, 1);
+  s.con[cellAt(s, 1, 0)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  s.con[cellAt(s, 2, 0)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.blocks = [{ id: 0, cells: [cellAt(s, 1, 0), cellAt(s, 2, 0)] }];
+  assert.equal(solve(s).guessForced, true, 'the gate is open and both route cells are a guess');
+
+  // A single hand tile under the west cell, reading zero, proves that cell safe — but the
+  // route still crosses the east one, which the block total then proves is the mine.
+  s.con[cellAt(s, 0, 1)] = CON_HAND;
+  const half = solve(s);
+  assert.deepEqual(half.safe, [cellAt(s, 1, 0)]);
+  assert.deepEqual(half.mines, [cellAt(s, 2, 0)]);
+  assert.equal(half.guessForced, true, 'knowing where the mine is does not make it passable');
+
+  // Give the route somewhere else to go and the board stops forcing a guess: every cell on
+  // the surviving route is either hand-built or proved safe by a hand clue.
+  for (const c of [cellAt(s, 1, 1), cellAt(s, 2, 1), cellAt(s, 3, 1)]) s.con[c] = CON_HAND;
+  assert.equal(solve(s).guessForced, false);
+});
+
+test('endpoints are not clue sources — they display nothing', () => {
+  const level = { id: 'solver-endpoint', map: ['A#B', '###'].join('\n'), arrivals: NEVER };
+  const s = init(level, 1);
+  // One hidden cell touching only the two endpoints and open water. If an endpoint were
+  // treated as a clue source, its zero would "prove" this cell safe out of thin air.
+  s.con[cellAt(s, 1, 0)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.blocks = [{ id: 0, cells: [cellAt(s, 1, 0)] }];
+  assert.deepEqual(clue(s, s.origin), { lo: 1, hi: 1 }, 'the count exists…');
+  const r = solve(s);
+  assert.deepEqual(r.mines, [cellAt(s, 1, 0)], '…but only the block total is allowed to use it');
+  assert.deepEqual(r.safe, []);
 });

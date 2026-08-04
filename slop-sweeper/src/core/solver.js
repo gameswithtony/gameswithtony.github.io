@@ -6,6 +6,10 @@
 // It enumerates over `aiHidden` cells and nothing else, so ocean, void, volcano, hand and
 // revealed tiles are known-empty by construction and irregular coastlines cost nothing
 // (SPEC §10.7's warning about rectangular frontiers).
+//
+// Its constraints come from three places, all of them things a player can see: every
+// displayed clue (revealed AI tiles and — since 2026-08-04 — hand tiles, see `showsClue`),
+// and every live block's "this generation introduced N defects" total.
 
 import { n4, n8 } from './grid.js';
 import { passable } from './routing.js';
@@ -18,6 +22,35 @@ export const MAX_COMPONENT_CELLS = 24;
 
 /** Backtracking nodes per component before giving up. Metrics-only, never gameplay. */
 export const NODE_BUDGET = 2_000_000;
+
+/**
+ * Cells whose clue the player can actually read, which is the only thing the solver is
+ * allowed to reason from.
+ *
+ * **Revised 2026-08-04 (user decision): hand tiles are clue sources too.** Structure you
+ * built yourself senses defects next to it, so a hand tile adjacent to unreviewed slop
+ * displays its count exactly as a reviewed tile does. That makes hand placement a *safe,
+ * slow information source* — build alongside a generated block and read its edge instead of
+ * clicking into it — and the solver has to see the same board the player does or the
+ * `guessForced` metric measures a game nobody is playing.
+ *
+ * `clue()` itself never needed changing: it has always counted the mine set around any cell
+ * index, with no opinion about what is built there (SPEC §7.4/§7.5, pinned by test). What
+ * changed is only *which* cells put their count on screen.
+ *
+ * Endpoints are excluded: they display nothing. They are never `hand` anyway — placement
+ * refuses them (PLAN §3.8) — but stating it here means the exclusion survives a future
+ * change of mind about that.
+ *
+ * @param {GameState} s
+ * @param {number} i
+ * @returns {boolean}
+ */
+function showsClue(s, i) {
+  if (i === s.origin || i === s.dest) return false;
+  const k = s.con[i].k;
+  return k === 'aiRevealed' || k === 'hand';
+}
 
 /**
  * @typedef {object} Constraint
@@ -50,10 +83,10 @@ export function solve(s) {
   /** @type {{ cells: number[], lo: number, hi: number }[]} */
   const raw = [];
 
-  // A revealed clue bounds the mines among its *hidden* 8-neighbours; the mines it can
+  // A visible clue bounds the mines among its *hidden* 8-neighbours; the mines it can
   // already see (confirmed ones) come off both ends of the range.
   for (let i = 0; i < s.con.length; i++) {
-    if (s.con[i].k !== 'aiRevealed') continue;
+    if (!showsClue(s, i)) continue;
     /** @type {number[]} */
     const cells = [];
     let known = 0;

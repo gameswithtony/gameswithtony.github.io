@@ -208,6 +208,13 @@ count zero for clues, so an irregular coast is a free deduction anchor on every 
 and narrow bands make the minesweeper layer *easier* while making the routing layer tighter.
 Treat coastline complexity as a difficulty-*reducing* axis and pay for it elsewhere.
 
+**Hand tiles are the other deduction anchor** (added 2026-08-04). A hand tile displays the
+count of defects around it, so building alongside a generated block reads its edge for free
+— safely, one turn at a time, with no risk of the crater a bad Analyze makes. That gives
+Place a second job besides throughput, and it means a level with room to build *beside* the
+route is easier to read than one where every tile you can afford is on it. Narrow channels
+and necks deny that room, which is a real part of why they are hard.
+
 **Volcanoes pull in two directions at once.** They stop blasts, so building slop against one
 contains the damage it might do — and they delete legal placements, so that is exactly where
 a block will not fit. A cluster in open water is the cheapest way to make placement a real

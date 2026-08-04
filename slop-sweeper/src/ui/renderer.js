@@ -225,16 +225,32 @@ export function createRenderer(canvas) {
     if (tier === 'far') return;
 
     // Clue digits (mid and near). Derived live from the mine set on every rebuild, so the
-    // never-wrong rule holds with no invalidation logic of its own (PLAN §3.5).
+    // never-wrong rule holds with no invalidation logic of its own (PLAN §3.5). Nothing here
+    // is cached per cell and the static key carries no cell data, so a hand tile built before
+    // the block that surrounds it starts reading the moment that block lands, and every
+    // number drops on its own when a blast takes the mines away.
+    //
+    // Hand tiles carry clues too (2026-08-04 user decision): code you wrote yourself can see
+    // the interface errors, so building a causeway alongside a generated block is a real way
+    // to solve it. They differ from revealed AI cells in one deliberate way — see below.
     for (let y = win.y0; y <= win.y1; y++) {
       for (let x = win.x0; x <= win.x1; x++) {
         const i = y * s.w + x;
-        if (s.con[i].k !== 'aiRevealed') continue;
+        const kind = s.con[i].k;
+        if (kind !== 'aiRevealed' && kind !== 'hand') continue;
         const { lo, hi } = clue(s, i);
+        // A hand tile with nothing next to it stays blank. Inside a block, "0" is information
+        // — it is the difference between a cell that was opened and one that was not — but a
+        // hand tile is visibly a hand tile whether it is drawn on or not, so a causeway of
+        // zeros would be a row of noise the eye has to filter past to find the real numbers.
+        if (kind === 'hand' && hi < 1) continue;
         const text = lo === hi ? String(lo) : `${lo}-${hi}`;
         // A range is three glyphs — 17 art px at the default gap, one wider than the tile.
         // Tighten to gap 0 (15) rather than let a clue bleed onto the cell next door; the
         // hyphen is drawn with blank columns either side so the three marks stay separate.
+        // INK on both bases, checked rather than assumed: it is 6.5:1 on HAND and 6.1:1 on
+        // AI_REVEALED, so the warm tile is if anything the easier read of the two. (PAPER on
+        // HAND is 2.4:1 — it looks plausible and is the wrong answer.)
         const gap = textWidthArt(text) > ART ? 0 : GLYPH_GAP;
         drawTextCentered(cctx, text, cam.ox + x * t + t / 2, cam.oy + y * t + t / 2, px, PALETTE.INK, gap);
       }

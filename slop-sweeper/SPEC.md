@@ -71,7 +71,7 @@ Terrain features are defined by a **capability table**, not by hardcoded per-fea
 - `OCEAN` — nothing built. Buildable per terrain capability.
 - `HAND` — player-placed. Always safe. Always buildable-from.
 - `AI_HIDDEN` — AI-generated, unrevealed. Passable. Not buildable-from. May contain a mine.
-- `AI_REVEALED` — AI tile whose clue is visible. Passable, safe, buildable-from.
+- `AI_REVEALED` — AI tile whose clue is visible. Passable, safe, buildable-from. *(Revised 2026-08-04: no longer the only state that shows a clue — `HAND` does too, see §7.4. What is still unique to `AI_REVEALED` is that it was *turned over*: it used to be slop and is now known to be clean.)*
 - `FLAGGED` — player-marked. Impassable to users. Not buildable-from. *(Revised 2026-08-04: represented as a `flagged` flag on `AI_HIDDEN` rather than as a separate state — see §4.5. The behaviour described here is unchanged; only the encoding is.)*
 - `MINE_CONFIRMED` — revealed to contain a mine. Impassable. *(Revised 2026-08-04: **no action produces this state any more** — analyzing a mine detonates it (§4.3), and a flag is what marks a suspected defect. The state, its clue arithmetic and its rendering are kept implemented and tested, per `PLAN.md` §2: a defuse verb — spend turns to turn a known defect into a permanent wall instead of a crater — is the obvious next move and would produce it on day one. §4.4's overwrite pricing below is written against that future.)*
 
@@ -313,9 +313,15 @@ Clue numbers count mines in **all 8 surrounding cells** (classic minesweeper), e
 
 **OPEN:** resolve to 4-way counting if playtest shows confusion. 4-way counting produces weaker deduction and may need compensating (larger blocks, more analysis).
 
+*(Revised 2026-08-04 by owner decision — **which cells carry a clue, not how one is counted.** Until now only `AI_REVEALED` tiles displayed a number. **`HAND` tiles display theirs too:** structure you built yourself senses the defects next to it. The adjacency rule above is untouched, and so is the arithmetic — a clue has always been a statement about the eight cells around a position, with no opinion about what is built on that position. Only the set of positions that put their count on screen changed.*
+
+*Why it matters more than it sounds: it turns Place into a **safe, slow information source**. Build alongside a generated block and read its edge, rather than clicking into the block and risking the crater §4.3 now produces. Generate buys ground fast and blind; Analyze buys one tile fast and dangerously; Place buys one tile slowly and safely, and now tells you something on the way. That is the trade the verb set was missing.*
+
+*Two consequences recorded elsewhere: `HAND` counting zero **as a neighbour** (§7.5) is unchanged and unrelated — a hand tile holds no mine, and separately has a count of its own. And the solver (§10.2) reads hand clues on the same footing as revealed ones, or its `guessForced` instrumentation would measure a game nobody is playing; endpoints stay out of both, since they display nothing. The renderer leaving a hand tile blank below 1 is a display choice about visual noise — blank means zero, and the information is identical.)*
+
 ### 7.5 Ocean as deduction aid — DECIDED
 
-Ocean cells are known-empty and count as zero for clue purposes. The ocean perimeter functions like the revealed edge of a minesweeper board and is a major deduction aid. This is what makes placement-against-the-edge a meaningful choice (§1).
+Ocean cells are known-empty and count as zero for clue purposes. *(Throughout this section "counts as zero" means **as a neighbour**: the cell holds no mine, so it adds nothing to the counts around it. It says nothing about whether the cell displays a count of its own — since 2026-08-04 hand tiles do, see §7.4.)* The ocean perimeter functions like the revealed edge of a minesweeper board and is a major deduction aid. This is what makes placement-against-the-edge a meaningful choice (§1).
 
 `VOID` and `VOLCANO` cells count as zero identically. A coastline is therefore just as good a deduction anchor as open ocean, which means non-rectangular play spaces (§10.7) change the *shape* of available deduction anchors without weakening them. Irregular coastlines with many inlets are actually *easier* to deduce against than open water, so treat coastline complexity as a difficulty-reducing axis, not an increasing one.
 
@@ -417,7 +423,7 @@ Three concrete reasons, all specific to this design:
 
 **The economy cannot be tuned by playing it.** §8.3 and §8.4 are claims about thousands of games, not fifteen. Run scripted policies (always-generate, always-hand, 70/30, adaptive) across seeded boards in Node and chart where skill and confidence land. Requires a core with no DOM imports and an injected PRNG rather than global `Math.random`.
 
-**The solver is needed at generation time, not just for hints.** Ranged clues make deduction a constraint problem: each clue is an inequality over a set of booleans. Enumerate frontier configurations consistent with all constraints; a tile is provably safe only if no consistent configuration places a mine there. Exponential in frontier size, which is exactly why small chunky blocks are load-bearing. At 4–8 cells it is trivially tractable.
+**The solver is needed at generation time, not just for hints.** Ranged clues make deduction a constraint problem: each **displayed** clue is an inequality over a set of booleans — revealed AI tiles and, since 2026-08-04, hand tiles (§7.4); endpoints display nothing and contribute nothing. Enumerate frontier configurations consistent with all constraints; a tile is provably safe only if no consistent configuration places a mine there. Exponential in frontier size, which is exactly why small chunky blocks are load-bearing. At 4–8 cells it is trivially tractable.
 
 *(Revised 2026-08-04, following the §4.2 size change to 12–26 cells: still tractable, and the reason is component splitting rather than block size — the solver enumerates over `AI_HIDDEN` cells only, splits the constraint graph into independent components, and marks any component past its budget `bailed`. Measured cost across the corpus is under a millisecond a game. What did change is the payoff: `guessForced` read 0% on every level of the old corpus and now fires on 20–40% of games, so "the moment deduction became impossible" is finally a signal instead of a constant.)*
 
