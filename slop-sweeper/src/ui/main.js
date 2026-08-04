@@ -70,6 +70,8 @@ function boot() {
 
   const params = new URLSearchParams(location.search);
   const ids = levelIds();
+  const labParam = params.get('lab');
+  const isLab = labParam !== null && labParam !== '0';
   const pinnedSeed = params.has('seed') ? (Number(params.get('seed')) >>> 0) : null;
   const wanted = params.get('level') ?? store.get(STORE_KEY) ?? ids[0];
   let levelId = ids.includes(wanted) ? wanted : ids[0];
@@ -116,13 +118,17 @@ function boot() {
     onMinimapJump: (cell) => { cam.centerOnCell(camera, s, cell); renderer.invalidate(); refresh(); },
     onCopySeed: copySeed,
     onRun: toggleRun,
+    onZoom: zoomStep,
   });
   hud.setLevels(ids, levelId);
 
   createInput(board, camera, {
     getState: () => s,
     onTap: select,
-    onViewChange: () => { renderer.invalidate(); requestDraw(); },
+    // Pinch and wheel land here. The zoom buttons describe the camera, so they are updated on
+    // the event rather than on the frame it schedules — a control that tells you what it will
+    // do next must not be a frame behind the thing it is describing.
+    onViewChange: () => { renderer.invalidate(); hud.zoom(camera); requestDraw(); },
     onGestureEnd: () => startLoop(),
     onRotate: rotate,
     onConfirm: confirmBlock,
@@ -214,6 +220,21 @@ function boot() {
       if (fits >= 0) view.rot = fits;
     }
     renderer.invalidate();
+    refresh();
+  }
+
+  /**
+   * The zoom buttons, which are just another caller of the camera the pinch and the wheel
+   * already use — anchored at the viewport centre, because a button has no gesture point to
+   * anchor to and the centre is the thing the player is looking at. `zoomBy` clamps to
+   * [minArtPx, maxArtPx] itself and reports whether anything moved, so the bounds need no
+   * checking here; the buttons show their own disabled state off the same two numbers.
+   * @param {number} steps  +1 zooms in
+   */
+  function zoomStep(steps) {
+    selfHeal();
+    if (cam.zoomBy(camera, s, steps, camera.cw / 2, camera.ch / 2)) renderer.invalidate();
+    hud.zoom(camera);
     refresh();
   }
 
@@ -323,8 +344,10 @@ function boot() {
     fx.pop(s.dest, fx.remaining(ev.user));
   });
 
+  // Every generated block ships at least two defects now, so the old "got away with it"
+  // branch and the singular form are both unreachable.
   bus.on('blockPlaced', (/** @type {{ mines: number }} */ ev) => {
-    hud.toast(ev.mines === 0 ? 'GOT AWAY WITH IT — 0 DEFECTS' : `INTRODUCED ${ev.mines} DEFECT${ev.mines === 1 ? '' : 'S'}`);
+    hud.toast(`INTRODUCED ${ev.mines} DEFECTS`);
   });
   bus.on('generateRefunded', () => hud.notice('NOWHERE LEGAL TO PUT IT — TURN REFUNDED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
@@ -495,10 +518,33 @@ function boot() {
   refresh();
   console.info(`slop-sweeper: '${s.level}' seed ${s.seed} — ?level=${levelId}&seed=${s.seed} replays it exactly`);
 
+  // The start screen and How to Play (PLAN §11.9). Loaded lazily like the Lab, but always
+  // loaded rather than gated: the "?" in the HUD reopens the rules mid-game, so the module is
+  // part of the shipped game even on the loads where the title card is skipped. The skip rule
+  // itself, and why `?seed=` is on it, lives in start.js.
+  //
+  // `body.starting` is set synchronously so the board is covered for the frame or two the
+  // dynamic import takes — otherwise a slow load flashes the game before the title card.
+  const wantStart = !isLab && !params.has('seed');
+  if (wantStart) document.body.classList.add('starting');
+  import('./start.js')
+    .then(({ createStart }) => {
+      const screen = createStart({
+        levels: ids,
+        getLevel: () => levelId,
+        onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); },
+      });
+      hud.onHelp(screen.help);
+      if (wantStart) screen.open();
+    })
+    .catch((err) => {
+      document.body.classList.remove('starting');
+      console.error('slop-sweeper: the start screen failed to load', err);
+    });
+
   // The Level Lab is a dev tool (PLAN §9.2): loaded only when asked for, so the shipped
   // page never fetches it and core never learns it exists.
-  const labParam = params.get('lab');
-  if (labParam !== null && labParam !== '0') {
+  if (isLab) {
     import('./lab.js')
       .then(({ createLab }) => createLab({
         getSeed: () => s.seed,

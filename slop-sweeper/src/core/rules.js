@@ -18,6 +18,11 @@ export const RULES = Object.freeze({
   // fifty-tile route from the origin. Seven still makes detonation the largest discrete
   // event in the game and still separates genRush from balanced by a wide margin.
   DETONATE_HIT: 7,
+  // Every generation ships at least this many defects (user decision 2026-08-04, superseding
+  // PLAN §3 ruling 6). A clean block made Generate strictly free, which removed the game's
+  // central tension from that turn entirely. Placement-time floor only — a blast may take a
+  // block below it and nothing puts it back. See `generate.rollMines`.
+  MIN_BLOCK_DEFECTS: 2,
   SERVED_BONUS: 0,            // tuning lever only; no confidence regeneration (PLAN §3.11)
   BLAST_RADIUS: 1,            // tile + orthogonals (SPEC §5 baseline)
   // ANALYZE_REVEALS is gone (2026-08-04 user decision). Analyze is one minesweeper click:

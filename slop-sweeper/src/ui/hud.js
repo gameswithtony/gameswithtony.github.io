@@ -31,6 +31,7 @@ import * as cam from './camera.js';
  * @property {(cell: number) => void} onMinimapJump
  * @property {() => void} onCopySeed
  * @property {() => void} onRun        fast-forward toggle (PLAN §12.6)
+ * @property {(steps: number) => void} onZoom   ±1 artPx, anchored at the viewport centre
  */
 
 /** @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>} */
@@ -137,6 +138,9 @@ export function createHud(h) {
     rotLabel: el('rot-label'),
     trayHint: el('tray-hint'),
     minimap: /** @type {HTMLCanvasElement} */ (el('minimap')),
+    zoomIn: /** @type {HTMLButtonElement} */ (el('btn-zoom-in')),
+    zoomOut: /** @type {HTMLButtonElement} */ (el('btn-zoom-out')),
+    help: /** @type {HTMLButtonElement} */ (el('btn-help')),
     banner: el('banner'),
     bannerTitle: el('banner-title'),
     bannerSub: el('banner-sub'),
@@ -161,6 +165,15 @@ export function createHud(h) {
   dom.generate.addEventListener('click', () => h.onAction('generate'));
   dom.wait.addEventListener('click', () => h.onAction('wait'));
   dom.run.addEventListener('click', () => h.onRun());
+  dom.zoomIn.addEventListener('click', () => h.onZoom(1));
+  dom.zoomOut.addEventListener('click', () => h.onZoom(-1));
+  // How to Play is a lazily-imported overlay, so the button is dead until that module lands
+  // and registers itself. Disabled rather than silently inert: a control that does nothing
+  // when tapped is worse than one that says it is not ready.
+  dom.help.disabled = true;
+  dom.help.addEventListener('click', () => helpFn?.());
+  /** @type {(() => void) | null} */
+  let helpFn = null;
   dom.rotate.addEventListener('click', () => h.onRotate());
   dom.confirm.addEventListener('click', () => h.onConfirm());
   dom.bannerBtn.addEventListener('click', () => h.onRestart());
@@ -295,12 +308,42 @@ export function createHud(h) {
     }
 
     lastMinimap = { s, cam: camera };
+    syncZoom(camera);
     drawMinimap(dom.minimap, s, camera);
+  }
+
+  /**
+   * The zoom buttons are the fourth caller of the same camera — pinch, wheel and the keyboard
+   * got there first — so their disabled state cannot live where they are clicked or it would
+   * go stale the moment somebody pinched instead. It tracks the camera, on the one path every
+   * zoom already takes: the redraw.
+   * @param {Camera} camera
+   */
+  function syncZoom(camera) {
+    dom.zoomOut.disabled = camera.artPx <= camera.minArtPx;
+    dom.zoomIn.disabled = camera.artPx >= camera.maxArtPx;
   }
 
   return {
     setLevels,
     update,
+
+    /**
+     * Hand the "?" button something to open, once the overlay module has loaded.
+     * @param {() => void} fn
+     */
+    onHelp(fn) {
+      helpFn = fn;
+      dom.help.disabled = false;
+    },
+
+    /**
+     * The camera moved. Called synchronously from every zoom path rather than left to the
+     * next repaint: the buttons describe the camera, and the camera has already changed by
+     * the time the frame is requested.
+     * @param {Camera} camera
+     */
+    zoom(camera) { syncZoom(camera); },
 
     /**
      * Camera-only refresh: the viewport rectangle has to track a pan, but a pan changes
@@ -310,6 +353,7 @@ export function createHud(h) {
      */
     minimap(s, camera) {
       lastMinimap = { s, cam: camera };
+      syncZoom(camera);
       drawMinimap(dom.minimap, s, camera);
     },
 

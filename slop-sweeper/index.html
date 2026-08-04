@@ -61,7 +61,18 @@
       <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at. -->
       <button id="btn-run" title="Fast-forward: waits every 180 ms until something happens">RUN</button>
     </div>
-    <canvas id="minimap" title="Tap to jump"></canvas>
+    <!-- Zoom is a gesture first (pinch/wheel); these are the same camera call with a button
+         on it, for anyone whose hands or screen make a two-finger pinch awkward. -->
+    <div id="viewtools">
+      <div id="zoom">
+        <button id="btn-zoom-out" title="Zoom out (−)" aria-label="Zoom out">−</button>
+        <button id="btn-zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <!-- Reopens the rules. On a phone the only other way back to them is a refresh,
+             which rerolls the seed and throws the game away. -->
+        <button id="btn-help" title="How to play" aria-label="How to play">?</button>
+      </div>
+      <canvas id="minimap" title="Tap to jump"></canvas>
+    </div>
   </footer>
 
   <script type="module" src="./src/ui/main.js"></script>

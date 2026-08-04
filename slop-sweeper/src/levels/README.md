@@ -76,7 +76,7 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `map` | *(required)* | the charmap above |
 | `name` | `id` | display name |
 | `arrivals` | `{ count: 10, firstTick: 6, every: 4 }` | how many users, when the first one shows up, and the gap between them |
-| `mineDensity` | `0.16` | per-cell probability inside a generated block; the block's total is `Binomial(size, p)` and **zero is possible** |
+| `mineDensity` | `0.16` | per-cell probability inside a generated block; the total is `Binomial(size, p)` **topped up to a minimum of 2** — see §4 |
 | `shapePool` | `'compact'` | which blocks Generate draws from — see §4 |
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
@@ -103,7 +103,11 @@ Two consequences for authoring, both learned the hard way in the 2026-08-04 tuni
   game that a flagging player simply would not.
 - **Loosening the schedule to pay for those turns pays for hand-building too.** On the long
   levels, going from `every: 3` to `every: 4` took `handOnly` from 0% to 100% — the one
-  outcome SPEC §1 forbids. If your level has a floor, `every` is not the dial; density is.
+  outcome SPEC §1 forbids. If your level has a floor, `every` is not the dial.
+- **And since the two-defect floor (§4), density is barely a dial either on small blocks.**
+  A level with a hand-only floor *and* a `compact` pool now has very little slack in any
+  direction; `caldera` and `strait` are both sitting in that corner and both measure in
+  single digits for every AI policy.
 
 ---
 
@@ -114,9 +118,34 @@ destroy the deduction layer, so every limb of every stencil is at least two cell
 standing test enforces it). Rotation is free and unlimited; there is no reflection.
 
 A block is meant to be a small minesweeper in its own right: at `mineDensity: 0.12` a 20-cell
-block carries two or three defects, one Analyze turns over eight tiles, and reading the whole
-thing costs two or three turns. That trade — fast ground now, comprehension debt later — is
-the game. Pick densities that keep it a trade.
+block carries two or three defects, and reading it costs two or three turns. That trade —
+fast ground now, comprehension debt later — is the game. Pick densities that keep it a trade.
+
+### Every block carries at least two defects (2026-08-04)
+
+The roll is `Binomial(size, mineDensity)` and is then **topped up to two** if it came in
+under. Zero-defect generations are gone: they were the one turn on which Generate was free,
+which is the opposite of what the game is about.
+
+**This changes what `mineDensity` does, and it is the single most important thing to know
+before tuning a level.** The floor binds from below, so the dial no longer controls whether a
+block is dangerous — only the size of the tail above two. It binds hardest exactly where you
+are least likely to notice: small blocks at low density. Expected defects per block:
+
+| block size | p = 0.11 | p = 0.15 | p = 0.20 |
+| --- | --- | --- | --- |
+| 12 cells (`R12`) | 2.18 *(raw 1.32)* | 2.39 *(raw 1.80)* | 2.74 *(raw 2.40)* |
+| 16 cells (`O16`) | 2.38 *(raw 1.76)* | 2.76 *(raw 2.40)* | 3.37 *(raw 3.20)* |
+| 25 cells (`O25`) | 3.03 *(raw 2.75)* | 3.86 *(raw 3.75)* | 5.03 *(raw 5.00)* |
+
+Read the twelve-cell row: nearly doubling the density moves the real answer by a quarter.
+Below about 0.15 on `compact`-sized shapes the dial is close to inert, so **do not reach for
+density to make a small-block level easier** — it has nowhere left to go. Reach for the
+schedule, and if the schedule is pinned by a hand-only floor (§6), accept that the level is
+as easy as it gets.
+
+The floor is placement-time only. A blast may take a block below two, or to zero, and nothing
+puts it back.
 
 | pool | shapes | sizes | feel |
 | --- | --- | --- | --- |

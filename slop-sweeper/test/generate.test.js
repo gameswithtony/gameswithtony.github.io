@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { RULES } from '../src/core/rules.js';
 import { TERRAIN, defineTerrain } from '../src/core/state.js';
 import { cellAt, n4 } from '../src/core/grid.js';
 import { SHAPES, shapeIndex } from '../src/core/shapes.js';
@@ -178,27 +179,86 @@ test('placeBlock refuses anchors and rotations that were not drawn', () => {
   assert.match(/** @type {any} */ (reduce(s, { t: 'placeBlock', cell: phase.rots[0].anchors[0], rot: /** @type {any} */ (7) }).ev[0]).reason, /was not drawn/);
 });
 
-test('the mine roll is Binomial(size, density), rolled after the placement is final', () => {
+test('the mine roll is Binomial(size, density) with a floor of two (rev. 2026-08-04)', () => {
+  const MIN = RULES.MIN_BLOCK_DEFECTS;
+  const big = Array.from({ length: 25 }, (_, i) => i);      // an O25's worth of cells
+  const small = Array.from({ length: 12 }, (_, i) => i);    // an R12's worth
+
+  // The floor is a floor, not a replacement: p=0 gives exactly two, p=1 still gives all.
+  const none = rollMines(mulberry32(1), small, 0);
+  assert.equal(none.size, MIN, 'a density of zero is topped up to the floor');
+  for (const c of none) assert.ok(small.includes(c));
+  assert.equal(rollMines(mulberry32(1), small, 1).size, small.length);
+
+  // Above the floor the Binomial is untouched — on 25 cells at 0.2 the floor almost never
+  // binds (P(X<2) ≈ 0.03), so the mean should still sit on n×p.
   const gen = mulberry32(99);
-  const cells = [0, 1, 2, 3, 4];
-
-  assert.equal(rollMines(mulberry32(1), cells, 0).size, 0, 'p=0 never mines');
-  assert.equal(rollMines(mulberry32(1), cells, 1).size, cells.length, 'p=1 always mines');
-
   let total = 0;
   for (let i = 0; i < 400; i++) {
-    const mines = rollMines(gen, cells, 0.25);
-    assert.ok(mines.size >= 0 && mines.size <= cells.length);
-    for (const c of mines) assert.ok(cells.includes(c));
+    const mines = rollMines(gen, big, 0.2);
+    assert.ok(mines.size >= MIN && mines.size <= big.length);
+    for (const c of mines) assert.ok(big.includes(c));
     total += mines.size;
   }
-  const mean = total / 400 / cells.length;
-  assert.ok(Math.abs(mean - 0.25) < 0.05, `per-cell rate drifted to ${mean.toFixed(3)}`);
+  const mean = total / 400;
+  assert.ok(Math.abs(mean - 5) < 0.5, `mean drifted to ${mean.toFixed(2)}, expected ≈ 5`);
 
-  // Zero is a legitimate and delightful outcome (PLAN §3.6).
-  let zeroes = 0;
-  for (let i = 0; i < 200; i++) if (rollMines(gen, cells, 0.25).size === 0) zeroes++;
-  assert.ok(zeroes > 0, 'a clean generation must be possible');
+  // ZERO IS NO LONGER POSSIBLE (superseding PLAN §3 ruling 6), and at a low density the
+  // floor is what most blocks land on — "exactly two" has to be the common outcome or the
+  // rule would just be a rounding error.
+  const counts = new Map();
+  for (let i = 0; i < 600; i++) {
+    const n = rollMines(gen, small, 0.08).size;
+    assert.ok(n >= MIN, `a generation shipped ${n} defects`);
+    counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  assert.ok((counts.get(MIN) ?? 0) > 300, `only ${counts.get(MIN)} of 600 low-density blocks hit the floor`);
+  assert.ok((counts.get(MIN + 1) ?? 0) > 0, 'and the tail above it still exists');
+});
+
+test('the top-up is uniform over the clean cells, and deterministic', () => {
+  const cells = Array.from({ length: 12 }, (_, i) => i);
+  // At density 0 every defect comes from the top-up, so where they land *is* the top-up.
+  const gen = mulberry32(4242);
+  const hit = new Set();
+  for (let i = 0; i < 200; i++) for (const c of rollMines(gen, cells, 0)) hit.add(c);
+  assert.equal(hit.size, cells.length, 'the top-up must not favour the front of the block');
+
+  // Same stream state, same answer — the correction is as replayable as the roll (PLAN §7.5).
+  const a = [...rollMines(mulberry32(7), cells, 0.05)].sort((x, y) => x - y);
+  const b = [...rollMines(mulberry32(7), cells, 0.05)].sort((x, y) => x - y);
+  assert.deepEqual(a, b);
+});
+
+test('PROPERTY: every committed block ships at least two defects, across pools and densities', () => {
+  // Through the reducer, not the helper: this is about what `blockPlaced` announces.
+  let blocks = 0;
+  const sizes = new Set();
+  for (const pool of /** @type {const} */ (['compact', 'awkward', 'heavy'])) {
+    for (const mineDensity of [0.02, 0.11, 0.15, 0.3]) {
+      for (let seed = 1; seed <= 8; seed++) {
+        let s = init({ ...OPEN, id: `floor-${pool}`, shapePool: pool, mineDensity }, seed);
+        for (let turn = 0; turn < 4; turn++) {
+          const drawn = reduce(s, { t: 'generate' });
+          if (drawn.ev[0].t !== 'blockDrawn') break;
+          const rot = /** @type {any} */ (drawn.s.phase).rots.find((/** @type {any} */ r) => r.anchors.length);
+          if (!rot) break;
+          const r = reduce(drawn.s, { t: 'placeBlock', cell: rot.anchors[0], rot: rot.rot });
+          const toast = /** @type {any} */ (r.ev[1]);
+          assert.equal(toast.t, 'blockPlaced');
+          assert.ok(toast.mines >= RULES.MIN_BLOCK_DEFECTS,
+            `${pool} @ ${mineDensity} shipped ${toast.mines} defects`);
+          assert.equal(toast.mines, r.s.blocks[toast.block].cells.filter((/** @type {number} */ c) => /** @type {any} */ (r.s.con[c]).mine).length,
+            'and the toast is still never wrong about the count');
+          sizes.add(toast.cells.length);
+          blocks++;
+          s = r.s;
+        }
+      }
+    }
+  }
+  assert.ok(blocks > 200, `only ${blocks} blocks exercised`);
+  assert.ok(sizes.size > 4, 'the sweep should have covered several stencil sizes');
 });
 
 test('the same seed and the same moves produce the same block and the same mines', () => {

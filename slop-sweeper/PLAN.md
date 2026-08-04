@@ -122,7 +122,22 @@ hash token and renderer tile all intact and tested.)*
    information payoff of burn-it-down. Nothing clue-shaped is ever stored; it is computed.
 6. **Per-block mine count = Binomial(size, level.mineDensity)**, rolled from the generation RNG
    stream at commit (after position/rotation are final), mines placed uniformly among block
-   cells. Zero is possible — "got away with it" is a legitimate and delightful outcome.
+   cells. ~~Zero is possible — "got away with it" is a legitimate and delightful outcome.~~
+   **SUPERSEDED 2026-08-04 (user decision): every generation ships at least two defects.**
+   The roll is unchanged and then topped up — uniformly among the cells the Bernoulli pass
+   left clean, one draw from the same `gen` stream per defect added, so the replay contract
+   (§7.5) is untouched. `floor = min(RULES.MIN_BLOCK_DEFECTS, size)` guards a hypothetical
+   block smaller than the floor; the real table starts at twelve cells (§10).
+
+   "Got away with it" was a lovely moment and a bad rule: it was the one turn on which
+   Generate cost nothing at all, so on a clean draw the game's whole thesis — fast ground you
+   do not understand — simply did not apply. **Placement-time only:** a blast may take a
+   block below two or to zero, and nothing puts it back. That is safe precisely because
+   ruling 5 derives every clue and badge live rather than storing them.
+
+   The economics moved more than the sentence suggests, and §9's note records the numbers.
+   Below the floor, `mineDensity` has largely stopped being a dial: on a twelve-cell block,
+   0.11 → 0.20 used to move the expected count 1.32 → 2.40, and now moves it 2.18 → 2.74.
 7. **Users stack freely** (no collision); renderer offsets/marks multiples.
 8. **Endpoints** are always passable, count as structure for build adjacency, are not buildable,
    and are indestructible (blast skips them).
@@ -611,6 +626,52 @@ often as `balanced` everywhere. What the corpus no longer has is a comfortable m
 long-route levels sit at 10–30% for the best bot where they were 80–100% before the change.
 `plain` and `atoll` carry the "is this fun" question now; the other four are the ceiling.
 
+> **Revised a fourth time 2026-08-04 (user decision): every generation ships at least two
+> defects** (§3 ruling 6). **No level numbers changed**, and that is a decision rather than an
+> omission — see below. This is the largest single economic shift the corpus has taken, and
+> it did not come from the sentence, it came from the arithmetic.
+>
+> **The floor raised effective density ~35% on the levels that matter, and took the density
+> dial away at the same time.** At `caldera`'s 0.11 over a mean block of ~16 cells, nearly
+> half of all rolls used to come in under two (P(X<2) ≈ 0.46), so nearly half of all blocks
+> got topped up. Expected defects per block went 1.76 → 2.38. The compensating move would
+> normally be to lower density — except the floor is *why* the number rose, so lowering it
+> barely moves anything: the least dangerous block obtainable is now 2.0, against 2.38 today.
+> On a twelve-cell block the whole 0.11–0.20 range now spans 2.18–2.74.
+>
+> Measured, 60 games/cell, seed 1 (win %, §3 ruling 1 revision → now):
+>
+> | level | handOnly | genRush | balanced:0.4 | careful:0.4 |
+> | --- | --- | --- | --- | --- |
+> | `plain` | 100% → 100% | 33% → 18% | 58% → 38% | 50% → 25% |
+> | `channel` | 0% → **0%** | 28% → 8% | 23% → 7% | 5% → 0% |
+> | `atoll` | 100% → 100% | 28% → 20% | 48% → 38% | 48% → 35% |
+> | `caldera` | 0% → **0%** | 32% → 5% | 27% → **0%** | 10% → **0%** |
+> | `strait` | 0% → **0%** | 20% → 0% | 20% → 3% | 3% → 0% |
+> | `sprawl` | 0% → **0%** | 13% → 2% | 7% → 2% | 0% → 0% |
+>
+> Every floor holds — `handOnly` never generates, so the change cannot reach it. Everything
+> else lost 10–25 points, and **`caldera` and `strait` collapsed to single digits for every
+> AI policy.** Two compensating levers were measured and neither is a *small* adjustment that
+> works:
+>
+> - `caldera` `count` 9 → 8 (the most schedule slack its hand-only floor can spare): best
+>   policy 5% → 7%. The binding cost is detonations, not waiting.
+> - `DETONATE_HIT` 7 → 6, corpus-wide: `plain` and `channel` recover a little (38% → 42%,
+>   7% → 12%), `caldera` and `strait` do not move off zero — the bots simply survive longer
+>   and then lose to the same detonations.
+>
+> Both were reverted. Shipping a change that does not fix the thing it was for is worse than
+> reporting the finding: **`caldera` and `strait` are levels with a hand-only floor and a
+> `compact`-sized pool, which is now a corner with no slack in any direction** — `every` is
+> pinned by the floor and density is pinned by the two-defect minimum. If they are to come
+> back it will take a structural change (shorter routes, a bigger pool, or a `blastRadius`
+> of 0 on those levels), not a tuning pass. Flagged for the spec owner rather than guessed at.
+>
+> As ever the bots do not flag, and they now detonate 4–9 times a game clicking into slop a
+> human would mark and route around. These numbers remain the floor of the difficulty, not
+> its middle.
+
 Re-measured after §3 ruling 1's revision (a clicked mine detonates), same seeds, same level
 numbers — the delta is the cost of probing, and the `dets` column is the story:
 
@@ -865,6 +926,44 @@ verb set):*
 - `F` toggles the flag on the selected cell (§12). It is the only keyboard verb, and only
   because it is the only one that spends no turn; everything else stays behind select→act.
 
+*Revised 2026-08-04 (user decision — explicit zoom, and a way back to the rules):*
+
+- **`+` / `−` zoom buttons and a `?`**, grouped with the minimap as `#viewtools` — the controls
+  that change what you are *looking at* rather than what the board *is*. They are one more
+  caller of `cam.zoomBy(±1)` (§12.3), anchored at the viewport centre because a button has no
+  gesture point to anchor to, and they show a disabled state at `minArtPx` / `maxArtPx`.
+- **Placement is per-breakpoint, and the narrow case is measured, not chosen.** At ≥900px the
+  cluster docks beside the minimap in the footer. Below that it floats just above the footer in
+  the same bottom-right corner, because the footer's second row is already exactly full at the
+  280px worst case (globals 198 + minimap 60 + gap + padding = 280): a second row-2 item — or a
+  second grid *column*, which is charged to both rows — clips GENERATE/WAIT/RUN, and row 1 is
+  the tray during `placing`. Floating also buys the 44px touch target a 34px row cannot, which
+  is the whole point of the buttons on a phone.
+- The `?` reopens **How to Play** mid-game (§11.9). On a phone the only other way back to the
+  rules is a refresh, and a refresh rerolls the seed and throws the game away.
+- The `blockPlaced` toast drops its zero-defect branch and its singular form: with a floor of
+  two defects per generated block, both are unreachable.
+
+### 11.9 Start screen & How to Play (§11.8's overlay layer)
+
+Two DOM overlays over an already-booted game, in `src/ui/start.js`, imported lazily the way the
+Lab is. Core never learns either exists: the level picker calls the same `onLevel` the HUD
+dropdown does, and PLAY does nothing but hide a div.
+
+**Skip rule.** The start screen opens on a plain load, and stays out of the way of every flow
+that is not one: `?lab=1` (a dev tool whose author did not ask for a title card) and `?seed=`
+(a repro link — a door in front of it defeats the point, and the level picker behind that door
+would reroll the exact thing the link exists to preserve). `?level=` deliberately does *not*
+skip, because the game writes it into the URL itself on every start, so honouring it would mean
+the screen shows exactly once ever on a given browser. `body.starting` covers the board
+synchronously so a slow load cannot flash the game before the title card.
+
+**How to Play** is static copy in the HUD's register — GOAL · BUILD · READ · CLEAR OR AVOID ·
+CONTROLS — scrolling inside its own card, never growing the document: the board is a
+fixed-height grid, so an overlay that scrolled the page would be the one thing able to move the
+canvas. Reachable from the start screen (BACK returns to it) and from the HUD's `?` (BACK reads
+CLOSE, because there is nothing behind it).
+
 ---
 
 ## 12. Input & camera
@@ -876,6 +975,11 @@ verb set):*
    midpoint — non-negotiable, §10.5 — with simultaneous midpoint pan); wheel and ctrl+wheel
    (trackpad pinch) = zoom anchored at cursor. Pointers tracked in a Map; `touch-action: none`
    on the board container; viewport meta pins page zoom. Pointer capture per gorillas (§4).
+   *Revised 2026-08-04 (user decision):* plus **`+` / `−` buttons** (§11.8) — a fourth caller of
+   the same `zoomBy(±1)`, anchored at the viewport centre, clamped by `setArtPx` like every
+   other caller. Because there are now four of them, the buttons' disabled state is synced from
+   the camera on the *event* rather than on the frame it schedules: a control that describes
+   the camera must not be a frame behind it, and pinch must never leave it stale.
 3. **Zoom snapping:** continuous pinch ratio maps to integer artPx with hysteresis (switch at
    ±0.6 toward the next integer) so tier/scale changes don't flicker at boundaries. Pan clamps
    to the playable bbox with rubber-banding on overscroll, springing back on release.
@@ -993,6 +1097,10 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
       (tests). A flag wall closes the gate; unflagging reopens it; flagging behind a walker
       strands it and the stranded user drains (§6.4).
 - [ ] §4.2 legal anchors highlighted per rotation; mine-count toast on commit
+- [ ] §4.2 (rev. 2026-08-04) every committed block carries ≥ 2 defects — property test over
+      all three pools × four densities × many seeds, through the reducer so it is what
+      `blockPlaced` announces. The top-up is uniform over the clean cells and replays from
+      the seed (tests). A blast may still take a block below two; nothing restores it.
 - [ ] §5 blast flood fill stops at `VOLCANO` and `VOID` via the same table path — no
       special-case (tests); `HAND` tiles destroyed; no chains; in-area users requeue; others
       strand (§6.4)

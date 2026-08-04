@@ -11,6 +11,7 @@ import { init } from '../src/core/reduce.js';
 test('rules.js carries every PLAN §8 constant', () => {
   for (const k of [
     'CONFIDENCE_START', 'WAIT_DRAIN_PER_USER', 'DETONATE_HIT', 'SERVED_BONUS', 'BLAST_RADIUS',
+    'MIN_BLOCK_DEFECTS',
     'USER_MOVE_EVERY', 'ART_PX_PER_TILE', 'FONT_MIN_DEVICE_PX',
     'ZOOM_MAX_ARTPX', 'TAP_SLOP_CSS', 'TAP_MS', 'STEP_TWEEN_MS', 'FF_INTERVAL_MS',
   ]) {

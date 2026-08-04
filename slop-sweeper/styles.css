@@ -175,6 +175,8 @@ b { color: var(--paper); font-weight: 700; }
 #banner {
   position: absolute;
   inset: 0;
+  /* Above the floating zoom cluster (z-index 5 below 900px), under the start/help overlays. */
+  z-index: 30;
   display: grid;
   place-content: center;
   gap: 8px;
@@ -342,6 +344,21 @@ select {
 .tray-controls { display: flex; gap: 6px; }
 #tray-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Zoom buttons live with the minimap because they are the same thing: the two controls that
+   change what you are looking at rather than what the board is. Sized for a thumb, not for a
+   cursor — the whole reason they exist is that pinch is awkward one-handed. */
+#viewtools { display: flex; align-items: center; gap: 6px; flex: none; }
+#zoom { display: flex; gap: 4px; }
+
+#zoom button {
+  width: 40px;
+  height: 44px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+}
+
 #minimap {
   width: 120px;
   height: 66px;
@@ -354,6 +371,102 @@ select {
 }
 
 .hidden { display: none !important; }
+
+/* --- start screen & how to play (PLAN §11.9) ---------------------------------------
+   Both are DOM over an already-booted game. `body.starting` covers the board for the frame
+   or two the lazy import takes, so a slow load never flashes the game before the title. */
+body.starting #board > * { visibility: hidden; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(13, 16, 22, 0.94);
+}
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  text-align: center;
+}
+
+#start h1 {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 38px);
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  color: var(--coast);
+}
+
+#start .premise {
+  margin: 0 0 4px;
+  max-width: 42ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+#start-level { width: 160px; text-align: center; }
+.overlay-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.overlay-actions button { padding: 10px 18px; }
+#start-play { border-color: var(--ok); color: var(--ok); }
+
+/* The rules card scrolls INSIDE itself. The page behind it never scrolls — the board is a
+   fixed-height grid — so an overlay that grew the document would be the one thing on the
+   page able to move the canvas. */
+.help-card { align-items: stretch; text-align: left; gap: 0; }
+
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.help-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  color: var(--coast);
+}
+
+.help-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 0;
+}
+
+.help-body h3 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  color: var(--user);
+}
+
+.help-body h3:first-child { margin-top: 6px; }
+
+.help-body p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--paper);
+}
 
 /* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
    One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
@@ -400,6 +513,30 @@ select {
   #tray, #actionbar { grid-area: main; min-width: 0; }
   #globals { grid-area: globals; }
   #minimap { grid-area: minimap; width: 60px; height: 34px; }
+
+  /* The zoom cluster leaves the footer grid here, and this is measured rather than taste: at
+     the 280px worst case row 2 is already exactly full (globals 198 + minimap 60 + 6 gap +
+     16 padding = 280), and a second row-2 item — or a second grid COLUMN, which is charged to
+     both rows — clips GENERATE/WAIT/RUN. Row 1 cannot take it either, because the tray fills
+     that row during `placing`.
+     So it floats just above the footer, in the same bottom-right corner as the minimap and
+     directly over it: visually one corner stack, costing the footer nothing. It also buys
+     back the 44px touch target the 34px row could not give, which is the point of the
+     buttons existing on a phone at all. */
+  #viewtools { display: contents; }
+  #zoom {
+    position: fixed;
+    right: 8px;
+    bottom: calc(var(--hud-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    z-index: 5;
+    gap: 6px;
+  }
+  #zoom button {
+    width: 44px;
+    height: 44px;
+    font-size: 17px;
+    background: rgba(27, 34, 48, 0.94);
+  }
   /* Tray: canvas + controls only. The hint line would make the tray 50px of content in a
      46px row; the board's green anchors say the same thing. */
   #tray { padding: 4px 6px; gap: 6px; }

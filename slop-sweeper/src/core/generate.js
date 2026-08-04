@@ -4,6 +4,7 @@
 // (PLAN §3.6). VOID rejection is not written down anywhere here — it falls out of the
 // terrain capability table, exactly as SPEC §10.7 demands.
 
+import { RULES } from './rules.js';
 import { n4 } from './grid.js';
 import { conCaps, isGeneratable } from './state.js';
 import { resolvePool, rotationsOf } from './shapes.js';
@@ -126,7 +127,25 @@ export function legalPlacements(s, shapeIdx) {
 
 /**
  * Binomial(size, density), one Bernoulli per cell in commit order, drawn after position and
- * rotation are final (PLAN §3.6). Zero is a legitimate and delightful outcome.
+ * rotation are final (PLAN §3.6) — **then topped up to `MIN_BLOCK_DEFECTS`.**
+ *
+ * Revised 2026-08-04 (user decision, superseding PLAN §3 ruling 6's "zero is possible"):
+ * every generation ships at least two defects. A clean block was a lovely moment and a bad
+ * rule: it meant a Generate could be strictly free, so the honest play was sometimes to
+ * spam it and hope, and the tension the whole game is built on — fast ground you do not
+ * understand — simply did not apply to that block. With a floor, the question is never
+ * *whether* the block is dangerous, only *how* dangerous and *where*.
+ *
+ * The top-up draws uniformly from the cells the Bernoulli pass left clean, one at a time,
+ * from the same `gen` stream — so it is as deterministic as the roll it corrects, and the
+ * replay contract (PLAN §7.5) holds unchanged. `floor = min(MIN_BLOCK_DEFECTS, size)` so a
+ * block smaller than the floor mines every cell instead of looping forever; the real table
+ * starts at twelve cells (PLAN §10), so that guard is for a hypothetical, not for today.
+ *
+ * **Placement-time only.** A later blast may take a block below two, or to zero, and nothing
+ * puts it back — the floor is a property of what generation ships, not an invariant of the
+ * board (PLAN §3.5's derive-everything-live rule is what makes that safe).
+ *
  * @param {Rng} gen
  * @param {number[]} cells
  * @param {number} density
@@ -136,5 +155,18 @@ export function rollMines(gen, cells, density) {
   /** @type {Set<number>} */
   const mines = new Set();
   for (const c of cells) if (gen.chance(density)) mines.add(c);
+
+  const floor = Math.min(RULES.MIN_BLOCK_DEFECTS, cells.length);
+  if (mines.size >= floor) return mines;
+
+  // Swap-remove from a shrinking pool: uniform, no rejection loop, and it consumes exactly
+  // one number from the stream per defect added.
+  const clean = cells.filter((c) => !mines.has(c));
+  while (mines.size < floor) {
+    const pick = Math.floor(gen() * clean.length);
+    mines.add(clean[pick]);
+    clean[pick] = clean[clean.length - 1];
+    clean.pop();
+  }
   return mines;
 }
