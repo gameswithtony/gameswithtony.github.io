@@ -328,9 +328,8 @@ function boot() {
   });
   bus.on('generateRefunded', () => hud.notice('NOWHERE LEGAL TO PUT IT — TURN REFUNDED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
-    hud.toast(`REVIEWED ${ev.revealed.length} · CONFIRMED ${ev.minesFound.length}`);
+    hud.toast(`REVIEWED ${ev.revealed.length} CELL${ev.revealed.length === 1 ? '' : 'S'}`);
     for (const c of ev.revealed) fx.flip(c, PALETTE.AI_REVEALED, 0);
-    for (const c of ev.minesFound) fx.flip(c, PALETTE.RED, 0);
   });
   // Never says which destroyed cells held mines — they go silently (SPEC §5). `destroyed`
   // is only the cells whose construction was removed, so the visual extent comes from

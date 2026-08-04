@@ -2,12 +2,14 @@
 // SPEC §4.3 as revised 2026-08-04: **Analyze is one minesweeper click.** It opens the tile
 // you pointed at and nothing else — unless that tile's clue is zero, in which case the
 // classic cascade runs, which is free because a zero cannot neighbour a mine. A mined
-// target is confirmed rather than opened, and does not go off (PLAN §3.1).
+// target **detonates** (revised again 2026-08-04, superseding PLAN §3 ruling 1): you pointed
+// at it and clicked it, so it is the same incident as a user stepping on it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { RULES } from '../src/core/rules.js';
 import { cellAt } from '../src/core/grid.js';
-import { clue, init, legalActions, reduce } from '../src/core/reduce.js';
+import { blastArea, clue, init, legalActions, reduce } from '../src/core/reduce.js';
 
 const NEVER = { count: 4, firstTick: 9999, every: 9999 };
 
@@ -137,23 +139,74 @@ test('the cascade honours flags, exactly as minesweeper does', () => {
   for (const x of [2, 3, 4]) assert.equal(through.con[at(x, 2)].k, 'aiRevealed');
 });
 
-test('a mined target is confirmed, does not cascade, and does not detonate (PLAN §3.1)', () => {
+test('a mined target GOES OFF — the same incident as stepping on it', () => {
+  // Revised 2026-08-04 (user decision), superseding PLAN §3 ruling 1's no-blast rationale:
+  // the player pointed at the tile and clicked it, which is minesweeper.
   const { s, at } = board(SQUARE);
   const mine = at(4, 4);
   const { s: done, ev } = reduce(s, { t: 'analyze', cell: mine });
 
-  const analyzed = /** @type {any} */ (ev[0]);
-  assert.deepEqual(analyzed.revealed, [], 'the click ends on the defect');
-  assert.deepEqual(analyzed.minesFound, [mine]);
-  assert.equal(done.con[mine].k, 'mineConfirmed');
-  assert.equal(/** @type {any} */ (done.con[mine]).block, 0, 'it remembers which generation shipped it');
-  assert.equal(done.con[at(3, 4)].k, 'aiHidden', 'nothing around it moved');
+  // The event stream is the traversal path's, unchanged, so the renderer's shake/dissolve/
+  // debris fires with no UI change at all.
+  const boom = /** @type {any} */ (ev[0]);
+  assert.equal(boom.t, 'detonate');
+  assert.equal(boom.at, mine);
+  assert.deepEqual(boom.minesLost, [mine]);
+  assert.deepEqual(ev[1], { t: 'confidence', delta: -RULES.DETONATE_HIT, reason: 'detonation' });
+  assert.equal(ev.some((e) => e.t === 'analyzed'), false, 'nothing was reviewed; it exploded');
 
-  assert.equal(ev.some((e) => e.t === 'detonate'), false, 'reviewing a defect does not set it off');
-  assert.equal(done.stats.detonations, 0);
-  assert.equal(done.confidence, 100, 'and it costs no confidence');
-  // A confirmed mine is a permanent wall: with Overwrite absent you route around it.
-  assert.equal(done.blocks[0].cells.includes(mine), true, 'the cell still belongs to its block');
+  // The crater: the tile and its four orthogonals revert to open water (blastRadius 1).
+  assert.deepEqual(boom.destroyed, blastArea(s, mine), 'the crater is blastArea(), nothing bespoke');
+  for (const c of boom.destroyed) assert.equal(done.con[c].k, 'none', `cell ${c} should be ocean`);
+  assert.equal(done.con[mine].k, 'none');
+  assert.equal(done.terrain[mine], 'ocean');
+
+  assert.equal(done.stats.detonations, 1);
+  assert.equal(done.stats.analyzed, 1, 'the turn is still spent, and it was still a review');
+  assert.equal(done.tick, 1);
+  assert.equal(done.confidence, 100 - RULES.DETONATE_HIT);
+
+  // Nothing is confirmed any more — the state exists, but no action reaches it.
+  for (const c of done.con) assert.notEqual(c.k, 'mineConfirmed');
+  // The block lost the cells the blast took.
+  assert.equal(done.blocks[0].cells.includes(mine), false);
+  assert.equal(done.blocks[0].cells.length, 25 - boom.destroyed.length);
+});
+
+test('the blast from a review takes flags with the cells they were on', () => {
+  const { s, at } = board(SQUARE);
+  const mine = at(4, 4);
+  const doomed = at(4, 3);                       // orthogonal to the mine, inside the blast
+  const flagged = reduce(s, { t: 'flag', cell: doomed }).s;
+  assert.equal(/** @type {any} */ (flagged.con[doomed]).flagged, true);
+
+  const { s: done, ev } = reduce(flagged, { t: 'analyze', cell: mine });
+  assert.equal(/** @type {any} */ (ev[0]).destroyed.includes(doomed), true);
+  assert.equal(done.con[doomed].k, 'none', 'the flagged cell went up with the rest');
+  assert.equal(done.con[doomed].k === 'aiHidden', false, 'so there is no flag left to honour');
+});
+
+test('a review that detonates strands the users it cuts off, on the same tick', () => {
+  // PLAN §7.1: the blast is the player action (step 1); departures and movement then run
+  // over a distance field computed after the ground moved.
+  const level = { id: 'analyze-strand', map: ['#####', 'A###B', '#####'].join('\n'), arrivals: { count: 1, firstTick: 0, every: 1 } };
+  let s = init(level, 1);
+  s.con[cellAt(s, 1, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.con[cellAt(s, 3, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
+  s.blocks = [{ id: 0, cells: [cellAt(s, 1, 1), cellAt(s, 2, 1), cellAt(s, 3, 1)] }];
+  s.users = [{ id: 0, at: cellAt(s, 1, 1), state: 'moving', visited: [s.origin, cellAt(s, 1, 1)], stalled: false }];
+  s.schedule = { ...s.schedule, total: 1, spawned: 1 };
+
+  const { s: done, ev } = reduce(s, { t: 'analyze', cell: cellAt(s, 2, 1) });
+  // Exactly the traversal path's order, victims first — `detonate()` is the same function.
+  assert.deepEqual(ev.map((e) => e.t).slice(0, 3), ['requeued', 'detonate', 'confidence']);
+  // The walker was standing in the crater, so it goes back to the origin like any other
+  // blast victim (PLAN §3.4) — the trigger being a click rather than a footstep changes
+  // nothing about the aftermath.
+  assert.equal(done.users[0].state, 'queued');
+  assert.equal(done.users[0].at, done.origin);
+  assert.ok(done.confidence < 100 - RULES.DETONATE_HIT, 'and the wait is charged on top');
 });
 
 test('the reveal list is a pure function of the board, in ascending frontier order', () => {
@@ -210,14 +263,19 @@ test('PROPERTY: over real generated blocks, a cascade never opens a defect', () 
     }
     for (let i = 0; i < s.con.length; i++) {
       if (s.con[i].k !== 'aiHidden') continue;
+      const mined = /** @type {any} */ (s.con[i]).mine;
       const { ev } = reduce(s, { t: 'analyze', cell: i });
       const a = /** @type {any} */ (ev[0]);
-      assert.equal(a.t, 'analyzed');
-      for (const c of a.revealed) {
-        assert.equal(/** @type {any} */ (s.con[c]).mine, false, `seed ${seed}: cascade opened mined cell ${c}`);
+      if (mined) {
+        assert.equal(a.t, 'detonate', `seed ${seed}: clicking a defect must set it off`);
+        assert.equal(a.at, i);
+      } else {
+        assert.equal(a.t, 'analyzed');
+        assert.deepEqual(a.minesFound, [], 'a found mine is a crater, never a discovery');
+        for (const c of a.revealed) {
+          assert.equal(/** @type {any} */ (s.con[c]).mine, false, `seed ${seed}: cascade opened mined cell ${c}`);
+        }
       }
-      assert.ok(a.minesFound.length === 0 || (a.minesFound.length === 1 && a.minesFound[0] === i),
-        'only the tile you clicked can ever be confirmed');
       checked++;
     }
   }

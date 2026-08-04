@@ -85,14 +85,22 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 
 There is no `analyzeReveals` any more (removed 2026-08-04). **Analyze is one minesweeper
 click**: it opens the tile you point at, and if that tile's clue is zero the classic cascade
-runs. How much a review turns over is now a property of the board — of `mineDensity`, mostly
-— not a number a level sets. **Flag** is the other new verb: free, no tick, and a flagged
-tile is impassable to users, so a flag wall can close your own route.
+runs — and **if you click a mine it goes off**, running the same detonation a user stepping
+on it would. How much a review turns over is now a property of the board — of `mineDensity`,
+mostly — not a number a level sets, and `blastRadius` now prices misclicks as well as
+footsteps. **Flag** is the other new verb: free, no tick, a flagged tile is impassable to
+users (so a flag wall can close your own route), and Analyze refuses a flagged target, which
+is what stops a fat finger from cratering the tile you had worked out.
 
 Two consequences for authoring, both learned the hard way in the 2026-08-04 tuning pass:
 
 - **Reading a block costs three or four turns now, not one.** Budget for it. A level tuned
   against the old bulk reveal will be roughly ten turns too tight.
+- **Probing is a gamble, not a read.** Since a clicked mine detonates, `mineDensity` prices
+  *two* things at once: how hard the block is to deduce, and how expensive it is to get that
+  deduction wrong. Raising it past ~0.15 punishes twice. The sim bots never flag, so every
+  win rate they print is the floor — they take three or four self-inflicted detonations a
+  game that a flagging player simply would not.
 - **Loosening the schedule to pay for those turns pays for hand-building too.** On the long
   levels, going from `every: 3` to `every: 4` took `handOnly` from 0% to 100% — the one
   outcome SPEC §1 forbids. If your level has a floor, `every` is not the dial; density is.

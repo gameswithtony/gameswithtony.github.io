@@ -68,7 +68,7 @@ function cellHint(s, cell) {
   if (s.con[cell].k !== 'aiHidden') return '';
   return flaggedAt(s, cell)
     ? 'FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO ANALYZE'
-    : 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · FLAG IS FREE';
+    : 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · A MINE DETONATES · FLAG IS FREE';
 }
 
 /**

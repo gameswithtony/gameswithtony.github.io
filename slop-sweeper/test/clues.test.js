@@ -54,6 +54,10 @@ test('ocean, void, volcano, hand, revealed and endpoints all count zero (SPEC §
 });
 
 test('a confirmed mine keeps counting while it exists (PLAN §3.10)', () => {
+  // No action produces `mineConfirmed` since 2026-08-04 — analyzing a defect detonates it
+  // (PLAN §3 ruling 1). The state is kept anyway, per PLAN §2's rule about implementing the
+  // full §2.2 union, so its arithmetic is still specified and still tested: a future defuse
+  // verb would produce it and must find the clue layer already correct.
   const s = init(BOARD, 1);
   const centre = cellAt(s, 4, 1);
   const mined = cellAt(s, 5, 1);
@@ -61,10 +65,23 @@ test('a confirmed mine keeps counting while it exists (PLAN §3.10)', () => {
   s.blocks = [{ id: 0, cells: [mined] }];
   assert.deepEqual(clue(s, centre), { lo: 1, hi: 1 });
 
-  const after = reduce(s, { t: 'analyze', cell: mined }).s;
-  assert.equal(after.con[mined].k, 'mineConfirmed');
+  const after = { ...s, con: s.con.slice() };
+  after.con[mined] = { k: 'mineConfirmed', block: 0 };
   assert.deepEqual(clue(after, centre), { lo: 1, hi: 1 }, 'standard flag arithmetic');
   assert.equal(blockMines(after, 0), 1);
+});
+
+test('analyzing a defect detonates it, and confirms nothing (rev. 2026-08-04)', () => {
+  const s = init(BOARD, 1);
+  const mined = cellAt(s, 5, 1);
+  s.con[mined] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
+  s.blocks = [{ id: 0, cells: [mined] }];
+
+  const { s: after, ev } = reduce(s, { t: 'analyze', cell: mined });
+  assert.equal(ev[0].t, 'detonate');
+  assert.equal(after.con[mined].k, 'none', 'the tile is open water now');
+  assert.deepEqual(clue(after, cellAt(s, 4, 1)), { lo: 0, hi: 0 }, 'the clue drops with the mine');
+  assert.equal(blockMines(after, 0), 0);
 });
 
 test('silent mine destruction lowers the clues around it and the block badge (PLAN §3.5)', () => {

@@ -135,23 +135,30 @@ export function reduce(s, a) {
       if (reason) return rejected(s, reason);
       const d = draft(s);
       const target = /** @type {{ k: 'aiHidden', mine: boolean, block: number }} */ (d.con[a.cell]);
-      /** @type {number[]} */
-      const revealed = [];
-      /** @type {number[]} */
-      const minesFound = [];
-      if (target.mine) {
-        // A mined tile can never become AI_REVEALED (SPEC §2.2 defines that state safe),
-        // and skipping it silently would leak by omission — so it is confirmed, and it does
-        // not blast (PLAN §3.1). No cascade: the click ends here.
-        d.con[a.cell] = { k: 'mineConfirmed', block: target.block };
-        minesFound.push(a.cell);
-      } else {
-        revealTile(d, a.cell, revealed);
-        cascade(d, a.cell, revealed);
-      }
       d.stats.analyzed++;
       /** @type {Ev[]} */
-      const ev = [{ t: 'analyzed', revealed, minesFound }];
+      const ev = [];
+      if (target.mine) {
+        // IT GOES OFF (user decision 2026-08-04, superseding PLAN §3 ruling 1's no-blast
+        // rationale). You pointed at it and clicked; that is minesweeper, and it is the same
+        // incident as a user stepping on it — the identical `detonate()` below, so the same
+        // events, the same crater, the same hit. `stats.analyzed` still counts the turn: the
+        // review happened, it just went badly. No cascade, obviously.
+        //
+        // Ordering (PLAN §7.1): the blast is step 1, the player action. `runTick` then runs
+        // departures and movement over a distance field computed after the ground moved, so
+        // anyone the crater stranded stalls on this tick rather than the next one.
+        detonate(d, ev, a.cell, new Set());
+      } else {
+        /** @type {number[]} */
+        const revealed = [];
+        revealTile(d, a.cell, revealed);
+        cascade(d, a.cell, revealed);
+        // `minesFound` can no longer be anything but empty — a found mine is a detonation,
+        // not a discovery. The field stays in the event so the Ev shape (and the renderer
+        // reading it) is unchanged; see PLAN §3 ruling 1.
+        ev.push({ t: 'analyzed', revealed, minesFound: [] });
+      }
       return { s: runTick(d, ev), ev };
     }
     case 'flag': {

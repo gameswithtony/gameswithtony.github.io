@@ -73,7 +73,7 @@ Terrain features are defined by a **capability table**, not by hardcoded per-fea
 - `AI_HIDDEN` — AI-generated, unrevealed. Passable. Not buildable-from. May contain a mine.
 - `AI_REVEALED` — AI tile whose clue is visible. Passable, safe, buildable-from.
 - `FLAGGED` — player-marked. Impassable to users. Not buildable-from. *(Revised 2026-08-04: represented as a `flagged` flag on `AI_HIDDEN` rather than as a separate state — see §4.5. The behaviour described here is unchanged; only the encoding is.)*
-- `MINE_CONFIRMED` — revealed to contain a mine. Impassable.
+- `MINE_CONFIRMED` — revealed to contain a mine. Impassable. *(Revised 2026-08-04: **no action produces this state any more** — analyzing a mine detonates it (§4.3), and a flag is what marks a suspected defect. The state, its clue arithmetic and its rendering are kept implemented and tested, per `PLAN.md` §2: a defuse verb — spend turns to turn a known defect into a permanent wall instead of a crater — is the obvious next move and would produce it on day one. §4.4's overwrite pricing below is written against that future.)*
 
 ### 2.3 Future features — NOT YET BUILT
 
@@ -159,7 +159,11 @@ Reveals clue numbers on some `AI_HIDDEN` tiles, converting them to `AI_REVEALED`
 - **Precision of the revealed clues is governed by current skill** (§7.2).
 - **OPEN:** does the player choose which tiles/region to analyze? Player-chosen is more interesting and more thematically accurate (you choose what to review). Recommend the player selects a target tile and analysis radiates from it.
 
-*(Revised 2026-08-04 by owner decision. **Analyze is one minesweeper click.** It opens the single tile the player pointed at; if that tile's clue is exactly zero it cascades classically — every hidden 8-neighbour opens, recursing through further zeros — and the cascade is free because a zero clue cannot, by the definition of a clue, neighbour a mine. A mined target becomes `MINE_CONFIRMED` and does not cascade (the ruling in `PLAN.md` §3.1 stands). A flagged target is refused outright — unflag it first — and the cascade skips flagged tiles, both exactly as minesweeper behaves.*
+*(Revised 2026-08-04 by owner decision. **Analyze is one minesweeper click.** It opens the single tile the player pointed at; if that tile's clue is exactly zero it cascades classically — every hidden 8-neighbour opens, recursing through further zeros — and the cascade is free because a zero clue cannot, by the definition of a clue, neighbour a mine. A mined target **detonates** — see the second note below. A flagged target is refused outright — unflag it first — and the cascade skips flagged tiles, both exactly as minesweeper behaves.*
+
+*(Revised again 2026-08-04 by owner decision: **a mined target detonates.** Not confirmed — it goes off, running §5's standard detonation unchanged: blast radius by flood fill, destroyed construction reverts to ocean, other mines in the area go silently, users in the crater re-queue, confidence takes the hit. It is the identical code path a user stepping on the mine takes, so it emits the identical events and the renderer needed no change at all. The turn is still consumed and the review still counts in the stats — it happened, it just went badly — and there is no cascade.*
+
+*`PLAN.md` §3 ruling 1 argued the opposite, and its reasoning is worth keeping because of **why** it stopped applying: it was written when Analyze swept a region, so the player had not chosen the mined tile and setting it off would have been a gotcha. One click at a time removes that premise. You point at the tile; that is the decision; this is minesweeper. The knock-on effects are that `MINE_CONFIRMED` (§2.2) is now produced by nothing, and that §4.5's refusal to analyze a flagged tile stops being a courtesy — it is the only thing between a misclick and a crater.)*
 
 *"Quantity revealed per analysis: per-level parameter" is therefore **withdrawn**: the constant `ANALYZE_REVEALS` and the `analyzeReveals` level override are deleted, not defaulted. The reason is the whole point of the change: a bulk reveal did the deduction **for** the player, risk-free, so the minesweeper layer had no play in it. One click at a time is a decision — where do you probe, and is this tile the one that ends your turn. The cost is real and measured: reading a block costs several turns now instead of one, which is why the corpus was re-tuned (PLAN §9) and why `4.5 Flag` is no longer omitted from the prototype.)*
 
@@ -195,6 +199,8 @@ Advance the tick without acting.
 **DECIDED**
 
 A user stepping onto an `AI_HIDDEN` tile reveals it. If it contains a mine, it detonates.
+
+*(Revised 2026-08-04 by owner decision: **a user stepping on it is no longer the only trigger.** Analyzing a mined tile (§4.3) runs this same section, unchanged and unspecialized — same flood fill, same reversion to ocean, same silent destruction of other mines, same re-queue, same confidence drop. Everything below therefore reads with "the triggering user" generalized to "the trigger"; when the trigger is a click rather than a footstep there simply is no triggering user to send home, and only users standing in the crater re-queue.)*
 
 Detonation effects:
 
@@ -472,7 +478,7 @@ This eliminates the misfire class (tap-to-place vs drag-to-pan on one surface), 
 
 Side benefit: showing only *legal* actions teaches the adjacency and build-from rules without a tutorial. A cell adjacent only to `AI_HIDDEN` simply will not offer Place, and the player learns §4.1 from its absence.
 
-Use the selected state to preview consequences: blast radius of a confirmed mine, routes a flag would sever, ghost of the current block with valid/invalid tinting.
+Use the selected state to preview consequences: blast radius of a confirmed mine, routes a flag would sever, ghost of the current block with valid/invalid tinting. *(Revised 2026-08-04: the confirmed-mine preview has nothing to fire on while no action produces `MINE_CONFIRMED` — see §2.2. The other two previews are unaffected, and the code stays for the same reason the state does.)*
 
 **Block placement flow:** Generate → block appears in HUD at fixed size (must stay legible at far zoom while the player scans) → ghost follows cursor/tap position with snap → rotate button, free and unlimited → confirm. Nothing spends a turn until confirm.
 

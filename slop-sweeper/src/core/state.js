@@ -82,6 +82,14 @@ export function caps(t) {
 /**
  * The full §2.2 union. The predicates below never grow a special case (PLAN §2).
  *
+ * `mineConfirmed` is kept deliberately although **no action produces it any more** (user
+ * decision 2026-08-04: analyzing a mine detonates it, it does not confirm it). The row, its
+ * clue arithmetic (it still `holdsMine`), the hash token and the renderer's `mine` tile all
+ * stay, on the same reasoning PLAN §2 gives for implementing the full §2.2 union: it costs a
+ * few lines and keeps the schema honest, and a defuse verb — the obvious future move that
+ * turns a known defect into a permanent wall instead of a crater — would produce it on day
+ * one. Direct construction in tests is the only thing that reaches it today.
+ *
  * Revised 2026-08-04 (user decision): the standalone `flagged` state is gone. A flag is an
  * *annotation on an unreviewed AI tile*, not a construction state of its own — it has to
  * remember the tile's mine and block, and it has to keep counting for clues exactly as the
@@ -95,7 +103,7 @@ export const CON = {
   hand:          { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
   aiHidden:      { passable: true,  handFrom: false, genFrom: true,  occupies: true,  holdsMine: true },
   aiRevealed:    { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
-  mineConfirmed: { passable: false, handFrom: false, genFrom: false, occupies: true,  holdsMine: true },
+  mineConfirmed: { passable: false, handFrom: false, genFrom: false, occupies: true,  holdsMine: true },   // unreachable today; see above
 };
 
 /**
@@ -262,7 +270,9 @@ export function stopsBlast(terrain) {
  *   | { t: 'generateRefunded' }
  *   | { t: 'placed', cells: number[] }
  *   | { t: 'blockPlaced', block: number, cells: number[], mines: number }
- *   | { t: 'analyzed', revealed: number[], minesFound: number[] }
+ *   | { t: 'analyzed', revealed: number[], minesFound: number[] }   // minesFound is always
+ *                                                                   // empty since 2026-08-04:
+ *                                                                   // a found mine detonates
  *   | { t: 'flagged', cell: number, on: boolean }
  *   | { t: 'reveal', cell: number }
  *   | { t: 'detonate', at: number, destroyed: number[], minesLost: number[] }

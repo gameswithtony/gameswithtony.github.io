@@ -72,18 +72,35 @@ one).
 Full §2.2 construction-state union is implemented in types and in the table-driven
 passability/buildability predicates, because it costs a few lines and keeps the schema
 honest. *(Revised 2026-08-04: `FLAGGED` is no longer one of those states — flag ships as a
-real verb, encoded as `aiHidden.flagged`, see §3 ruling 2 and SPEC §4.5. The union now has
-no unused members.)*
+real verb, encoded as `aiHidden.flagged`, see §3 ruling 2 and SPEC §4.5. `MINE_CONFIRMED`
+took its place as the member no action produces, once ruling 1 made a clicked mine detonate;
+it is kept on exactly this paragraph's reasoning, with its clue arithmetic, capability row,
+hash token and renderer tile all intact and tested.)*
 
 ---
 
 ## 3. Rulings where the spec is silent (all provisional, revisit in playtest)
 
-1. **Analyze that reaches a mined tile → `MINE_CONFIRMED`, no blast.** Review found the defect.
-   The alternative (silently skipping mines) leaks perfect information by omission — "the tile
-   analysis refused to reveal is a mine" — and `AI_REVEALED` is defined safe (§2.2), so a mined
-   tile can never become it. Cost is real: with Overwrite absent, a confirmed mine is a permanent
-   wall the player must route around, which makes analyze targeting a weighty choice.
+1. ~~**Analyze that reaches a mined tile → `MINE_CONFIRMED`, no blast.**~~ **SUPERSEDED
+   2026-08-04 (user decision): it detonates.** The original ruling was written when Analyze
+   swept a region — the player did not choose the mined tile, so setting it off would have
+   been a gotcha, and confirming it was the fair reading. Ruling 2's revision removed that
+   premise: **the player now points at one tile and clicks it.** Clicking a mine and having
+   it go off is not a gotcha, it is minesweeper, and it is what makes the click a decision
+   rather than a free scan. So a mined target runs the **standard detonation** — literally
+   the same `detonate()` the traversal path calls: flood-fill `blastRadius` through
+   blast-permitting terrain, destroyed construction reverts to open water, mines in the area
+   go silently, users in the crater re-queue, `DETONATE_HIT` off the meter, `detonations`
+   incremented, the same `detonate` + `confidence` events (so the shake/dissolve/debris juice
+   fires with no renderer change at all). The turn is still spent and `stats.analyzed` still
+   increments: the review happened, it just went badly. No cascade. The part of the original
+   ruling that survives is the reason it existed — nothing is ever silently skipped, and no
+   information leaks by omission.
+
+   Consequences worth stating: `MINE_CONFIRMED` is now produced by **nothing**, and flags do
+   the job it used to (a suspected defect is marked, not clicked). SPEC §4.5's misclick
+   protection — Analyze refuses a flagged target — is now load-bearing rather than a courtesy:
+   it is the only thing standing between a fat finger and a crater.
 2. ~~**Analyze spread:** from the player-chosen `AI_HIDDEN` target, BFS 4-way across the
    contiguous `AI_HIDDEN` region, revealing up to `ANALYZE_REVEALS` tiles in BFS order.~~
    **SUPERSEDED 2026-08-04 (user decision), and this ruling is why.** Playtest found the exact
@@ -94,8 +111,8 @@ no unused members.)*
    tiles). The cascade needs no solver and can never be wrong: a zero clue has no mined
    8-neighbour by the definition of a clue, so the closure it opens is provably safe, and
    `reduce.js` throws rather than trusts that. `ANALYZE_REVEALS` and `LevelDef.analyzeReveals`
-   are **deleted**, not defaulted. Ruling 1 above is untouched and now covers the whole mined
-   case: a mined target is confirmed, does not blast, and does not cascade. See SPEC §4.3.
+   are **deleted**, not defaulted. The mined case is ruling 1 above, which this revision in
+   turn superseded: a mined target detonates. See SPEC §4.3.
 3. **Win/loss (resolves OPEN #8 for the prototype only):** win when every scheduled user has
    arrived at B; lose when confidence ≤ 0.
 4. **Users caught in a blast:** any user standing inside the destroyed area returns to origin and
@@ -113,7 +130,11 @@ no unused members.)*
    depart at once (the flush when a path completes is great feedback). Users spawned this tick
    join the queue and gate next tick.
 10. **`MINE_CONFIRMED` counts in adjacent clues** while it exists (standard minesweeper flag
-    arithmetic); if a blast destroys it, counts drop — consistent with ruling 5.
+    arithmetic); if a blast destroys it, counts drop — consistent with ruling 5. *(Still the
+    specified behaviour, still tested, but since ruling 1's revision **no action produces the
+    state**. It is kept for the reason §2 gives for implementing the whole §2.2 union: it costs
+    a few lines, keeps the schema honest, and the obvious next verb — defuse, turning a known
+    defect into a permanent wall instead of a crater — produces it on day one.)*
 11. **No confidence regeneration.** A `SERVED_BONUS` constant exists in `rules.js`, default 0, as
     a tuning lever only.
 12. **Restart rerolls the seed by default**; `?seed=` pins it for reproduction. Combined with
@@ -249,7 +270,7 @@ export type Con =                                     // §2.2, complete
   | { k: 'hand' }
   | { k: 'aiHidden'; mine: boolean; block: number; flagged: boolean }   // rev. 2026-08-04
   | { k: 'aiRevealed'; block: number }
-  | { k: 'mineConfirmed'; block: number }
+  | { k: 'mineConfirmed'; block: number }               // no action produces it (rev. 2026-08-04)
 
 export interface User {
   id: number; at: number
@@ -291,7 +312,7 @@ export type Ev =
   | { t: 'generateRefunded' }                         // §4.2: empty legal set, turn not consumed
   | { t: 'placed'; cells: number[] }                  // hand tile or committed block cells
   | { t: 'blockPlaced'; block: number; cells: number[]; mines: number }  // count → toast
-  | { t: 'analyzed'; revealed: number[]; minesFound: number[] }
+  | { t: 'analyzed'; revealed: number[]; minesFound: number[] }  // minesFound always [] now
   | { t: 'flagged'; cell: number; on: boolean }
   | { t: 'reveal'; cell: number }                     // traversal reveal (§5)
   | { t: 'detonate'; at: number; destroyed: number[]; minesLost: number[] }
@@ -481,12 +502,27 @@ structural ones marked SPEC.
 >   path any oxygen, not the most comfortable, and `every` is pinned at 3 on the four levels
 >   whose floor is load-bearing.
 > - **`careful` overtook `balanced` decisively.** With one click per turn, reviewing what your
->   users are about to walk on is worth far more than a review cadence; `balanced:0.4` now
->   eats 5–6 detonations a game where `careful` eats 1–2. That is the intended shape of the
->   change, and it is the first time the corpus has separated the two policies this cleanly.
+>   users are about to walk on is worth far more than a review cadence. *(Then §3 ruling 1's
+>   revision — a clicked mine detonates — took most of that back: probing is now a gamble, and
+>   `careful` is the policy that gambles most. See the second table below.)*
 > - **The sim measures the pessimistic end.** The bots never flag (see `sim/policies.js`), and
 >   flagging is exactly the tool that answers "I have deduced a defect and cannot afford to
 >   clear it". Read the long levels' 10–30% best-policy rates with that in mind.
+
+> **Revised a third time 2026-08-04 (user decision): analyzing a mine detonates it**
+> (§3 ruling 1). No level numbers changed — this was a measurement pass, not a tuning pass,
+> because the user is hand-playtesting feel and the bots are now *badly* unrepresentative.
+> The effect is concentrated exactly where you would expect: every policy that probes now
+> blows itself up doing it, and `careful:0.4` — the policy that probes most — lost the most.
+> Detonations per game roughly doubled for the reviewing policies (`plain`/`careful`
+> 2.4 → 5.8), and `careful` fell below `balanced` on `channel`, `caldera` and `strait`.
+>
+> **That gap is mostly an artefact, and it is worth being precise about why.** A bot never
+> flags, so when it suspects a tile its only move is to click it — and now that kills it. A
+> human's answer to "I think that is a defect" is a flag, which costs no turn and no
+> confidence. The three-to-four extra detonations a game in the table below are almost
+> entirely self-inflicted probe deaths that a flagging player would never take. The corpus
+> was left alone on that basis.
 
 Authored as charmaps in `src/levels/*.js` (SPEC §10.7 legend). `route` is the A→B path
 length in tiles — with the schedule it sets the floor on session length, since the last
@@ -517,6 +553,24 @@ The floors hold on all four levels that have one, and `genRush` detonates roughl
 often as `balanced` everywhere. What the corpus no longer has is a comfortable middle: the
 long-route levels sit at 10–30% for the best bot where they were 80–100% before the change.
 `plain` and `atoll` carry the "is this fun" question now; the other four are the ceiling.
+
+Re-measured after §3 ruling 1's revision (a clicked mine detonates), same seeds, same level
+numbers — the delta is the cost of probing, and the `dets` column is the story:
+
+| level | handOnly | genRush | balanced:0.4 | careful:0.4 | best med | dets (bal / careful) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plain` | 100% | 20% | 33% | **48%** | 87 | 6.8 / 5.8 |
+| `channel` | **0%** | 7% | **12%** | 5% | 138 | 6.0 / 4.6 |
+| `atoll` | 100% | 10% | 43% | **45%** | 67 | 4.6 / 4.7 |
+| `caldera` | **0%** | 5% | **18%** | 5% | 125 | 5.5 / 4.3 |
+| `strait` | **0%** | 0% | **10%** | 2% | 107 | 3.6 / 4.0 |
+| `sprawl` | **0%** | 3% | **7%** | 2% | 158 | 5.7 / 4.1 |
+
+Nothing became newly unwinnable — the levels that sit at 2–10% were at 3–15% before — so no
+constant was touched. The one structural change is that **probing is no longer strictly
+good**: `balanced` beats `careful` on four of six levels now, which is the intended shape.
+The right way to read this table is as the floor of the game's difficulty, not its middle:
+it is what the corpus looks like played by someone who has flags and refuses to use them.
 
 ### 9.1 Authoring pipeline — new levels must be cheap, for humans and AI alike
 
@@ -854,7 +908,12 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
 - [ ] §4.3 (rev. 2026-08-04) Analyze opens **exactly one tile**; a zero clue cascades and a
       numbered clue does not; the cascade skips flagged tiles, never leaves the contiguous
       hidden region, and **never opens a mine** — asserted directly and again as a property
-      over real generated blocks (tests). A mined target is confirmed and does not cascade.
+      over real generated blocks (tests).
+- [ ] §4.3 / §5 (rev. 2026-08-04) a mined target **detonates**: the same `detonate()` as the
+      traversal path, so the same `detonate` + `confidence` events, the same crater, the same
+      requeue and the same meter hit — the renderer needed no change. The turn is still spent
+      and `stats.analyzed` still increments; no cascade; nothing becomes `MINE_CONFIRMED`
+      (tests, including a property run over real generated blocks).
 - [ ] §4.3 `ANALYZE_REVEALS` / `analyzeReveals` are gone from `rules.js`, `levels/index.js`
       and the validator (standing test asserts they are absent from `RULES` and
       `LEVEL_DEFAULTS`), and the Level Lab no longer offers the field.
