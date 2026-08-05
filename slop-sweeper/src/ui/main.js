@@ -10,6 +10,7 @@
 
 import { RULES } from '../core/rules.js';
 import { blastArea, init, legalActions, reduce } from '../core/reduce.js';
+import { levelParams, setLevelParams } from '../core/state.js';
 import { randomSeed } from '../core/rng.js';
 import { getLevel, levelIds } from '../levels/index.js';
 import * as cam from './camera.js';
@@ -26,14 +27,61 @@ import { PALETTE } from './palette.js';
 /** @typedef {import('./renderer.js').ViewOverlay} ViewOverlay */
 
 const STORE_KEY = 'slop-sweeper.level';
+const SAVE_KEY = 'slop-sweeper.save';
+
+/**
+ * BUMP THIS WHENEVER `GameState`'s SHAPE CHANGES — a new field, a renamed one, a changed
+ * `Con` or `Phase` variant, anything. A save written by an older shape is discarded on sight
+ * rather than half-read, which is the only cheap way to keep a persisted structure honest
+ * against a core that is still moving. Costing a player one in-progress game at a version
+ * bump is the right trade against reviving a state the reducer no longer understands.
+ */
+const SAVE_V = 1;
 
 /** localStorage must never be load-bearing: the game runs with storage unavailable (PLAN §4). */
 const store = {
   /** @param {string} k @returns {string | null} */
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   /** @param {string} k @param {string} v */
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode, or quota */ } },
+  /** @param {string} k */
+  del(k) { try { localStorage.removeItem(k); } catch { /* nothing to do about it */ } },
 };
+
+/**
+ * @typedef {object} SaveFile
+ * @property {number} v
+ * @property {string} levelId
+ * @property {LevelDef | null} labDef   embedded, because a pasted level is not in the registry
+ * @property {GameState} state
+ */
+
+/**
+ * Enough of a shape check to catch a save from another version, another game, or a corrupted
+ * string. It is not a schema validator — `SAVE_V` is what guards shape drift — it is the
+ * "never throw on a bad save" rule made concrete.
+ * @param {unknown} raw
+ * @returns {SaveFile | null}
+ */
+function parseSave(raw) {
+  if (typeof raw !== 'string') return null;
+  try {
+    const save = JSON.parse(raw);
+    if (!save || save.v !== SAVE_V || typeof save.levelId !== 'string') return null;
+    const s = save.state;
+    if (!s || typeof s !== 'object') return null;
+    if (!Array.isArray(s.terrain) || !Array.isArray(s.con) || !Array.isArray(s.users)
+      || !Array.isArray(s.blocks) || !s.phase || !s.stats || !s.schedule || !s.rng || !s.bbox
+      || typeof s.w !== 'number' || typeof s.h !== 'number' || typeof s.seed !== 'number'
+      || typeof s.tick !== 'number' || s.terrain.length !== s.w * s.h || s.con.length !== s.terrain.length) {
+      return null;
+    }
+    if (save.labDef !== null && (typeof save.labDef !== 'object' || typeof save.labDef?.map !== 'string')) return null;
+    return /** @type {SaveFile} */ (save);
+  } catch {
+    return null;                       // truncated, tampered with, or not ours at all
+  }
+}
 
 /**
  * The event drain, as a registry rather than a switch: M4 subscribes particles to
@@ -81,15 +129,57 @@ function boot() {
   const bus = createBus();
   const fx = createEffects();
 
+  /**
+   * The save, if there is one this URL agrees with (PLAN §11.10). Resolved before anything is
+   * built, because it decides which level boots, which state it boots into, and whether the
+   * title card is shown at all.
+   *
+   * THE RULE, and why each clause is there:
+   *   · `?lab` absent — the Lab boots definitions by hand and must never have one restored
+   *     underneath it.
+   *   · `?seed=` present — restore only when it is the seed we saved, and only when `?level=`
+   *     (if present) agrees too. A share link REFRESHED MID-PLAY is the same game and has to
+   *     resume; a share link for a *different* game is repro intent and boots fresh.
+   *   · `?level=` present — must match. The game writes this parameter into the URL itself on
+   *     every start, so an ordinary refresh always agrees and always resumes; choosing a
+   *     different level from the URL is a request for that level, not for the saved one.
+   * @returns {SaveFile | null}
+   */
+  function loadSave() {
+    if (params.has('lab')) return null;
+    const save = parseSave(store.get(SAVE_KEY));
+    if (!save) return null;
+    const level = params.get('level');
+    if (level !== null && level !== save.levelId) return null;
+    if (pinnedSeed !== null && pinnedSeed !== (save.state.seed >>> 0)) return null;
+    // A registered level must still be registered; a Lab save carries its own definition.
+    if (!save.labDef && !ids.includes(save.levelId)) return null;
+    try {
+      // `levelParams` is keyed on the terrain ARRAY's identity (a WeakMap in core), so a state
+      // that came back through JSON has none — it would silently fall back to the defaults and
+      // play at the wrong patience and the wrong mine density. Booting the definition once and
+      // copying its parameters across re-associates them using core's own defaulting rather
+      // than a second copy of it here, and doubles as a check that the level still loads.
+      const def = save.labDef ?? getLevel(save.levelId);
+      setLevelParams(save.state, levelParams(init(def, save.state.seed)));
+      return save;
+    } catch {
+      return null;                     // the level no longer loads: the save is unplayable
+    }
+  }
+
+  const restored = loadSave();
+  if (restored) levelId = restored.levelId;
+
   /** @type {LevelDef} */
-  let levelDef = getLevel(levelId);
+  let levelDef = restored?.labDef ?? getLevel(levelId);
   /**
    * Non-null while the Level Lab's definition is the one being played (PLAN §9.2).
    * @type {LevelDef | null}
    */
-  let labDef = null;
+  let labDef = restored?.labDef ?? null;
 
-  let s = init(levelDef, pinnedSeed ?? randomSeed());
+  let s = restored ? restored.state : init(levelDef, pinnedSeed ?? randomSeed());
   /**
    * The state as it was before the action currently being drained — the only place a
    * destroyed tile still exists to be drawn coming apart (PLAN §11.6).
@@ -156,7 +246,10 @@ function boot() {
     onRun: toggleRun,
     onZoom: zoomStep,
   });
-  hud.setLevels(ids, levelId);
+  // Same union `startWith` builds: a restored Lab game boots straight past `startWith`, and
+  // without this its own level would be missing from the dropdown, which would then display
+  // some other level's name over the board actually on screen.
+  hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
 
   createInput(board, camera, {
     getState: () => s,
@@ -226,6 +319,17 @@ function boot() {
     cam.fit(camera, s);
     renderer.invalidate();
     refresh();
+    saveGame();
+  }
+
+  /**
+   * Persist the reducer's state and nothing else (PLAN §11.10). Camera, selection, ghost and
+   * the run toggle are all deliberately absent: they are view state, they are cheap to
+   * re-derive, and serializing the camera would put a zoom level inside a saved game, which
+   * is exactly the coupling SPEC §10.5 exists to prevent.
+   */
+  function saveGame() {
+    store.set(SAVE_KEY, JSON.stringify({ v: SAVE_V, levelId, labDef, state: s }));
   }
 
   function restart() {
@@ -242,6 +346,7 @@ function boot() {
     bus.drain(out.ev);
     renderer.invalidate();
     refresh();
+    saveGame();
     startLoop();
   }
 
@@ -570,8 +675,16 @@ function boot() {
   //
   // `body.starting` is set synchronously so the board is covered for the frame or two the
   // dynamic import takes — otherwise a slow load flashes the game before the title card.
-  const wantStart = !isLab && !params.has('seed');
+  // A refresh that lands back in a game must not land on the title card — that would be the
+  // door in front of the repro link all over again, one screen further in. That holds however
+  // the restored game ended: a finished one shows its END screen, derived below from the phase
+  // alone, exactly as if the final action had just resolved. Opening the title card first and
+  // letting the end screen replace it would be a visible flash of the wrong thing.
+  const wantStart = !isLab && !params.has('seed') && !restored;
   if (wantStart) document.body.classList.add('starting');
+  if (restored && (s.phase.k === 'won' || s.phase.k === 'lost')) {
+    showEnd(s.phase.k === 'won', { served: s.stats.served, total: s.schedule.total });
+  }
   import('./start.js')
     .then(({ createStart }) => {
       endScreen = createStart({

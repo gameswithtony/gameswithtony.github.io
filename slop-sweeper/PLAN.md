@@ -170,6 +170,11 @@ hash token and renderer tile all intact and tested.)*
 12. **Restart rerolls the seed by default**; `?seed=` pins it for reproduction. Combined with
     determinism (§7.9) this closes the refresh-to-reroll exploit: replaying the same seed replays
     the same block draws and mine rolls.
+    *Revised 2026-08-04 (user decision — the game survives a refresh, §11.10):* a refresh now
+    **resumes** rather than starting over, which is strictly stronger against the same exploit
+    than the fresh-seed rule it replaces — refreshing rerolls *nothing at all*, where before it
+    rerolled the whole board. RESTART remains the one deliberate reroll, and is still the only
+    way to get a new seed without asking for one in the URL.
 
 ---
 
@@ -1098,6 +1103,38 @@ losses.
   with their own buttons, and the board behind them is finished. Both sit above the floating
   zoom cluster.
 
+### 11.10 Save & resume (2026-08-04, user decision — overturns §16's "no saves")
+
+Storage is the UI shell's job and lives in `main.js`; core stays pure and never learns a save
+exists. One key, `slop-sweeper.save`, holding `{ v, levelId, labDef, state }` — the reducer's
+`GameState` and the two facts needed to boot it again. **View state is never serialized**:
+camera, selection, ghost, rotation and the run toggle all reboot fresh, so SPEC §10.5 survives
+intact and a saved game cannot carry a zoom level around inside it.
+
+`SAVE_V` (in `main.js`, beside the key) is **bumped by hand whenever `GameState`'s shape
+changes**. A save with the wrong version, a parse failure, or a state that fails a shape check
+is discarded silently and the game boots fresh — a corrupt save must never throw. Writing
+happens after every dispatch and on every start; with storage unavailable every path is a
+no-op and the game is fully playable, per §4.
+
+**Restore rule.** Resume iff a valid save exists, `?lab` is absent, and every URL parameter
+present agrees with it: `?level=` must match the saved level; `?seed=` must match the saved
+seed *and* its `?level=`, if present, must match too. The game writes `?level=` into the URL
+itself on every start, so an ordinary refresh always agrees and always resumes; a share link
+refreshed mid-play is the same game and resumes; a share link for a *different* game is repro
+intent and boots fresh. A Lab save restores through `playDef`, since its definition is embedded
+rather than registered.
+
+Restoring boots down the identical path a fresh `init` takes — fit the camera, invalidate,
+refresh the HUD — so no render state is special-cased. One wrinkle core forces and the code
+comments: `levelParams` is keyed on the terrain array's *identity* through a WeakMap, so a
+state that came back through JSON has no parameters; restore re-associates them by booting the
+definition once and copying, rather than by restating core's defaulting logic in the shell.
+
+A resumed game **skips the title card** when its phase is `play` or `placing` — a refresh
+landing on the title card would be the door-in-front-of-the-repro-link problem one screen
+further in. A resumed `won`/`lost` shows its end screen, derived from the phase alone.
+
 ---
 
 ## 12. Input & camera
@@ -1315,6 +1352,14 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
   question, not a schedule slip — surface it, don't polish past it.
 - **Node version.** Sim and tests want Node ≥ 20 (`node:test`). Dev-only — players need nothing
   but a browser.
-- **No saves is a feature here.** Levels are 5–10 minutes; refresh restarts with a fresh seed
+- ~~**No saves is a feature here.** Levels are 5–10 minutes; refresh restarts with a fresh seed
   (§3.12 closes the reroll exploit). Persisting mid-game state would drag camera/phase
-  serialization questions into the prototype for no tuning value.
+  serialization questions into the prototype for no tuning value.~~
+  **Overturned 2026-08-04 by user decision: the game saves and resumes (§11.10).** The stated
+  cost did not materialise, because the phase question answered itself and the camera question
+  was never asked: **only the reducer's `GameState` is persisted** — camera, selection, ghost
+  and the run toggle all reboot fresh, so SPEC §10.5's "view state is never serialized" is
+  untouched. GameState was already plain JSON all the way down, so persistence is
+  `JSON.stringify` with a version stamp rather than an encoder, and `test/save.test.js` now
+  pins that property so it cannot quietly stop being true. §3.12's exploit argument comes out
+  stronger, not weaker.
