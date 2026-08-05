@@ -87,9 +87,13 @@ for (const id of args.levels) {
     rows.push([
       id,
       policy,
+      pct(st.servedFraction),
+      pct(st.perfectRate),
       pct(st.winRate),
+      num(st.meanServed, 1),
+      num(st.gaveUpPerGame, 1),
+      num(st.killedPerGame, 1),
       st.medianWinTicks ? num(st.medianWinTicks, 0) : '—',
-      num(st.meanWinConfidence),
       num(st.detonationsPerGame, 2),
       num(st.waitingPerGame, 0),
       num(st.verbs.placed, 1),
@@ -99,16 +103,19 @@ for (const id of args.levels) {
       pct(st.guessForcedRate),
       st.rejects ? String(st.rejects) : '·',
     ]);
-    if (args.verbose) console.error(`  ${id} × ${policy}: ${pct(st.winRate)}`);
+    if (args.verbose) console.error(`  ${id} × ${policy}: served ${pct(st.servedFraction)}`);
   }
 }
 
 console.log(`# slop-sweeper sim — ${args.games} games/cell, seed ${args.seed}\n`);
 console.log(markdownTable(
-  ['level', 'policy', 'win', 'medTicks', 'confW', 'dets', 'waitΣ', 'place', 'gen', 'analyze', 'refund', 'guess', 'bad'],
+  ['level', 'policy', 'served', 'perfect', 'win', 'score', 'gaveUp', 'killed', 'medTicks',
+    'dets', 'waitΣ', 'place', 'gen', 'analyze', 'refund', 'guess', 'bad'],
   rows,
 ));
 console.log(`\n_${rows.length} cells in ${((Date.now() - started) / 1000).toFixed(1)}s. `
-  + 'medTicks/confW are over winning games; waitΣ is the waiting-tick integral; '
-  + 'guess is the share of games where deduction was ever impossible on a live route; '
-  + 'bad counts rejected bot actions (should be ·)._');
+  + '**served** is the headline: mean users delivered / scheduled. perfect = every user '
+  + 'delivered; win = at least one, so it reads high by design. score is mean users served; '
+  + 'gaveUp/killed split the losses by cause; medTicks is over winning games; waitΣ is the '
+  + 'total ticks users spent unable to move; guess is the share of games where deduction was '
+  + 'ever impossible on a live route; bad counts rejected bot actions (should be ·)._');

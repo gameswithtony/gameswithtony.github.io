@@ -3,7 +3,7 @@
 // Pure — the input state is never mutated; a draft is cloned and returned. The tick
 // pipeline runs in the exact order of PLAN §7.1 and nothing here knows what a frame is.
 
-import { RULES, LEVEL_DEFAULTS } from './rules.js';
+import { LEVEL_DEFAULTS } from './rules.js';
 import {
   CON_HAND, CON_NONE, conCaps, isFlagged, isHandBuildable, levelParams, setLevelParams, stopsBlast,
 } from './state.js';
@@ -34,6 +34,7 @@ export function init(def, seed) {
   const params = {
     arrivals: def.arrivals ?? LEVEL_DEFAULTS.arrivals,
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
+    patience: def.patience ?? LEVEL_DEFAULTS.patience,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
@@ -59,10 +60,9 @@ export function init(def, seed) {
       nextTick: params.arrivals.firstTick,
       every: params.arrivals.every,
     },
-    confidence: RULES.CONFIDENCE_START,
     phase: { k: 'play' },
     rng: initStreams(seed),
-    stats: { placed: 0, generated: 0, analyzed: 0, waited: 0, detonations: 0, served: 0 },
+    stats: { placed: 0, generated: 0, analyzed: 0, waited: 0, detonations: 0, served: 0, lost: 0 },
   };
   setLevelParams(s, params);
   return s;
@@ -361,7 +361,7 @@ function runTick(d, ev) {
   // Step 5 — stranding: users with no remaining path simply stall each tick and are
   // already counted as waiting below (SPEC §6.4). No extra state needed.
   spawns(d, ev);
-  meters(d, ev);
+  patience(d, ev);
   d.tick++;
   return d;
 }
@@ -407,7 +407,6 @@ function movement(d, ev, dist) {
     if (to === d.dest) {
       u.state = 'arrived';
       d.stats.served++;
-      d.confidence += RULES.SERVED_BONUS;   // 0 by default; no event, the Ev union has no reason for it
       ev.push({ t: 'arrived', user: u.id });
     }
   }
@@ -481,21 +480,20 @@ function detonate(d, ev, at, destroyed) {
     if (b.cells.some((c) => lost.has(c))) b.cells = b.cells.filter((c) => !lost.has(c));
   }
 
-  // Everyone standing in the hole goes back to the start, the triggerer included
-  // (PLAN §3.4). Users elsewhere whose route was severed stay put and strand (SPEC §6.4).
+  // Everyone standing in the hole is KILLED, the triggerer included (PLAN §3 ruling 4,
+  // revised 2026-08-04: they used to re-queue). The trigger cell is inside `blastArea`, so
+  // the triggerer is covered by the same set as the bystanders — no special case. Users
+  // elsewhere whose route was severed simply stall, and their patience runs down (§6.4).
   for (const u of d.users) {
     if (u.state !== 'moving' || !lost.has(u.at)) continue;
-    u.state = 'queued';
-    u.at = d.origin;
-    u.visited = [];
+    u.state = 'gone';
     u.stalled = false;
-    ev.push({ t: 'requeued', user: u.id });
+    d.stats.lost++;
+    ev.push({ t: 'userLost', user: u.id, at: u.at, reason: 'detonation' });
   }
 
   d.stats.detonations++;
-  d.confidence -= RULES.DETONATE_HIT;
   ev.push({ t: 'detonate', at, destroyed: gone, minesLost });
-  ev.push({ t: 'confidence', delta: -RULES.DETONATE_HIT, reason: 'detonation' });
 }
 
 /**
@@ -506,7 +504,7 @@ function spawns(d, ev) {
   const sc = d.schedule;
   while (sc.spawned < sc.total && d.tick >= sc.nextTick) {
     /** @type {User} */
-    const u = { id: d.users.length, at: d.origin, state: 'queued', visited: [], stalled: false };
+    const u = { id: d.users.length, at: d.origin, state: 'queued', visited: [], stalled: false, waited: 0 };
     d.users.push(u);
     sc.spawned++;
     sc.nextTick += sc.every;
@@ -515,32 +513,41 @@ function spawns(d, ev) {
 }
 
 /**
- * Gated at origin, stalled mid-route or stranded by a blast all count identically
- * (SPEC §6.4). Win/loss per PLAN §3.3.
+ * Step 7 — patience, and the end of the game. Replaces the confidence meter entirely (user
+ * decision 2026-08-04; SPEC §8, PLAN §3 rulings 3/4/11).
+ *
+ * **Waiting is not moving.** Gated at the origin, stalled mid-route, or stranded behind a
+ * crater are the same thing to the person standing there, exactly as SPEC §6.4 always said —
+ * what changed is what it costs. `waited` is cumulative and never resets, so a route that
+ * keeps stalling bleeds the same user out over the whole game rather than forgiving them
+ * every time it briefly clears. At `patience` the user gives up and is gone for good; there
+ * is no way to get them back.
+ *
+ * Stranding needs no special case any more, which is the tidiest thing about this design: a
+ * stranded user is a blocked user, blocked is waiting, and patience resolves it.
  * @param {GameState} d
  * @param {Ev[]} ev
  */
-function meters(d, ev) {
-  let waiting = 0;
+function patience(d, ev) {
+  const limit = levelParams(d).patience;
   for (const u of d.users) {
-    if (u.state === 'queued' || (u.state === 'moving' && u.stalled)) waiting++;
-  }
-  if (waiting > 0) {
-    const delta = -RULES.WAIT_DRAIN_PER_USER * waiting;
-    d.confidence += delta;
-    ev.push({ t: 'confidence', delta, reason: 'waiting' });
+    if (u.state !== 'queued' && !(u.state === 'moving' && u.stalled)) continue;
+    u.waited++;
+    if (u.waited < limit) continue;
+    u.state = 'gone';
+    u.stalled = false;
+    d.stats.lost++;
+    ev.push({ t: 'userLost', user: u.id, at: u.at, reason: 'gaveUp' });
   }
 
-  // Win first: a level whose users all arrived is finished, even if the same tick emptied
-  // the meter.
-  if (d.schedule.spawned >= d.schedule.total && d.users.every((u) => u.state === 'arrived')) {
-    d.phase = { k: 'won' };
-    ev.push({ t: 'won' });
-  } else if (d.confidence <= 0) {
-    d.confidence = 0;
-    d.phase = { k: 'lost' };
-    ev.push({ t: 'lost' });
-  }
+  // The level ends when every scheduled user has resolved one way or the other. Score is
+  // the arrivals; one is enough to call it a win, and the goal is all of them.
+  if (d.schedule.spawned < d.schedule.total) return;
+  if (!d.users.every((u) => u.state === 'arrived' || u.state === 'gone')) return;
+  const served = d.stats.served;
+  const total = d.schedule.total;
+  d.phase = served >= 1 ? { k: 'won' } : { k: 'lost' };
+  ev.push({ t: served >= 1 ? 'won' : 'lost', served, total });
 }
 
 // --- helpers ------------------------------------------------------------------------

@@ -78,12 +78,12 @@ test('a user with no legal move stalls in place and counts as waiting', () => {
 
   s = { ...s, con: s.con.slice() };
   s.con[cellAt(s, 2, 0)] = CON_NONE;       // the blast an M2 mine would have caused
-  const before = s.confidence;
   const r = reduce(s, { t: 'wait' });
 
   assert.equal(r.s.users[0].at, cellAt(s, 1, 0), 'stranded users wait in place (SPEC §6.4)');
   assert.equal(r.s.users[0].stalled, true);
   assert.equal(r.s.users[0].state, 'moving');
   assert.equal(r.ev.some((e) => e.t === 'step'), false);
-  assert.equal(r.s.confidence, before - RULES.WAIT_DRAIN_PER_USER, 'a stalled user drains like any other waiting user');
+  assert.equal(r.s.users[0].waited, s.users[0].waited + 1,
+    'a stalled user burns patience like any other waiting user');
 });

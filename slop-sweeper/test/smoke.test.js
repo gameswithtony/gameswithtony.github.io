@@ -10,14 +10,17 @@ import { init } from '../src/core/reduce.js';
 
 test('rules.js carries every PLAN §8 constant', () => {
   for (const k of [
-    'CONFIDENCE_START', 'WAIT_DRAIN_PER_USER', 'DETONATE_HIT', 'SERVED_BONUS', 'BLAST_RADIUS',
-    'MIN_BLOCK_DEFECTS',
+    'USER_PATIENCE', 'BLAST_RADIUS', 'MIN_BLOCK_DEFECTS',
     'USER_MOVE_EVERY', 'ART_PX_PER_TILE', 'FONT_MIN_DEVICE_PX',
     'ZOOM_MAX_ARTPX', 'TAP_SLOP_CSS', 'TAP_MS', 'STEP_TWEEN_MS', 'FF_INTERVAL_MS',
   ]) {
     assert.equal(typeof RULES[k], 'number', `missing constant ${k}`);
   }
-  assert.equal(RULES.CONFIDENCE_START, 100);
+  // The confidence meter is gone with the points economy (2026-08-04): patience replaces the
+  // drain, detonation deaths replace the hit, all-users-gone replaces the empty bar.
+  for (const dead of ['CONFIDENCE_START', 'WAIT_DRAIN_PER_USER', 'DETONATE_HIT', 'SERVED_BONUS']) {
+    assert.equal(dead in RULES, false, `${dead} should be gone`);
+  }
   // Removed 2026-08-04 with single-click Analyze: a per-level reveal budget has nothing
   // left to budget, and a stale constant is how a dead rule comes back to life.
   assert.equal('ANALYZE_REVEALS' in RULES, false);
@@ -90,7 +93,7 @@ test('the registry boots a level into a well-formed state', () => {
   const s = init(getLevel('plain'), 1);
   assert.equal(s.level, 'plain');
   assert.equal(s.tick, 0);
-  assert.equal(s.confidence, RULES.CONFIDENCE_START);
+  assert.equal(s.stats.served + s.stats.lost, 0);
   assert.equal(s.phase.k, 'play');
   assert.equal(s.con.length, s.w * s.h);
   assert.equal(s.users.length, 0);

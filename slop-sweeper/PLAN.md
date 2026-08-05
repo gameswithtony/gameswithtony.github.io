@@ -113,10 +113,18 @@ hash token and renderer tile all intact and tested.)*
    `reduce.js` throws rather than trusts that. `ANALYZE_REVEALS` and `LevelDef.analyzeReveals`
    are **deleted**, not defaulted. The mined case is ruling 1 above, which this revision in
    turn superseded: a mined target detonates. See SPEC §4.3.
-3. **Win/loss (resolves OPEN #8 for the prototype only):** win when every scheduled user has
-   arrived at B; lose when confidence ≤ 0.
-4. **Users caught in a blast:** any user standing inside the destroyed area returns to origin and
-   re-queues, exactly like the triggerer. Users elsewhere whose path is severed strand per §6.4.
+3. ~~**Win/loss:** win when every scheduled user has arrived at B; lose when confidence ≤ 0.~~
+   **SUPERSEDED 2026-08-04 (user decision): THE GAME IS SCORED IN POINTS.** The level ends
+   when every scheduled user has resolved — arrived or gone. **Score is arrivals: one is a
+   win, all of them is the goal, none is a loss.** Events carry it: `{ t: 'won', served,
+   total }` / `{ t: 'lost', served, total }`. Win rate therefore reads high by design and is
+   nearly useless on its own; **mean served fraction** is the number that means anything, and
+   **perfect-game rate** is the old bar.
+4. ~~**Users caught in a blast** return to origin and re-queue, the triggerer included.~~
+   **SUPERSEDED 2026-08-04: they are killed.** `{ t: 'userLost', user, at, reason:
+   'detonation' }`, and they are gone for good — there is no revival. The triggerer needs no
+   special case, because the trigger cell is inside its own blast area. Users elsewhere whose
+   path is severed still strand per §6.4, and §7.1's new step 7 resolves them.
 5. **Clues and per-block badges are always derived live** from the current mine set — silent mine
    destruction (§5) updates them. Required by the never-wrong rule (§7.2), and it is the
    information payoff of burn-it-down. Nothing clue-shaped is ever stored; it is computed.
@@ -150,8 +158,15 @@ hash token and renderer tile all intact and tested.)*
     state**. It is kept for the reason §2 gives for implementing the whole §2.2 union: it costs
     a few lines, keeps the schema honest, and the obvious next verb — defuse, turning a known
     defect into a permanent wall instead of a crater — produces it on day one.)*
-11. **No confidence regeneration.** A `SERVED_BONUS` constant exists in `rules.js`, default 0, as
-    a tuning lever only.
+11. ~~**No confidence regeneration.** A `SERVED_BONUS` constant exists as a tuning lever.~~
+    **SUPERSEDED 2026-08-04: there is no confidence.** The meter is gone entirely and so are
+    `CONFIDENCE_START`, `WAIT_DRAIN_PER_USER`, `DETONATE_HIT` and `SERVED_BONUS`. What
+    replaces it is **patience**: each user carries a cumulative count of ticks it spent unable
+    to move, and at `levelParams(s).patience` it gives up — `{ t: 'userLost', user, at,
+    reason: 'gaveUp' }`. Waiting is queued-at-origin *or* stalled-this-tick, exactly the three
+    cases SPEC §6.4 always treated identically; moving is never waiting; the count never
+    resets. The ruling this replaces was about a resource the player spent. Patience is about
+    people who leave, which is the same pressure with a face on it.
 12. **Restart rerolls the seed by default**; `?seed=` pins it for reproduction. Combined with
     determinism (§7.9) this closes the refresh-to-reroll exploit: replaying the same seed replays
     the same block draws and mine rolls.
@@ -414,9 +429,19 @@ tick, `generateRefunded` event, phase unchanged):
 5. **Stranding check:** moving users with no remaining path simply stay `moving`; they will
    stall each tick and count as waiting (§6.4) — no extra state needed.
 6. **Spawns:** schedule due → new queued users (they gate next tick).
-7. **Meters:** `confidence −= WAIT_DRAIN_PER_USER × waitingCount`, where waiting = queued +
-   stalled-this-tick (§6.4 counts all three cases identically); then win/lose check (§3.3).
+7. **Patience, and the end of the game** (rewritten 2026-08-04 with the points economy —
+   this slot used to be "Meters"). Every user that is queued, or moving-and-stalled-this-tick,
+   has its cumulative `waited` incremented; any user reaching `levelParams(s).patience` turns
+   `gone` and emits `userLost … 'gaveUp'`. Then: if every scheduled user has spawned and every
+   user is `arrived` or `gone`, the level ends — `served >= 1 ? won : lost`, with the score on
+   the event.
 8. `tick++`.
+
+**Step 5 (stranding) no longer needs saying, and that is the tidiest thing about this
+design.** It used to be a paragraph explaining that stranded users stay `moving`, stall each
+tick, and count as waiting. All three are still true and none is now a special case: a
+stranded user is a blocked user, blocked is waiting, and step 7 resolves it exactly as it
+resolves someone who never got to leave the origin.
 
 ### 7.2 Placement legality (§4.2)
 
@@ -523,10 +548,11 @@ structural ones marked SPEC.
 
 | Constant | Start | Note |
 | --- | --- | --- |
-| `CONFIDENCE_START` | 100 | |
-| `WAIT_DRAIN_PER_USER` | 0.5 /user/tick | continuous + scales with count (SPEC §8.2) |
-| `DETONATE_HIT` | 10 | |
-| `SERVED_BONUS` | 0 | tuning lever only (§3.11) |
+| ~~`CONFIDENCE_START`~~ | — | **deleted 2026-08-04**: the meter is gone (§3 ruling 11) |
+| ~~`WAIT_DRAIN_PER_USER`~~ | — | **deleted 2026-08-04**: patience is per-user and scales the same way |
+| ~~`DETONATE_HIT`~~ | — | **deleted 2026-08-04**: a blast kills users instead (§3 ruling 4) |
+| `USER_PATIENCE` | 20 | cumulative waiting ticks before a user leaves; per-level override |
+| ~~`SERVED_BONUS`~~ | — | **deleted 2026-08-04** |
 | `BLAST_RADIUS` | 1 | tile + orthogonals (SPEC §5 baseline); per-level override |
 | ~~`ANALYZE_REVEALS`~~ | — | **deleted 2026-08-04**: Analyze is one click (§3 ruling 2) |
 | `USER_MOVE_EVERY` | 1 | per-level override (OPEN #1) |
@@ -689,6 +715,73 @@ constant was touched. The one structural change is that **probing is no longer s
 good**: `balanced` beats `careful` on four of six levels now, which is the intended shape.
 The right way to read this table is as the floor of the game's difficulty, not its middle:
 it is what the corpus looks like played by someone who has flags and refuses to use them.
+
+> **Revised a fifth time 2026-08-04 (user decision): THE POINTS ECONOMY.** The confidence
+> meter is gone (§3 rulings 3/4/11). Users run out of patience and leave, blasts kill them,
+> and the score is how many reached B. **No level numbers changed in this pass** — it was a
+> measurement, and the metric it is measured with is new, so the old columns are not
+> comparable and are not reproduced.
+>
+> `RULES.USER_PATIENCE` is **20 cumulative waiting ticks**, picked empirically and bounded
+> from both sides by the sweep (40 games/cell, `plain` and `sprawl`):
+>
+> | patience | `plain` handOnly served | `plain` balanced | `sprawl` handOnly served |
+> | --- | --- | --- | --- |
+> | 12 | 67% | 17% | **0%** |
+> | 16 | 78% | 17% | **0%** |
+> | **20** | **89%** | 17% | **0%** |
+> | 24 | 100% (perfect) | 17% | 11% ← floor breaks |
+> | 28 | 100% (perfect) | 17% | 22% ← floor breaks |
+>
+> **24 is disqualified**: at that patience `handOnly` starts delivering users on `sprawl`,
+> which is the AI-abstinence path SPEC §1 forbids outright. Below 20, `plain` — the control,
+> the level with no floor to protect — starts losing users to patience for no reason a player
+> could have done anything about. 20 is the largest value that keeps every hand-only floor at
+> a clean **0% served** while the control delivers 89% by hand, so it is the pick.
+>
+> The sweep's other finding is the one that matters more: **patience is not what limits the
+> corpus.** `plain`'s AI policies serve 17% at *every* patience from 12 to 28, because their
+> users are not running out of time — they are being killed. Across the corpus the AI
+> policies lose five to nine of their nine-to-twelve users to blasts and one or two to
+> patience. Under the old meter a detonation cost 7 points off a bar of 100; it now costs a
+> person, permanently, off a supply of nine.
+>
+> Measured, 60 games/cell, seed 1 — **served** is mean users delivered / scheduled:
+>
+> | level | handOnly | genRush | balanced:0.4 | careful:0.4 | killed/game (balanced) |
+> | --- | --- | --- | --- | --- | --- |
+> | `plain` | **89%** | 3% | 14% | 13% | 7.5 of 9 |
+> | `channel` | **0%** | 1% | 1% | 0% | 8.1 of 9 |
+> | `atoll` | **92%** | 25% | **28%** | 16% | 8.0 of 12 |
+> | `caldera` | **0%** | 1% | 1% | 0% | 7.9 of 9 |
+> | `strait` | **0%** | 0% | 0% | 0% | 6.2 of 9 |
+> | `sprawl` | **0%** | 0% | 0% | 0% | 7.8 of 9 |
+>
+> **The hand-only floors read better than they ever have.** On the four levels that have one,
+> hand-only now delivers *nobody at all* — every user times out waiting for a forty-turn
+> build. On `plain` and `atoll`, which have no floor to protect, it delivers 89–92% and loses
+> exactly the one user who was queued longest. That is the AI-abstinence question answered
+> more legibly than a confidence bar ever answered it.
+>
+> **The AI side is where the corpus now needs work, and the diagnosis is not subtle.** Only
+> `plain` and `atoll` are playable by a bot at all, and even there generation delivers a
+> quarter of the users hand-building delivers. This is not a schedule or density problem:
+> `arrivals` and `mineDensity` were both tuned against a meter that no longer exists, and the
+> new cost — one dead user per blast, out of nine — is far steeper than the seven confidence
+> points it replaced. **The lever that speaks to it is `blastRadius`** (0 would kill only the
+> triggerer instead of everyone in the crater), or simply fewer scheduled users being asked to
+> cross more generated ground. Flagged for the spec owner; no numbers were touched this round.
+>
+> **`caldera` and `strait`, re-read on fresh ground as instructed.** Their M7.4 collapse was
+> confidence-mediated and that diagnosis is void. They are still the bottom of the corpus, for
+> a clearer reason: the longest routes cross the most generated ground, and generated ground
+> now kills the people walking it. The old note — "a hand-only floor plus a `compact` pool is
+> a corner with no slack" — is **retired**; it was a statement about two dials that no longer
+> govern the outcome.
+>
+> **The bots still never flag**, and under this economy that is a much bigger handicap than it
+> was: every detonation now costs a person permanently. A flagging player routes around
+> suspected defects for free. Read every AI row as the floor.
 
 ### 9.1 Authoring pipeline — new levels must be cheap, for humans and AI alike
 
@@ -944,7 +1037,25 @@ verb set):*
 - The `blockPlaced` toast drops its zero-defect branch and its singular form: with a floor of
   two defects per generated block, both are unreachable.
 
-### 11.9 Start screen & How to Play (§11.8's overlay layer)
+*Revised 2026-08-04 (user decision — the points economy):*
+
+- **The confidence meter is gone and its slot is the score**: `SERVED n/total · LOST n`, with
+  `LOST` in RED the moment it is non-zero — it is the one number in the HUD that can only get
+  worse. It keeps the meter's exact per-breakpoint widths (148 / 88 / 76) and drops its words
+  below 900px for a compact `9/12 ✕2`, because the top bar's row packing is measured to the
+  pixel and a wider chip pushed the forecast trio onto a clipped fourth row.
+- **Patience is telegraphed on the board** (§11.5). A user past two thirds of
+  `levelParams(s).patience` gets a RED ring instead of an INK one; a *pile* takes its worst
+  member's patience rather than an average, because the queue at the origin is where patience
+  usually runs out and one user about to leave it is the thing worth seeing. The dot keeps its
+  USER colour — a user about to give up is still a user. Mid and near only, and a colour swap
+  rather than a blink: a blink would mean a running RAF, and the board is motionless between
+  ticks (§11.4). Measured on `plain`, the warning lands ~6 ticks before the first user leaves.
+- `userLost` gets a notice naming which of the two ways it happened, and stops fast-forward.
+- **The `#banner` is gone.** The end screens are overlays now (§11.9), which puts every
+  full-screen surface in one module with one Esc rule and one z-order.
+
+### 11.9 Overlay layer — start · how to play · win · lose
 
 Two DOM overlays over an already-booted game, in `src/ui/start.js`, imported lazily the way the
 Lab is. Core never learns either exists: the level picker calls the same `onLevel` the HUD
@@ -958,11 +1069,34 @@ skip, because the game writes it into the URL itself on every start, so honourin
 the screen shows exactly once ever on a given browser. `body.starting` covers the board
 synchronously so a slow load cannot flash the game before the title card.
 
-**How to Play** is static copy in the HUD's register — GOAL · BUILD · READ · CLEAR OR AVOID ·
-CONTROLS — scrolling inside its own card, never growing the document: the board is a
+**How to Play** is static copy in the HUD's register — GOAL · PATIENCE · BUILD · READ · CLEAR
+OR AVOID · CONTROLS — scrolling inside its own card, never growing the document: the board is a
 fixed-height grid, so an overlay that scrolled the page would be the one thing able to move the
 canvas. Reachable from the start screen (BACK returns to it) and from the HUD's `?` (BACK reads
-CLOSE, because there is nothing behind it).
+CLOSE, or returns to an end screen if one is waiting behind it).
+
+*Revised 2026-08-04 (user decision — the points economy):* the layer gains the two **end
+screens**, replacing `#banner`, and GOAL is rewritten around points, patience and permanent
+losses.
+
+- **WIN** — the score large (`SERVED n/total`, kicked by `PERFECT` in OK green when they are
+  equal), then map · ticks · seed, the stat grid, and **SHARE**. Share tries `navigator.share`,
+  falls back to the clipboard, and prints the raw string into the card if both are refused —
+  a score you cannot get out of the tab is not a score. Backing out of the OS sheet is a
+  decision, not a failure, so `AbortError` does *not* fall through to a silent copy. The string
+  is `SLOP SWEEPER · THE SPRAWL · SERVED 9/12 · 87 TICKS · <url>`, and the URL carries only
+  `level` and `seed` — determinism is the whole reason a link is in there, and `?seed=` is on
+  the skip list above precisely so a shared score opens on the board it is boasting about.
+- **LOSE** — a LinkedUp post: corporate positivity annexing the catastrophe. Posts live in
+  `src/ui/linkedup.js` as a plain array with a header written for whoever edits it next; adding
+  one is copying an entry, and there is nothing to register. Six ship. Tokens (`{map}`,
+  `{served}`, `{total}`, `{lost}`, `{detonations}`, `{ticks}`) are substituted per run, and an
+  unknown token is left verbatim so a typo shows on the card rather than vanishing. The card is
+  the one thing in the game rendered in a sans-serif on white — the tonal break *is* the joke.
+  Invented names only; "LinkedUp" is the only brand named.
+- **Esc** backs out of the informational overlays but not the end screens: those are a decision
+  with their own buttons, and the board behind them is finished. Both sit above the floating
+  zoom cluster.
 
 ---
 
@@ -1021,6 +1155,12 @@ Policies (legal information only — no mine peeking):
   thesis — legible placement should out-survive greedy placement.
 
 Provisional tuning gates (adjust constants, cadence, density until):
+
+> **Metrics revised 2026-08-04 with the points economy.** `sim/run.js` reports **served**
+> (mean users delivered / scheduled — the headline), **perfect** (every user delivered — the
+> old win condition), **win** (at least one delivered, so it reads high by design and means
+> little alone), **score**, and the loss split **gaveUp / killed**. `confW` is gone with the
+> meter; `waitΣ` is now the total ticks users spent unable to move, summed off `user.waited`.
 
 | Gate | Target |
 | --- | --- |
@@ -1105,6 +1245,18 @@ Determinism replay (same seed + action log ⇒ identical per-tick hashes) runs a
       special-case (tests); `HAND` tiles destroyed; no chains; in-area users requeue; others
       strand (§6.4)
 - [ ] §5 silent mine destruction updates clues and block badges (test — never-wrong rule §7.2)
+- [ ] §8 (rev. 2026-08-04) **no confidence anywhere**: `CONFIDENCE_START`,
+      `WAIT_DRAIN_PER_USER`, `DETONATE_HIT`, `SERVED_BONUS` and the `confidence` event are
+      absent (test greps `RULES`)
+- [ ] §8 patience: waiting is queued-or-stalled and **cumulative**; moving never counts;
+      reaching `patience` emits `userLost … 'gaveUp'` at the cell the user stood on; the
+      per-level override works (tests)
+- [ ] §5 (rev. 2026-08-04) a blast **kills** every user in the crater including the
+      triggerer — `userLost … 'detonation'`, no revival, and the `requeued` event is gone
+      from the union (tests)
+- [ ] §3 ruling 3 (rev.) the level ends when every scheduled user is `arrived` or `gone`;
+      `served >= 1` wins and the event carries `{ served, total }`; zero served loses;
+      all served is a perfect game (tests)
 - [ ] §6.1 forecast trio persistent in HUD
 - [ ] §6.2 gate is topological, not safe: a user departs into a mined corridor (test)
 - [ ] §6.3 movement: monotone toward dest, seeded random tie-break, no revisit, stall-in-place

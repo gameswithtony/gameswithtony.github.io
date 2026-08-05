@@ -126,31 +126,14 @@ b { color: var(--paper); font-weight: 700; }
   flex-wrap: wrap;
 }
 
-.meter {
-  position: relative;
-  width: 132px;
-  height: 15px;
-  background: var(--void);
-  border: 1px solid var(--edge);
-  overflow: hidden;
-}
-
-.meter-fill {
-  height: 100%;
-  width: 100%;
-  background: var(--ok);
-  transition: width 140ms linear;
-}
-
-.meter-label {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  color: var(--ink);
-  font-weight: 700;
-}
+/* The score chip stands exactly where the confidence meter did, at exactly its widths — the
+   topbar's row packing is measured to the pixel in the media queries below, and a wider chip
+   pushed the spec-mandated forecast trio (SPEC §6.1) onto a clipped fourth row. Below 900px
+   it drops its words for a compact `9/12 ✕2`, the way the tray's ROTATE becomes ROT. */
+#score { width: 148px; justify-content: center; gap: 4px; }
+#score b { color: var(--paper); }
+#score .sep { color: var(--edge); }
+#score .narrow-only { color: var(--dim); margin-left: 2px; }
 
 /* --- board ------------------------------------------------------------------ */
 
@@ -170,51 +153,6 @@ b { color: var(--paper); font-weight: 700; }
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
-}
-
-#banner {
-  position: absolute;
-  inset: 0;
-  /* Above the floating zoom cluster (z-index 5 below 900px), under the start/help overlays. */
-  z-index: 30;
-  display: grid;
-  place-content: center;
-  gap: 8px;
-  justify-items: center;
-  text-align: center;
-  background: rgba(13, 16, 22, 0.82);
-}
-
-#banner-title {
-  font-size: clamp(22px, 6vw, 34px);
-  letter-spacing: 0.18em;
-  color: var(--coast);
-}
-
-#banner-sub { font-size: 12px; color: var(--dim); }
-
-/* End-screen stats (PLAN §11.8). Fixed columns so a three-digit tick count cannot reflow
-   the panel, and it scrolls inside itself rather than pushing PLAY AGAIN off the board. */
-#banner-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 132px));
-  gap: 4px 10px;
-  margin: 6px 0 2px;
-  max-height: 46vh;
-  overflow-y: auto;
-}
-
-#banner-stats:empty { display: none; }
-
-#banner-stats .stat {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 3px 6px;
-  border: 1px solid var(--edge);
-  background: var(--chrome);
-  font-size: 10px;
-  color: var(--dim);
 }
 
 #toast, #notice {
@@ -308,7 +246,6 @@ button.verb.free i { background: var(--revealed); }
 
 #btn-generate { border-color: var(--hidden); color: var(--revealed); }
 #btn-generate:not(:disabled) i { background: var(--revealed); }
-#banner-btn { border-color: var(--coast); }
 
 /* RUN ⇄ STOP swap a three-letter word for a four-letter one, so the button is given the
    width of the longer state: a control that changes size when you press it is a control
@@ -468,6 +405,140 @@ body.starting #board > * { visibility: hidden; }
   color: var(--paper);
 }
 
+/* --- win screen --------------------------------------------------------------------- */
+
+.end-card { gap: 6px; }
+
+.end-kicker {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--dim);
+}
+
+.end-kicker.perfect { color: var(--ok); }
+
+.end-score {
+  font-size: clamp(26px, 8vw, 44px);
+  letter-spacing: 0.1em;
+  color: var(--coast);
+}
+
+.end-sub {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dim);
+  word-break: break-all;      /* the share URL lands here when the clipboard is blocked */
+}
+
+/* Fixed columns so a three-digit tick count cannot reflow the panel, and it scrolls inside
+   itself rather than pushing the buttons off the card. */
+.end-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 132px));
+  gap: 4px 10px;
+  margin: 8px 0 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.end-stats .stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--edge);
+  background: var(--void);
+  font-size: 10px;
+  color: var(--dim);
+}
+
+#win-share { border-color: var(--user); color: var(--user); }
+
+/* --- lose screen: the LinkedUp post -------------------------------------------------
+   Deliberately the one place in the game that does NOT look like the game: a bright, round,
+   friendly little card, because that contrast is the joke. Nothing here is pixel art. */
+
+.lose-card { gap: 10px; align-items: stretch; }
+
+/* Everything in this game is monospace. The post is not — the typeface change is half the
+   joke, and it is what makes the card read as something pasted in from another world. */
+.lu-brand, .lu-post {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.lu-brand {
+  align-self: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #6aa8ff;
+}
+
+.lu-brand span {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #6aa8ff;
+  color: #10151f;
+}
+
+.lu-post {
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2230;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  max-height: min(52vh, 420px);
+  text-align: left;
+}
+
+.lu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 8px;
+}
+
+.lu-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #6aa8ff;
+  color: #fff;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.lu-who { display: flex; flex-direction: column; min-width: 0; }
+.lu-who b { font-size: 13px; color: #1d2230; }
+.lu-headline { font-size: 11px; line-height: 1.4; color: #5b6472; }
+.lu-meta { font-size: 10px; color: #8a929e; }
+
+.lu-body { padding: 2px 14px 10px; }
+
+.lu-body p {
+  margin: 0 0 9px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.lu-body p:last-child { margin-bottom: 0; }
+
+.lu-reactions {
+  padding: 8px 14px 12px;
+  border-top: 1px solid #e6e9ee;
+  font-size: 11px;
+  color: #5b6472;
+}
+
+#lose-retry { border-color: var(--ok); color: var(--ok); }
+
 /* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
    One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
    squeezing the action bar to nothing — and a clipped verb button whose centre lands on
@@ -491,7 +562,7 @@ body.starting #board > * { visibility: hidden; }
 
   #topbar { gap: 6px; padding: 6px 8px; }
   .forecast { gap: 8px; width: 100%; margin-left: 0; justify-content: space-between; }
-  .meter { width: 88px; }
+  #score { width: 88px; gap: 2px; }
   button { padding: 6px 9px; }
 
   #hud {
@@ -555,18 +626,18 @@ body.starting #board > * { visibility: hidden; }
 }
 
 /* --- ≤559px: the top bar genuinely needs three rows --------------------------------
-   Row 1 stops fitting level+restart+seed+tick+meter (523px of fixed-width content) below
+   Row 1 stops fitting level+restart+seed+tick+score (523px of fixed-width content) below
    ~539px, so the forecast trio — persistent, spec-mandated UI (SPEC §6.1) — was being cut
    mid-glyph. Three rows of 26 + two 6px gaps + 12 padding + 1 border = 93 ≤ 96 = --top-h.
    The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT, 166px total) and is
    allowed to share a row, so the worst packing in this band is:
-       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [meter 88 + fc 166]
-       320px (308 usable): [field + restart + seed 299] [tick + meter 177] [fc 166]
+       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [score 76 + fc 166]
+       320px (308 usable): [field + restart + seed 299] [tick + score 165] [fc 166]
    — three rows at every width in the band, and the trio is never clipped. */
 @media (max-width: 559px) {
   :root { --top-h: 96px; }
   #topbar, #hud { padding-left: 6px; padding-right: 6px; }
-  .meter { width: 76px; }
+  #score { width: 76px; }
   .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
   .tiny-hide { display: none; }
   .tiny-only { display: inline; }

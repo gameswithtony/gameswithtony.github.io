@@ -6,7 +6,6 @@
 // else, so the UI can never offer a verb the reducer would reject — and the absence of
 // Place next to unreviewed slop is how SPEC §4.1 teaches itself.
 
-import { RULES } from '../core/rules.js';
 import { legalActions } from '../core/reduce.js';
 import { isFlagged } from '../core/state.js';
 import { gateOpen } from '../core/routing.js';
@@ -122,8 +121,8 @@ export function createHud(h) {
     restart: el('btn-restart'),
     seed: el('seed'),
     tick: el('tick'),
-    confFill: el('confidence-fill'),
-    confLabel: el('confidence-label'),
+    scServed: el('sc-served'),
+    scLost: el('sc-lost'),
     remaining: el('fc-remaining'),
     next: el('fc-next'),
     waiting: el('fc-waiting'),
@@ -141,11 +140,6 @@ export function createHud(h) {
     zoomIn: /** @type {HTMLButtonElement} */ (el('btn-zoom-in')),
     zoomOut: /** @type {HTMLButtonElement} */ (el('btn-zoom-out')),
     help: /** @type {HTMLButtonElement} */ (el('btn-help')),
-    banner: el('banner'),
-    bannerTitle: el('banner-title'),
-    bannerSub: el('banner-sub'),
-    bannerStats: el('banner-stats'),
-    bannerBtn: el('banner-btn'),
     toast: el('toast'),
     notice: el('notice'),
   };
@@ -176,7 +170,6 @@ export function createHud(h) {
   let helpFn = null;
   dom.rotate.addEventListener('click', () => h.onRotate());
   dom.confirm.addEventListener('click', () => h.onConfirm());
-  dom.bannerBtn.addEventListener('click', () => h.onRestart());
   dom.minimap.addEventListener('pointerdown', (e) => {
     if (!lastMinimap) return;
     const cell = minimapCell(dom.minimap, lastMinimap.s, e);
@@ -217,10 +210,11 @@ export function createHud(h) {
     dom.seed.textContent = `SEED ${s.seed}`;
     dom.tick.textContent = String(s.tick);
 
-    const pct = Math.max(0, Math.min(100, (s.confidence / RULES.CONFIDENCE_START) * 100));
-    dom.confFill.style.width = `${pct}%`;
-    dom.confFill.style.background = pct <= 25 ? PALETTE.RED : pct <= 50 ? PALETTE.HAND : PALETTE.OK;
-    dom.confLabel.textContent = String(Math.round(s.confidence));
+    // The score. `lost` goes red the moment it is non-zero: it is the one number in the HUD
+    // that can only ever get worse, and it is what separates a good run from a shipped one.
+    dom.scServed.textContent = `${s.stats.served}/${s.schedule.total}`;
+    dom.scLost.textContent = String(s.stats.lost ?? 0);
+    dom.scLost.style.color = (s.stats.lost ?? 0) > 0 ? PALETTE.RED : '';
 
     // The forecast trio is persistent, not optional polish (SPEC §6.1).
     dom.remaining.textContent = String(s.schedule.total - s.stats.served);
@@ -372,46 +366,6 @@ export function createHud(h) {
       clearTimeout(noticeTimer);
       noticeTimer = setTimeout(() => dom.notice.classList.add('hidden'), 2400);
     },
-
-    /**
-     * The end screen (PLAN §11.8): the banner plus what the game cost. Every number is read
-     * straight off `s.stats` — nothing is accumulated by the UI, so the panel cannot drift
-     * from the reducer. Level and Restart live in the top bar, which the banner does not
-     * cover, so the controls stay reachable behind it.
-     * @param {GameState} s
-     * @param {string} title
-     * @param {string} sub
-     */
-    endScreen(s, title, sub) {
-      dom.bannerTitle.textContent = title;
-      dom.bannerSub.textContent = sub;
-      dom.bannerBtn.textContent = 'PLAY AGAIN';
-      dom.bannerStats.innerHTML = '';
-      /** @type {[string, string][]} */
-      const rows = [
-        ['TICKS', String(s.tick)],
-        ['SERVED', `${s.stats.served}/${s.schedule.total}`],
-        ['DETONATIONS', String(s.stats.detonations)],
-        ['PLACED', String(s.stats.placed)],
-        ['GENERATED', String(s.stats.generated)],
-        ['ANALYZED', String(s.stats.analyzed)],
-        ['WAITED', String(s.stats.waited)],
-        ['CONFIDENCE', String(Math.round(s.confidence))],
-      ];
-      for (const [label, value] of rows) {
-        const cell = document.createElement('div');
-        cell.className = 'stat';
-        const k = document.createElement('span');
-        k.textContent = label;
-        const v = document.createElement('b');
-        v.textContent = value;
-        cell.append(k, v);
-        dom.bannerStats.append(cell);
-      }
-      dom.banner.classList.remove('hidden');
-    },
-
-    hideBanner() { dom.banner.classList.add('hidden'); },
 
     /**
      * @param {boolean} on

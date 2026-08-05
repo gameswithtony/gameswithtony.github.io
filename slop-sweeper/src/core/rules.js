@@ -2,33 +2,23 @@
 // Every tunable number in the game, one file (SPEC §10.2, PLAN §8). None of these is
 // sacred except the structural ones marked SPEC — the sim (§13) tunes the rest.
 
+// POINTS ECONOMY (user decision 2026-08-04). The stakeholder-confidence meter is gone, and
+// with it CONFIDENCE_START, WAIT_DRAIN_PER_USER, DETONATE_HIT and SERVED_BONUS. Pressure is
+// no longer a bar that empties: it is the users themselves. They run out of patience and
+// leave, they die in blasts, and if every one of them is gone before a single arrival the
+// level is lost. Score is users served. See SPEC §8 and PLAN §3 rulings 3/4/11.
 export const RULES = Object.freeze({
-  CONFIDENCE_START: 100,
-  // Per waiting user per tick — continuous, scales (SPEC §8.2). Lowered 0.75 → 0.40 on
-  // 2026-08-04: routes roughly doubled with the board rescale (PLAN §9), so a competent
-  // build now costs about twice as many turns and the waiting integral doubled with it.
-  // At 0.75 every level in the corpus lost on the meter alone, whatever the player did.
-  // The budget is CONFIDENCE_START / this ≈ 267 waiting-user-ticks per game. Three eighths
-  // rather than a round 0.4 because it is exact in binary: the meter is subtracted from
-  // once per tick and compared to zero, and 0.4 accumulates drift within a few dozen ticks.
-  WAIT_DRAIN_PER_USER: 0.375,
-  // Lowered 10 → 7 on 2026-08-04 with single-click Analyze. The explicit hit was set when
-  // one review turned over eight tiles, so a defect was cheap to find; now it is not, and
-  // the *implicit* cost of a blast has doubled anyway — every user in the hole re-walks a
-  // fifty-tile route from the origin. Seven still makes detonation the largest discrete
-  // event in the game and still separates genRush from balanced by a wide margin.
-  DETONATE_HIT: 7,
+  // Cumulative ticks a user will spend unable to move before it gives up and leaves for
+  // good. Not consecutive: the count never resets, so a route that keeps stalling bleeds the
+  // same user out over the whole game. Chosen empirically (PLAN §9); a level may override it
+  // with `LevelDef.patience`.
+  USER_PATIENCE: 20,
+  BLAST_RADIUS: 1,            // tile + orthogonals (SPEC §5 baseline)
   // Every generation ships at least this many defects (user decision 2026-08-04, superseding
   // PLAN §3 ruling 6). A clean block made Generate strictly free, which removed the game's
   // central tension from that turn entirely. Placement-time floor only — a blast may take a
   // block below it and nothing puts it back. See `generate.rollMines`.
   MIN_BLOCK_DEFECTS: 2,
-  SERVED_BONUS: 0,            // tuning lever only; no confidence regeneration (PLAN §3.11)
-  BLAST_RADIUS: 1,            // tile + orthogonals (SPEC §5 baseline)
-  // ANALYZE_REVEALS is gone (2026-08-04 user decision). Analyze is one minesweeper click:
-  // it opens the tile you pointed at, and a zero clue cascades for free. A bulk reveal did
-  // the deduction for the player, risk-free, which is exactly what made the minesweeper
-  // layer unplayable. The reveal count is now a property of the board, not a constant.
   USER_MOVE_EVERY: 1,         // OPEN #1
   ART_PX_PER_TILE: 16,        // SPEC §10.8 (revised 2026-08-04: finer art grid, calmer tiles)
   FONT_MIN_DEVICE_PX: 10,     // zoom tiers derive from this, never tuned apart (SPEC §10.8)
@@ -45,6 +35,7 @@ export const RULES = Object.freeze({
  * @typedef {object} LevelParams
  * @property {{ count: number, firstTick: number, every: number }} arrivals
  * @property {number} mineDensity
+ * @property {number} patience
  * @property {'compact' | 'awkward' | 'heavy' | string[]} shapePool
  * @property {number} userMoveEvery
  * @property {number} blastRadius
@@ -59,6 +50,7 @@ export const LEVEL_DEFAULTS = Object.freeze({
   // The corpus runs 0.15–0.16 (PLAN §9); the validator warns outside 0.10–0.40.
   mineDensity: 0.16,
   shapePool: 'compact',
+  patience: RULES.USER_PATIENCE,
   userMoveEvery: RULES.USER_MOVE_EVERY,
   blastRadius: RULES.BLAST_RADIUS,
 });

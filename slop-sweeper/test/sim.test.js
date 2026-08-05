@@ -69,7 +69,10 @@ test('SIM SMOKE: runGames(plain, handOnly, 5, seed) completes with sane stats', 
 
   assert.ok(st.winRate >= 0 && st.winRate <= 1);
   assert.ok(st.meanTicks > 0 && st.meanTicks <= MAX_TICKS);
-  assert.ok(st.meanConfidence >= 0);
+  assert.ok(st.servedFraction >= 0 && st.servedFraction <= 1, 'served fraction is the headline');
+  assert.ok(st.perfectRate >= 0 && st.perfectRate <= 1);
+  assert.equal(st.killedPerGame, 0, 'hand-only never generates, so nobody is ever blown up');
+  assert.ok(st.gaveUpPerGame >= 0);
   assert.equal(st.detonationsPerGame, 0, 'hand-only never generates, so it never detonates');
   assert.equal(st.verbs.generated, 0);
   assert.equal(st.verbs.analyzed, 0);
@@ -79,8 +82,13 @@ test('SIM SMOKE: runGames(plain, handOnly, 5, seed) completes with sane stats', 
   for (const g of st.games_) {
     assert.ok(g.ticks > 0 && g.ticks <= MAX_TICKS);
     assert.equal(typeof g.won, 'boolean');
-    assert.ok(g.served <= getLevel('plain').arrivals.count);
-    assert.equal(g.won, g.served === getLevel('plain').arrivals.count);
+    assert.equal(g.total, getLevel('plain').arrivals.count);
+    assert.ok(g.served <= g.total);
+    // Points economy (2026-08-04): a win is *one* arrival, not all of them. `perfect` is
+    // the old bar, and it is now a separate, much rarer thing.
+    assert.equal(g.won, g.served >= 1);
+    assert.equal(g.perfect, g.served === g.total);
+    assert.equal(g.served + g.lostGaveUp + g.lostDetonation, g.total, 'everyone is accounted for');
   }
 });
 
@@ -109,8 +117,8 @@ test('the solver instrumentation rides along without changing the game', () => {
   const withSolver = runGames(getLevel('strait'), 'balanced:0.5', 6, 5, { solver: true });
   const without = runGames(getLevel('strait'), 'balanced:0.5', 6, 5, { solver: false });
   assert.deepEqual(
-    withSolver.games_.map((g) => [g.won, g.ticks, g.confidence]),
-    without.games_.map((g) => [g.won, g.ticks, g.confidence]),
+    withSolver.games_.map((g) => [g.won, g.ticks, g.served]),
+    without.games_.map((g) => [g.won, g.ticks, g.served]),
     'solving must never perturb play',
   );
   assert.ok(withSolver.guessForcedRate >= 0 && withSolver.guessForcedRate <= 1);

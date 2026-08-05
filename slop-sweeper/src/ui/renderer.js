@@ -13,7 +13,7 @@
 
 import { RULES } from '../core/rules.js';
 import { blockMines, clue } from '../core/reduce.js';
-import { isFlagged } from '../core/state.js';
+import { isFlagged, levelParams } from '../core/state.js';
 import { PALETTE } from './palette.js';
 import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
 import { drawText, drawTextCentered, textWidthArt, GLYPH_H, GLYPH_GAP } from './font.js';
@@ -56,6 +56,27 @@ export const NEAR_MIN_ARTPX = MID_MIN_ARTPX * 2;
  * the old one-of-eight was, so nothing got thinner or fatter when the grid got finer.
  */
 const STROKE_ART = 2;
+
+/**
+ * The fraction of a user's patience that has to be gone before the board says so. Two thirds
+ * is late enough that it means something and early enough to still be actionable — a warning
+ * that fires at nine tenths is an obituary.
+ */
+const IMPATIENT_AT = 2 / 3;
+
+/**
+ * How far through its patience a user is, 0…1. Reads `waited` and the level's own threshold
+ * and nothing else — no core query the HUD does not already make. Defensive about both,
+ * because a level with no patience configured must not make every user look doomed.
+ * @param {GameState} s
+ * @param {import('../core/state.js').User} u
+ * @returns {number}
+ */
+function patienceSpent(s, u) {
+  const limit = levelParams(s).patience;
+  if (!limit || limit <= 0) return 0;
+  return Math.min(1, (u.waited ?? 0) / limit);
+}
 
 /**
  * @param {number} artPx
@@ -369,20 +390,24 @@ export function createRenderer(canvas) {
     const t = at.tile;
     const px = cam.artPx;
 
-    /** @type {Map<string, { x: number, y: number, n: number }>} */
+    /** @type {Map<string, { x: number, y: number, n: number, spent: number }>} */
     const stacks = new Map();
     for (const u of s.users) {
       const tw = fx ? fx.userPos(u.id) : null;
-      // An arrived user is off the board — unless its last step is still in the air.
-      if (u.state === 'arrived' && !tw) continue;
+      // Arrived and gone are both off the board — unless a last step is still in the air.
+      if ((u.state === 'arrived' || u.state === 'gone') && !tw) continue;
       const cx = tw ? tw.x : u.at % s.w;
       const cy = tw ? tw.y : Math.floor(u.at / s.w);
       const x = Math.round((cam.ox + cx * t) / px) * px;
       const y = Math.round((cam.oy + cy * t) / px) * px;
       const key = `${x},${y}`;
+      const spent = patienceSpent(s, u);
       const cur = stacks.get(key);
-      if (cur) cur.n++;
-      else stacks.set(key, { x, y, n: 1 });
+      // A pile takes its worst member's patience, not an average: the queue at the origin is
+      // where patience usually runs out, and one user about to walk away from it is the thing
+      // the player needs to see — averaging that away is how a pile looks fine until it isn't.
+      if (cur) { cur.n++; cur.spent = Math.max(cur.spent, spent); }
+      else stacks.set(key, { x, y, n: 1, spent });
     }
     if (stacks.size === 0) return;
 
@@ -392,9 +417,16 @@ export function createRenderer(canvas) {
     const dot = dotArt * px;
     const ring = STROKE_ART * px;      // the INK outline that keeps a dot off its own tile
 
-    for (const { x, y, n } of stacks.values()) {
+    for (const { x, y, n, spent } of stacks.values()) {
       const r = { x, y };
       if (r.x + t < 0 || r.y + t < 0 || r.x > cam.cw || r.y > cam.ch) continue;
+
+      // About to give up. The warning is a colour swap and nothing else — no blink, because a
+      // blink would mean a running RAF and the board is meant to be motionless between ticks
+      // (PLAN §11.4), and no extra mark, because this has to read as "that one is in trouble"
+      // rather than as a new kind of object. Mid and near only: at far the dot is three device
+      // pixels of topology and a red one would just be noise.
+      const impatient = tier !== 'far' && spent >= IMPATIENT_AT;
 
       // A stack becomes the count itself rather than a dot wearing a badge: one tile cannot
       // hold both at a readable size, and the pile at the origin is the "you have not
@@ -402,13 +434,15 @@ export function createRenderer(canvas) {
       // than one.
       if (n > 1 && tier !== 'far') {
         const text = n <= 9 ? String(n) : '+';         // exact count lives in the HUD forecast
-        drawBadge(ctx, text, r.x, r.y, px, PALETTE.USER);
+        drawBadge(ctx, text, r.x, r.y, px, impatient ? PALETTE.RED : PALETTE.USER);
         continue;
       }
 
       const cx = r.x + Math.round((t - dot) / (2 * px)) * px;
       const cy = r.y + Math.round((t - dot) / (2 * px)) * px;
-      ctx.fillStyle = PALETTE.INK;
+      // The ring carries the warning and the dot keeps its colour: a user about to leave is
+      // still a user, and swapping the fill would make it read as some other thing entirely.
+      ctx.fillStyle = impatient ? PALETTE.RED : PALETTE.INK;
       ctx.fillRect(cx - ring, cy - ring, dot + 2 * ring, dot + 2 * ring);
       ctx.fillStyle = PALETTE.USER;
       ctx.fillRect(cx, cy, dot, dot);

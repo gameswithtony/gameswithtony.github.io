@@ -17,6 +17,7 @@ import { sprawl } from './sprawl.js';
  * @property {string} [name]     default: id
  * @property {{ count: number, firstTick: number, every: number }} [arrivals]
  * @property {number} [mineDensity]
+ * @property {number} [patience]
  * @property {'compact' | 'awkward' | 'heavy' | string[]} [shapePool]
  * @property {number} [userMoveEvery]
  * @property {number} [blastRadius]
@@ -52,6 +53,7 @@ export function resolveLevel(def) {
     map: def.map,
     arrivals: { ...LEVEL_DEFAULTS.arrivals, ...(def.arrivals ?? {}) },
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
+    patience: def.patience ?? LEVEL_DEFAULTS.patience,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,

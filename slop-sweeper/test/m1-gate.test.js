@@ -40,11 +40,19 @@ test('a hand-only playthrough of plain reaches phase won', () => {
   }
 
   assert.equal(s.phase.k, 'won');
-  assert.equal(s.stats.served, level.arrivals.count);
+  const won = /** @type {any} */ (ev.find((e) => e.t === 'won'));
+  assert.deepEqual(won, { t: 'won', served: s.stats.served, total: level.arrivals.count },
+    'the win event carries the score');
+  // Under the points economy a thirty-turn hand build is slow enough that the first user
+  // runs out of patience waiting for it — the level is won, but not perfectly. That is the
+  // gate doing its job: it proves the loop completes headless, not that hand-only is free.
+  assert.ok(s.stats.served >= level.arrivals.count - 1,
+    `served only ${s.stats.served} of ${level.arrivals.count}`);
+  assert.equal(s.stats.served + s.stats.lost, level.arrivals.count, 'everyone resolved');
+  assert.equal(s.stats.detonations, 0, 'nothing was generated, so nothing blew up');
   assert.equal(s.users.length, level.arrivals.count);
-  assert.equal(s.users.every((u) => u.state === 'arrived' && u.at === s.dest), true);
-  assert.equal(ev.filter((e) => e.t === 'arrived').length, level.arrivals.count);
-  assert.ok(s.confidence > 0, `won with ${s.confidence} confidence left`);
+  assert.equal(s.users.every((u) => u.state === 'arrived' || u.state === 'gone'), true);
+  assert.equal(ev.filter((e) => e.t === 'arrived').length, s.stats.served);
   assert.equal(s.stats.generated, 0, 'hand-only');
   assert.ok(s.tick < 100, `finished in ${s.tick} ticks`);
 });

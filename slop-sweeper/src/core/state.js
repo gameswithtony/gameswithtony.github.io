@@ -207,9 +207,10 @@ export function stopsBlast(terrain) {
  * @typedef {object} User
  * @property {number} id
  * @property {number} at
- * @property {'queued' | 'moving' | 'arrived'} state
+ * @property {'queued' | 'moving' | 'arrived' | 'gone'} state  gone = left or killed, for good
  * @property {number[]} visited  current-trip no-revisit set (SPEC §6.3)
  * @property {boolean} stalled   no legal move this tick → counts as waiting (SPEC §6.4)
+ * @property {number} waited     CUMULATIVE ticks spent unable to move; at `patience`, gone
  */
 
 /**
@@ -255,11 +256,10 @@ export function stopsBlast(terrain) {
  * @property {Block[]} blocks      live cells; badge counts derived, never stored
  * @property {User[]} users
  * @property {{ total: number, spawned: number, nextTick: number, every: number }} schedule
- * @property {number} confidence
  * @property {Phase} phase
  * @property {{ gen: number, move: number }} rng   mulberry32 states (PLAN §7.5)
  * @property {{ placed: number, generated: number, analyzed: number, waited: number,
- *              detonations: number, served: number }} stats
+ *              detonations: number, served: number, lost: number }} stats
  */
 
 /**
@@ -291,10 +291,9 @@ export function stopsBlast(terrain) {
  *   | { t: 'departed', user: number }
  *   | { t: 'arrived', user: number }
  *   | { t: 'spawned', user: number }
- *   | { t: 'requeued', user: number }
- *   | { t: 'confidence', delta: number, reason: 'waiting' | 'detonation' }
- *   | { t: 'won' }
- *   | { t: 'lost' }} Ev
+ *   | { t: 'userLost', user: number, at: number, reason: 'gaveUp' | 'detonation' }
+ *   | { t: 'won', served: number, total: number }
+ *   | { t: 'lost', served: number, total: number }} Ev
  */
 
 // --- Level parameters ride beside the state, not inside it ------------------------

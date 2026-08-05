@@ -37,7 +37,7 @@ test('flagging toggles, and it is free: no tick, no drain, nothing but the cell'
   const on = reduce(s, { t: 'flag', cell: cells[0] });
   assert.deepEqual(on.ev, [{ t: 'flagged', cell: cells[0], on: true }]);
   assert.equal(on.s.tick, s.tick, 'the clock does not move');
-  assert.equal(on.s.confidence, s.confidence, 'and neither does the meter');
+  assert.deepEqual(on.s.users, s.users, 'and no user moved or lost patience');
   assert.deepEqual(on.s.stats, s.stats, 'flagging is not a verb the stats count');
   assert.deepEqual(on.s.users, s.users);
   assert.equal(isFlagged(on.s.con[cells[0]]), true);
@@ -122,9 +122,7 @@ test('flagging behind a walker strands it, and stranded users drain (SPEC §6.4)
 
   const { s: after, ev } = reduce(s, { t: 'wait' });
   assert.equal(after.users[0].stalled, true, 'the route it was walking is gone');
-  assert.ok(ev.some((e) => e.t === 'confidence' && /** @type {any} */ (e).reason === 'waiting'),
-    'a stranded user is a waiting user');
-  assert.ok(after.confidence < s.confidence);
+  assert.equal(after.users[0].waited, s.users[0].waited + 1, 'a stranded user is a waiting user');
 });
 
 test('a blast takes the flag with the cell', () => {
@@ -137,7 +135,7 @@ test('a blast takes the flag with the cell', () => {
   s.con[cellAt(s, 2, 1)] = CON_HAND;
   s.con[cellAt(s, 3, 1)] = CON_HAND;
   s.blocks = [{ id: 0, cells: [neighbour, trigger] }];
-  s.users = [{ id: 0, at: s.origin, state: 'moving', visited: [s.origin], stalled: false }];
+  s.users = [{ id: 0, at: s.origin, state: 'moving', visited: [s.origin], stalled: false, waited: 0 }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
 
   s = reduce(s, { t: 'flag', cell: neighbour }).s;

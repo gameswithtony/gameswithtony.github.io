@@ -52,13 +52,14 @@ export function serializeState(s) {
     `${s.origin}>${s.dest}`,
     s.con.map(conToken).join(','),
     s.blocks.map((b) => `${b.id}:${b.cells.join('.')}`).join('|'),
-    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.visited.join('.')}`).join('|'),
+    // `waited` and `state` are the whole economy since the points revision, so both are in
+    // the fingerprint: two boards that differ only in how close a user is to giving up are
+    // genuinely different boards.
+    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.waited}/${u.visited.join('.')}`).join('|'),
     `${s.schedule.total}/${s.schedule.spawned}/${s.schedule.nextTick}/${s.schedule.every}`,
-    // Rounded so accumulated float drain can never make two identical games hash apart.
-    s.confidence.toFixed(6),
     phaseToken(s.phase),
     `${s.rng.gen}/${s.rng.move}`,
-    [s.stats.placed, s.stats.generated, s.stats.analyzed, s.stats.waited, s.stats.detonations, s.stats.served].join('/'),
+    [s.stats.placed, s.stats.generated, s.stats.analyzed, s.stats.waited, s.stats.detonations, s.stats.served, s.stats.lost].join('/'),
   ].join('');
 }
 

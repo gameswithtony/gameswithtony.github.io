@@ -152,7 +152,6 @@ test('a mined target GOES OFF — the same incident as stepping on it', () => {
   assert.equal(boom.t, 'detonate');
   assert.equal(boom.at, mine);
   assert.deepEqual(boom.minesLost, [mine]);
-  assert.deepEqual(ev[1], { t: 'confidence', delta: -RULES.DETONATE_HIT, reason: 'detonation' });
   assert.equal(ev.some((e) => e.t === 'analyzed'), false, 'nothing was reviewed; it exploded');
 
   // The crater: the tile and its four orthogonals revert to open water (blastRadius 1).
@@ -164,7 +163,6 @@ test('a mined target GOES OFF — the same incident as stepping on it', () => {
   assert.equal(done.stats.detonations, 1);
   assert.equal(done.stats.analyzed, 1, 'the turn is still spent, and it was still a review');
   assert.equal(done.tick, 1);
-  assert.equal(done.confidence, 100 - RULES.DETONATE_HIT);
 
   // Nothing is confirmed any more — the state exists, but no action reaches it.
   for (const c of done.con) assert.notEqual(c.k, 'mineConfirmed');
@@ -195,18 +193,19 @@ test('a review that detonates strands the users it cuts off, on the same tick', 
   s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.con[cellAt(s, 3, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [cellAt(s, 1, 1), cellAt(s, 2, 1), cellAt(s, 3, 1)] }];
-  s.users = [{ id: 0, at: cellAt(s, 1, 1), state: 'moving', visited: [s.origin, cellAt(s, 1, 1)], stalled: false }];
+  s.users = [{ id: 0, at: cellAt(s, 1, 1), state: 'moving', visited: [s.origin, cellAt(s, 1, 1)], stalled: false, waited: 0 }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
 
   const { s: done, ev } = reduce(s, { t: 'analyze', cell: cellAt(s, 2, 1) });
   // Exactly the traversal path's order, victims first — `detonate()` is the same function.
-  assert.deepEqual(ev.map((e) => e.t).slice(0, 3), ['requeued', 'detonate', 'confidence']);
-  // The walker was standing in the crater, so it goes back to the origin like any other
-  // blast victim (PLAN §3.4) — the trigger being a click rather than a footstep changes
-  // nothing about the aftermath.
-  assert.equal(done.users[0].state, 'queued');
-  assert.equal(done.users[0].at, done.origin);
-  assert.ok(done.confidence < 100 - RULES.DETONATE_HIT, 'and the wait is charged on top');
+  assert.deepEqual(ev.map((e) => e.t).slice(0, 2), ['userLost', 'detonate']);
+  // The walker was standing in the crater, so the player's own click killed it (PLAN §3
+  // ruling 4, revised): the trigger being a click rather than a footstep changes nothing
+  // about the aftermath.
+  assert.deepEqual(ev[0], { t: 'userLost', user: 0, at: cellAt(s, 1, 1), reason: 'detonation' });
+  assert.equal(done.users[0].state, 'gone');
+  assert.equal(done.stats.lost, 1);
+  assert.equal(done.phase.k, 'lost', 'the level had one user and it just died unserved');
 });
 
 test('the reveal list is a pure function of the board, in ascending frontier order', () => {

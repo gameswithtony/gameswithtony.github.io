@@ -17,10 +17,13 @@
     <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
     <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
     <span class="chip">TICK <b id="tick">0</b></span>
-    <div id="confidence" class="meter" title="Stakeholder confidence">
-      <div id="confidence-fill" class="meter-fill"></div>
-      <span id="confidence-label" class="meter-label">100</span>
-    </div>
+    <!-- The score. Users served is the whole point total; users lost are the ones no amount
+         of building brings back. -->
+    <span id="score" class="chip" title="Users served · users lost for good">
+      <span class="narrow-hide">SERVED</span> <b id="sc-served">0/0</b>
+      <span class="narrow-hide sep">·</span>
+      <span class="narrow-hide">LOST</span><span class="narrow-only">✕</span><b id="sc-lost">0</b>
+    </span>
     <!-- The forecast trio is persistent UI (SPEC §6.1); below 560px it keeps the numbers
          and shortens the words rather than being clipped. -->
     <div id="forecast" class="forecast">
@@ -34,13 +37,7 @@
     <canvas id="game"></canvas>
     <div id="notice" class="hidden"></div>
     <div id="toast" class="hidden"></div>
-    <div id="banner" class="hidden">
-      <div id="banner-title"></div>
-      <div id="banner-sub"></div>
-      <!-- End-screen stats (PLAN §11.8); empty for the mid-game banners. -->
-      <div id="banner-stats"></div>
-      <button id="banner-btn">PLAY AGAIN</button>
-    </div>
+    <!-- The end screens are overlays now (PLAN §11.9), not a banner inside the board. -->
   </main>
 
   <footer id="hud">

@@ -21,7 +21,7 @@ const LINE = { id: 'blast-line', map: ['#########', 'A#######B', '#########'].jo
  * @returns {import('../src/core/state.js').GameState}
  */
 function users(s, at) {
-  s.users = at.map((cell, id) => ({ id, at: cell, state: /** @type {const} */ ('moving'), visited: [s.origin, cell], stalled: false }));
+  s.users = at.map((cell, id) => ({ id, at: cell, state: /** @type {const} */ ('moving'), visited: [s.origin, cell], stalled: false, waited: 0 }));
   s.schedule = { ...s.schedule, total: at.length, spawned: at.length };
   return s;
 }
@@ -94,8 +94,8 @@ test('a blast takes hand tiles down with it and leaves the endpoints standing', 
   assert.equal(after.con[cellAt(s, 4, 1)].k, 'hand', 'outside the radius, nothing happens');
   assert.deepEqual(after.blocks[0].cells, [], 'the block keeps only its live cells');
 
-  assert.equal(after.confidence, 100 - RULES.DETONATE_HIT - RULES.WAIT_DRAIN_PER_USER);
   assert.equal(after.stats.detonations, 1);
+  assert.equal(after.stats.lost, 1, 'and the user who stepped on it is gone');
 });
 
 test('endpoints are indestructible (PLAN §3.8)', () => {
@@ -128,26 +128,28 @@ test('no chains: a second mine in the area is deleted silently (SPEC §5)', () =
   assert.equal(booms.length, 1, 'one user, one incident');
   assert.deepEqual(/** @type {any} */ (booms[0]).minesLost, [trigger, neighbour]);
   assert.equal(after.con[neighbour].k, 'none');
-  assert.equal(after.confidence, 100 - RULES.DETONATE_HIT - RULES.WAIT_DRAIN_PER_USER, 'charged once');
+  assert.equal(after.stats.detonations, 1, 'counted once');
 });
 
-test('users in the hole re-queue; users behind the break strand and count as waiting', () => {
+test('USERS IN THE HOLE ARE KILLED; users behind the break strand and wait', () => {
   const s = paved();
   const mine = cellAt(s, 4, 1);
   s.con[mine] = { k: 'aiHidden', mine: true, block: 0 };
   s.blocks = [{ id: 0, cells: [mine] }];
   // User 0 walks into it; user 1 is two cells behind and will be cut off by the same blast.
   users(s, [cellAt(s, 3, 1), cellAt(s, 1, 1)]);
-  const before = s.confidence;
 
   const { s: after, ev } = reduce(s, { t: 'wait' });
   assert.ok(ev.some((e) => e.t === 'detonate'));
 
-  const requeued = ev.filter((e) => e.t === 'requeued').map((e) => /** @type {any} */ (e).user);
-  assert.deepEqual(requeued, [0], 'only the one standing in the hole goes back to the start');
-  assert.equal(after.users[0].state, 'queued');
-  assert.equal(after.users[0].at, after.origin);
-  assert.deepEqual(after.users[0].visited, [], 'a fresh trip, so the no-revisit set resets');
+  // Revised 2026-08-04 (points economy): the blast does not send them home, it kills them.
+  // The triggerer stands on the trigger cell, which is inside `blastArea`, so it needs no
+  // special case -- it dies with the bystanders.
+  const killed = ev.filter((e) => e.t === 'userLost');
+  assert.deepEqual(killed, [{ t: 'userLost', user: 0, at: cellAt(s, 4, 1), reason: 'detonation' }]);
+  assert.equal(after.users[0].state, 'gone');
+  assert.equal(after.stats.lost, 1);
+  assert.equal(ev.some((e) => e.t === 'requeued'), false, 'the requeue event is gone from the union');
 
   // User 1 stepped to (2,1) before the blast took (3,1) out from in front of it. The field
   // is recomputed mid-tick so it is marked waiting now, not a tick late (PLAN §7.1.3).
@@ -155,7 +157,7 @@ test('users in the hole re-queue; users behind the break strand and count as wai
   assert.equal(after.users[1].at, cellAt(s, 2, 1));
   assert.equal(after.users[1].stalled, true);
   assert.equal(distField(after)[after.users[1].at], -1, 'its route really is severed');
-  assert.equal(after.confidence, before - RULES.DETONATE_HIT - RULES.WAIT_DRAIN_PER_USER * 2);
+  assert.equal(after.users[1].waited, 1, 'and its patience has started running down');
 });
 
 test('a cell already destroyed this tick is skipped by a later blast (PLAN §7.1.4)', () => {
@@ -188,5 +190,6 @@ test('a clean AI tile just reveals, and reveals do not cost anything', () => {
   assert.deepEqual(ev.filter((e) => e.t === 'reveal'), [{ t: 'reveal', cell: clean }]);
   assert.equal(after.con[clean].k, 'aiRevealed');
   assert.equal(after.stats.detonations, 0);
-  assert.equal(after.confidence, 100 - RULES.WAIT_DRAIN_PER_USER * 0 - 0, 'nobody was waiting');
+  assert.equal(after.stats.lost, 0, 'nobody was hurt');
+  assert.equal(after.users[0].waited, 0, 'and nobody was waiting');
 });

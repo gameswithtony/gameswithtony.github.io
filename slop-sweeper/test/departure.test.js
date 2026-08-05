@@ -12,7 +12,7 @@ const CORRIDOR = { id: 'gate-corridor', map: 'A##B', arrivals: { count: 3, first
 /** Hand-place the users the schedule would have produced, so the tests control the clock. */
 function queue(/** @type {import('../src/core/state.js').GameState} */ s, /** @type {number} */ n) {
   for (let i = 0; i < n; i++) {
-    s.users.push({ id: s.users.length, at: s.origin, state: 'queued', visited: [], stalled: false });
+    s.users.push({ id: s.users.length, at: s.origin, state: 'queued', visited: [], stalled: false, waited: 0 });
   }
   s.schedule = { ...s.schedule, total: n, spawned: n };
   return s;
@@ -50,10 +50,13 @@ test('the gate is topological, not safe: a user departs into a mined corridor (S
   const { s: s2, ev } = reduce(s, { t: 'wait' });
   assert.equal(ev.some((e) => e.t === 'departed'), true, 'it walked in willingly');
   assert.equal(ev.some((e) => e.t === 'step' && /** @type {any} */ (e).to === mined), true);
-  // …and found out the hard way. The trip ends where it started (PLAN §3.4).
+  // …and found out the hard way. Revised 2026-08-04 (points economy): the trip ends, full
+  // stop — the user is killed, not sent back to try again.
   assert.equal(ev.some((e) => e.t === 'detonate'), true);
-  assert.equal(s2.users[0].state, 'queued');
-  assert.equal(s2.users[0].at, s2.origin);
+  assert.deepEqual(ev.filter((e) => e.t === 'userLost'),
+    [{ t: 'userLost', user: 0, at: mined, reason: 'detonation' }]);
+  assert.equal(s2.users[0].state, 'gone');
+  assert.equal(s2.stats.lost, 1);
 });
 
 test('flagged slop and mine-confirmed tiles close the gate; the path is otherwise passable', () => {

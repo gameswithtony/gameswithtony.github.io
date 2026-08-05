@@ -229,6 +229,8 @@ This makes volcanoes **blast shields**, and creates a placement incentive worth 
 
 **Detonation as a deliberate tactic is legal and intended.** A player who has written off a region can let a user walk into it to clear the ground. That is "burn it down and rewrite." Do not patch it out. Do ensure it is not *cheaper* than repairing: the cost is the reset trip plus confidence loss plus the rebuild.
 
+*(Revised 2026-08-04 by owner decision: **the tactic is now a sacrifice.** Users in the blast are killed, not returned to the queue (§8), so clearing ground on purpose costs you the person who did it — permanently, out of a fixed supply, off your final score. It is still legal and still intended, and it is a better decision than it was: the price is no longer an abstract number off a bar, it is "this one is not getting there, spend them". The triggerer needs no special case in the code, because the trigger cell is inside its own blast area.)*
+
 ---
 
 ## 6. Users
@@ -338,6 +340,29 @@ Ocean cells are known-empty and count as zero for clue purposes. *(Throughout th
 ---
 
 ## 8. Meters and pressure
+
+> **REVISED 2026-08-04 by owner decision — THE CONFIDENCE METER IS GONE.** This whole section
+> described a bar that emptied; the game now has no bar. Pressure is the users themselves,
+> and the economy is points:
+>
+> - **Patience replaces the drain.** Every user carries a cumulative count of the ticks it
+>   spent unable to move — queued at the origin, stalled mid-route, stranded behind a crater,
+>   all the same thing (§6.4 was always right about that). At `RULES.USER_PATIENCE` ticks it
+>   gives up and leaves for good. Moving is not waiting, and the count never resets, so a
+>   route that keeps stalling bleeds the same person out across the whole game.
+> - **Death replaces the detonation hit.** A user caught in a blast — the one who triggered
+>   it included — is killed, not returned to the queue. See §5.
+> - **Running out of users replaces the empty bar.** The level ends when every scheduled user
+>   has either arrived or gone. **Score is arrivals.** One is a win, all of them is the goal,
+>   none is a loss.
+>
+> `CONFIDENCE_START`, `WAIT_DRAIN_PER_USER`, `DETONATE_HIT` and `SERVED_BONUS` are deleted.
+> **The metaphor survives as flavour** — stakeholder confidence is a fine thing to call the
+> HUD's remaining-users readout, and §8.1's "AI is the exchange rate" framing still describes
+> what the player is trading. What is gone is the *mechanism*: nothing is subtracted from a
+> pool any more, and the thing you can run out of is people. Everything below is kept for the
+> reasoning; read §8.2's "continuous, scales with the count" as satisfied by patience running
+> on every waiting user at once. `PLAN.md` §3 rulings 3/4/11 and §7.1 carry the details.
 
 ### 8.1 Two persistent meters
 

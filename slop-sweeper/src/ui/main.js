@@ -99,6 +99,42 @@ function boot() {
   /** @type {ViewOverlay} */
   const view = { selected: -1, rot: 0, anchors: null, ghost: null, blast: null };
 
+  /**
+   * The overlay layer (PLAN §11.9), once its lazy module has landed. Null until then, which is
+   * why every call site uses `?.`.
+   * @type {import('./start.js').Overlays | null}
+   */
+  let endScreen = null;
+  /** @type {import('./start.js').EndFacts | null} a result that finished before the module did */
+  let pendingEnd = null;
+
+  /**
+   * Hand the end screen plain numbers rather than the state: it is shown after the game is
+   * over and must not be able to ask the board anything.
+   * @param {boolean} won
+   * @param {{ served: number, total: number }} ev
+   */
+  function showEnd(won, ev) {
+    /** @type {import('./start.js').EndFacts} */
+    const facts = {
+      won,
+      levelId,
+      mapName: levelDef.name ?? levelId,
+      served: ev.served,
+      total: ev.total,
+      lost: s.stats.lost ?? 0,
+      detonations: s.stats.detonations,
+      ticks: s.tick,
+      seed: s.seed,
+      placed: s.stats.placed,
+      generated: s.stats.generated,
+      analyzed: s.stats.analyzed,
+      waited: s.stats.waited,
+    };
+    if (endScreen) endScreen.end(facts);
+    else pendingEnd = facts;
+  }
+
   const hud = createHud({
     onAction: (kind) => {
       switch (kind) {
@@ -179,7 +215,7 @@ function boot() {
     prev = next;
     view.selected = -1;
     view.rot = 0;
-    hud.hideBanner();
+    endScreen?.close();
     hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
     const url = new URL(location.href);
     if (labDef) url.searchParams.delete('level');
@@ -367,8 +403,17 @@ function boot() {
     console.warn('slop-sweeper: reducer rejected an action —', ev.reason);
     hud.notice(`REJECTED: ${ev.reason.toUpperCase()}`);
   });
-  bus.on('won', () => { stopRun(); hud.endScreen(s, 'SHIPPED', `${s.level} · seed ${s.seed}`); });
-  bus.on('lost', () => { stopRun(); hud.endScreen(s, 'CONFIDENCE GONE', `${s.level} · seed ${s.seed}`); });
+  // A user leaving for good is the loudest thing that happens without an explosion, and it is
+  // the one loss the player can still do something about next time — so it is named, and it
+  // says which of the two ways it happened.
+  bus.on('userLost', (/** @type {{ reason: 'gaveUp' | 'detonation' }} */ ev) => {
+    hud.notice(ev.reason === 'gaveUp' ? 'A USER GAVE UP WAITING' : 'A USER WAS CAUGHT IN THE BLAST');
+    stopRun();
+  });
+  // The end screens are overlays (PLAN §11.9), so they are held back until the module lands;
+  // in practice it has loaded long before anybody finishes a game.
+  bus.on('won', (/** @type {{ served: number, total: number }} */ ev) => { stopRun(); showEnd(true, ev); });
+  bus.on('lost', (/** @type {{ served: number, total: number }} */ ev) => { stopRun(); showEnd(false, ev); });
 
   // --- fast-forward (PLAN §12.6) ------------------------------------------------------
   // Pure UI sugar over the same `wait` the button next to it dispatches. It stops the
@@ -384,7 +429,7 @@ function boot() {
   let ffHalt = '';
 
   bus.on('step', () => { ffSteps++; });
-  bus.on('requeued', () => { ffHalt = ffHalt || 'A USER WENT BACK'; });
+  bus.on('userLost', () => { ffHalt = ffHalt || 'A USER IS GONE'; });
 
   function toggleRun() {
     if (running) stopRun();
@@ -529,13 +574,17 @@ function boot() {
   if (wantStart) document.body.classList.add('starting');
   import('./start.js')
     .then(({ createStart }) => {
-      const screen = createStart({
+      endScreen = createStart({
         levels: ids,
         getLevel: () => levelId,
         onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); },
+        onRestart: restart,
       });
-      hud.onHelp(screen.help);
-      if (wantStart) screen.open();
+      hud.onHelp(endScreen.help);
+      if (wantStart) endScreen.open();
+      // A game short enough to finish before this module lands is not a real possibility, but
+      // if it happened the result would otherwise be swallowed.
+      if (pendingEnd) { endScreen.end(pendingEnd); pendingEnd = null; }
     })
     .catch((err) => {
       document.body.classList.remove('starting');

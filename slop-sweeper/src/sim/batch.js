@@ -3,7 +3,6 @@
 // `fs`, no DOM. `run.js` wraps it for Node and the Level Lab (§9.2) imports the same
 // function to quick-sim a pasted map in the browser.
 
-import { RULES } from '../core/rules.js';
 import { init, reduce } from '../core/reduce.js';
 import { solve } from '../core/solver.js';
 import { makePolicy } from './policies.js';
@@ -19,13 +18,16 @@ export const MAX_TICKS = 400;
 /**
  * @typedef {object} GameResult
  * @property {number} seed
- * @property {boolean} won
+ * @property {boolean} won              at least one user reached B (points economy)
+ * @property {number} served            the score
+ * @property {number} total             users the level scheduled
+ * @property {boolean} perfect          every scheduled user arrived
  * @property {number} ticks
- * @property {number} confidence
+ * @property {number} lostGaveUp        users who ran out of patience
+ * @property {number} lostDetonation    users killed in a blast
  * @property {number} detonations
- * @property {number} waitingIntegral   Σ over ticks of the number of users waiting
+ * @property {number} waitingIntegral   Σ over users of the ticks they spent unable to move
  * @property {{ placed: number, generated: number, analyzed: number, waited: number }} verbs
- * @property {number} served
  * @property {number} refunds
  * @property {boolean} guessForced      deduction was impossible at some sampled moment
  * @property {boolean} bailed           the solver gave up on a component at some point
@@ -38,11 +40,14 @@ export const MAX_TICKS = 400;
  * @property {string} policy
  * @property {number} games
  * @property {number} seed
- * @property {number} winRate
+ * @property {number} winRate            share of games that served at least one user
+ * @property {number} servedFraction     THE headline: mean served / scheduled
+ * @property {number} perfectRate        share of games that served everybody
  * @property {number} medianWinTicks
  * @property {number} meanTicks
- * @property {number} meanConfidence
- * @property {number} meanWinConfidence
+ * @property {number} meanServed
+ * @property {number} gaveUpPerGame
+ * @property {number} killedPerGame
  * @property {number} detonationsPerGame
  * @property {number} waitingPerGame
  * @property {number} refundsPerGame
@@ -66,9 +71,10 @@ export function runGame(def, policy, seed, opts = {}) {
   const bot = typeof policy === 'string' ? makePolicy(policy, seed) : policy(seed);
 
   let s = init(def, seed);
-  let waitingIntegral = 0;
   let refunds = 0;
   let rejects = 0;
+  let lostGaveUp = 0;
+  let lostDetonation = 0;
   let guessForced = false;
   let bailed = false;
   let stalls = 0;
@@ -85,10 +91,9 @@ export function runGame(def, policy, seed, opts = {}) {
     for (const e of r.ev) {
       if (e.t === 'generateRefunded') refunds++;
       else if (e.t === 'rejected') rejects++;
-      // The drain is WAIT_DRAIN_PER_USER per waiting user, so the event carries the count.
-      else if (e.t === 'confidence' && e.reason === 'waiting') {
-        waitingIntegral += Math.round(-e.delta / RULES.WAIT_DRAIN_PER_USER);
-      }
+      // Cause of death is not stored on the user, so book it from the event that announced
+      // it — the reducer already publishes exactly the split we want to report.
+      else if (e.t === 'userLost') (e.reason === 'gaveUp' ? lostGaveUp++ : lostDetonation++);
     }
 
     // Sampled after the verbs that change what is knowable (PLAN §13).
@@ -105,11 +110,18 @@ export function runGame(def, policy, seed, opts = {}) {
     if (stalls > 32) break;
   }
 
+  let waitingIntegral = 0;
+  for (const u of s.users) waitingIntegral += u.waited;
+
   return {
     seed,
     won: s.phase.k === 'won',
+    served: s.stats.served,
+    total: s.schedule.total,
+    perfect: s.stats.served === s.schedule.total,
     ticks: s.tick,
-    confidence: s.confidence,
+    lostGaveUp,
+    lostDetonation,
     detonations: s.stats.detonations,
     waitingIntegral,
     verbs: {
@@ -118,7 +130,6 @@ export function runGame(def, policy, seed, opts = {}) {
       analyzed: s.stats.analyzed,
       waited: s.stats.waited,
     },
-    served: s.stats.served,
     refunds,
     guessForced,
     bailed,
@@ -152,10 +163,13 @@ export function runGames(def, policy, n, seed, opts = {}) {
     games: n,
     seed,
     winRate: n ? wins.length / n : 0,
+    servedFraction: mean(games.map((g) => (g.total ? g.served / g.total : 0))),
+    perfectRate: n ? games.filter((g) => g.perfect).length / n : 0,
     medianWinTicks: median(wins.map((g) => g.ticks)),
     meanTicks: mean(games.map((g) => g.ticks)),
-    meanConfidence: mean(games.map((g) => g.confidence)),
-    meanWinConfidence: mean(wins.map((g) => g.confidence)),
+    meanServed: mean(games.map((g) => g.served)),
+    gaveUpPerGame: mean(games.map((g) => g.lostGaveUp)),
+    killedPerGame: mean(games.map((g) => g.lostDetonation)),
     detonationsPerGame: mean(games.map((g) => g.detonations)),
     waitingPerGame: mean(games.map((g) => g.waitingIntegral)),
     refundsPerGame: mean(games.map((g) => g.refunds)),

@@ -80,6 +80,7 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `shapePool` | `'compact'` | which blocks Generate draws from — see §4 |
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
+| `patience` | `20` (`RULES.USER_PATIENCE`) | cumulative ticks a user will spend unable to move before it gives up and leaves for good |
 
 `arrivals` is the difficulty dial. Everything else is texture.
 
@@ -105,9 +106,12 @@ Two consequences for authoring, both learned the hard way in the 2026-08-04 tuni
   levels, going from `every: 3` to `every: 4` took `handOnly` from 0% to 100% — the one
   outcome SPEC §1 forbids. If your level has a floor, `every` is not the dial.
 - **And since the two-defect floor (§4), density is barely a dial either on small blocks.**
-  A level with a hand-only floor *and* a `compact` pool now has very little slack in any
-  direction; `caldera` and `strait` are both sitting in that corner and both measure in
-  single digits for every AI policy.
+  Between them, a level with a hand-only floor and a `compact` pool has very little slack.
+- **Under the points economy the binding constraint moved again.** `caldera` and `strait`
+  score worst in the corpus because their long routes cross the most generated ground, and
+  generated ground now kills the people walking it — `caldera` loses about eight of nine users
+  to blasts. That is a *route* problem, not a schedule or density problem, and `blastRadius`
+  is the dial that speaks to it.
 
 ---
 
@@ -211,10 +215,29 @@ If this list ever grows an opinion about difficulty, it has turned into a design
 
 ## 6. Design axes, briefly
 
-**Arrival cadence is the primary dial.** Tightening it raises the *floor* — the minimum AI
-usage below which you lose now. The measured budget is `CONFIDENCE_START /
-WAIT_DRAIN_PER_USER` ≈ **267 waiting-user-ticks** for a whole game. Sum the users piled up at
-the origin over the ticks it takes to open a route and you have predicted the level.
+**The game is scored in points** (2026-08-04). There is no confidence meter. Each user has
+`patience` cumulative ticks of being unable to move — queued at the origin, stalled, or
+stranded, all the same — and then it leaves for good. A blast kills everyone standing in it.
+The level ends when every scheduled user has arrived or gone: **one arrival is a win, all of
+them is the goal, none is a loss.** So `arrivals.count` is now the denominator of the score as
+well as the difficulty dial, and the number to read in the sim is **served**, not win %.
+
+**Arrival cadence is still the primary dial.** Tightening it raises the *floor* — the minimum
+AI usage below which you deliver nobody. The budget is per-user now and easy to compute: a
+user spawned at tick `t` is gone by tick `t + patience` unless a route opens. Take the turn a
+competent build opens the route, subtract each user's spawn tick, and any user whose gap
+exceeds `patience` is one you were never going to deliver.
+
+**Deaths, not delays, are what actually caps the corpus.** Measured across all six levels the
+AI policies lose five to nine of their nine-to-twelve users to *blasts* and one or two to
+patience — and `plain` serves the same 17% at every patience from 12 to 28, which is as clean
+a demonstration as you could ask for that the schedule is not the binding constraint. If a
+level scores badly, look at `killed` before you touch `arrivals`: the fix is less generated
+ground on the route, or `blastRadius`, not a looser schedule.
+
+**And mind the ceiling on patience.** It is not a free dial: raise it far enough and hand-only
+starts delivering on levels that are supposed to have a floor. On `sprawl`, patience 24 takes
+hand-only from 0% to 11% served. Whatever you set, re-check the `handOnly` row.
 
 **Session length has a hard floor you cannot tune away:** `firstTick + (count−1)×every` plus
 the A→B route, because the last user cannot start walking before it spawns and the level is
@@ -327,11 +350,11 @@ node src/sim/run.js --level strait --games 200       # winnable? by whom? how ha
 node --test                                          # nothing else broke
 ```
 
-Targets to aim the second command at: hand-only should lose wherever you intended a floor,
-`balanced:0.4` should land somewhere in 30–70%, median winning length should sit in 35–85
-ticks, and winning games should finish on 10–40 confidence. Anything at 100% or 0% across the
-*whole* policy sweep is a level with no decision in it — but note that `careful:0.4` is the strongest bot on
-four of the six levels, because reviewing what your users are about to walk on is simply the
-right play now — but note the bots never flag, so every number the sim prints is the
-pessimistic end of the range. Read the spread between
-`genRush`, `balanced` and `careful`, not `careful` alone.
+Targets to aim the second command at, in the points economy: **hand-only should deliver
+nobody wherever you intended a floor** (it now reads as a clean 0% served, which is the
+crispest that gate has ever been), the best AI policy should land somewhere in 30-60% served,
+and `perfect` should be rare but not zero. **Ignore win %** - it only asks whether one user
+got through, so it reads high everywhere by design. Anything at 0% served across the *whole*
+policy sweep is a level nobody can play; anything near 100% is a level with no decision in it.
+Read the spread between `genRush`, `balanced` and `careful`, and read `gaveUp` against
+`killed` to see which pressure is actually biting.
