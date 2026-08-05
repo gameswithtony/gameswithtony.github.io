@@ -24,45 +24,52 @@ import { initials, pickPost } from './linkedup.js';
 /** @typedef {import('./linkedup.js').PostFacts} PostFacts */
 
 /**
- * The rules, in the HUD's voice: terse headers, short lines, no paragraph anybody has to
- * re-read. Kept as data so the copy is legible as copy rather than buried in markup.
+ * The rules as a plain how-to-play with the story in short asides, written for somebody
+ * sitting down to their first game (owner revision 2026-08-05, second pass: the first
+ * rewrite led with story and got called on it — instruction first, flavour in passing).
+ * Every mechanical claim from the original terse version survives. Kept as data so the copy
+ * is legible as copy rather than buried in markup. One deliberate style rule from the
+ * owner's voice profile: no em-dashes anywhere in this copy, colons and commas do the work.
  * @type {[string, string[]][]}
  */
 const HELP = [
-  ['GOAL', [
-    'Users arrive at A on a schedule and walk to B the moment a path exists.',
-    'Every user who gets across is a point. The run ends once none are left to arrive.',
-    'Serve one and you have shipped something. Serve all of them and the run is perfect.',
-    'Serve nobody and you have not shipped.',
+  ['THE GOAL', [
+    'Welcome to Slopsweeper! You are a coder with software to ship. Users arrive at A, and each one wants to reach B, the thing they came to do.',
+    'Build a path of code from A to B. The moment a path exists, users walk it on their own.',
+    'Every user who reaches B is a point. One is a win. All of them is a perfect run.',
   ]],
-  ['PATIENCE', [
-    'A user who cannot move is waiting, and waiting is counted — across the whole game, not per trip.',
-    'Spend enough of a user\'s patience and they give up and leave. They do not come back.',
-    'A user caught in a detonation is gone the same way. Nothing you build afterwards returns either of them.',
+  ['TURNS', [
+    'Tap a cell, then pick an action from the bar at the bottom. Each button shows its cost in turns.',
+    'Users move while you work: after every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
+    'Users are not patient. Each turn one of them stands stuck, they lose one patience, and it never comes back. A user who runs out leaves for good.',
+    'Tap the WAITING counter any time to see each user by name and how many turns they have left.',
   ]],
-  ['BUILD', [
-    'PLACE — one tile, one turn. It has to touch something already built.',
-    'GENERATE — a whole block, one turn. Rotate it, drop it on a highlighted anchor.',
-    'You cannot decline a block once it is drawn, and it always ships hidden defects — at least two of them.',
-    'BETA — one tile, one turn, and only a few per run. Users walk out to a beta and wait there instead of at A — closer to B, but only B counts as served.',
+  ['WRITE CODE', [
+    'PLACE writes one tile of code by hand. One turn. It must touch code already built. Hand-written code never has bugs.',
+    'GENERATE asks the AI for code. One turn buys a whole block. Rotate it if you like, then drop it on a highlighted anchor.',
+    'You cannot preview a block and you cannot reject one. And every block contains bugs: at least two defects, hidden inside. The game tells you how many, not where.',
   ]],
-  ['READ', [
-    'Every number counts the defects in the eight cells around it.',
-    'A revealed cell shows its own count.',
-    'Your hand tiles sense the defects beside them too — blank means provably clean.',
-    'A block badge is the defects still left in that block.',
+  ['THE BUGS', [
+    'A defect explodes when a user steps on it, or when you analyze it. The blast turns nearby code back into open ocean, including yours, and kills any user standing in it.',
+    'The numbers on the board are how you find defects first. Each number counts the defects in the eight cells touching it.',
+    'Your hand tiles show a number too, so building next to AI code is a safe way to probe it. A blank hand tile means zero: nothing dangerous beside it.',
+    'The badge on each block counts the defects still in that block.',
   ]],
-  ['CLEAR OR AVOID', [
-    'ANALYZE — one cell, one turn. A zero opens its neighbours with it.',
-    'Analyze a defect and it DETONATES: the blast craters back to open ocean, and any user standing in it is gone.',
-    'FLAG — free, and reversible. Users refuse to walk through a flagged cell.',
-    'A user who steps onto a hidden defect sets it off exactly the same way.',
+  ['REVIEW', [
+    'ANALYZE reviews one cell of AI code. One turn.',
+    'If the cell is clean, it flips over and shows its number. If that number is zero, its neighbours open too, free.',
+    'If the cell is a defect, it explodes. The numbers are there so you can know before you click.',
+    'FLAG is free and reversible. Mark a cell you do not trust and users will refuse to walk through it.',
+  ]],
+  ['BETAS', [
+    'You get a few beta releases per run. The BETA button counts them down.',
+    'A beta is one tile, one turn, placed like a hand tile. Users walk out to a beta and wait there instead of standing at A. That keeps them moving and stages them closer to B, but it does not score. Only B scores.',
+    'Careful: users will cross unreviewed AI code to reach a beta.',
   ]],
   ['CONTROLS', [
-    'Tap a cell to select it. The action bar does the acting — nothing on the board spends a turn by itself.',
-    'Drag to pan. Pinch, scroll, or the + and − buttons to zoom. Tap the minimap to jump.',
-    'R rotate · F flag · Enter confirm · Esc deselect.',
-    'WAIT passes one turn. RUN keeps passing until something worth watching happens.',
+    'Drag to pan. Pinch, scroll, or the + and − buttons to zoom. Tap the minimap to jump anywhere.',
+    'R rotates a block, F flags the selected cell, Enter confirms, Esc deselects.',
+    'WAIT passes one turn without building. RUN keeps passing turns until something needs your attention.',
   ]],
 ];
 
