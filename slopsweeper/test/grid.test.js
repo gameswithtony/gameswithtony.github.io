@@ -10,7 +10,7 @@ test('the legend maps every authored character', () => {
   assert.equal(m.h, 1);
   assert.deepEqual(m.terrain, ['ocean', 'ocean', 'volcano', 'void', 'ocean']);
   assert.equal(m.origin, 0);
-  assert.equal(m.dest, 4);
+  assert.equal(m.dests[0], 4);
 });
 
 test('space is an alias of void', () => {
@@ -28,7 +28,7 @@ test('short rows are right-padded with void and trailing whitespace is invisible
     'ocean', 'void', 'void',
     'ocean', 'ocean', 'ocean',
   ]);
-  assert.equal(m.dest, 8);
+  assert.equal(m.dests[0], 8);
 });
 
 test('blank leading and trailing lines are dropped, so template literals just work', () => {

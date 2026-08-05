@@ -19,6 +19,17 @@ something better opens up. Camping drains patience like any other waiting, so wh
 buys is the walk, not the clock. With no beta on the board the game is bit-for-bit the game
 it was, which the sim table and `test/beta.test.js` both check rather than assume.
 
+**Multi-destination itineraries** land the same day (SPEC §2.4/§6.5, §9.2.2): a level may mark
+`B`, `C`, `D`… as well as `A`, and each user carries a list of the ones it has to visit, in any
+order. The lists are authored by the level and handed out round-robin by spawn order, so the
+demand is a property of the level and not of the seed; a level that lists none sends every user
+everywhere, which is why a one-destination level is the game it always was — measured, not
+promised. Reaching a stop that is not the last one refunds half a bar of patience and the walk
+carries on; the last one is arrival and scores the point, however far the user went to earn it.
+`src/levels/delta.js` is the first level built for it — two necks into one spine with three
+lobes hanging off it, so SPEC §9.2.2's trunk-versus-branches decision arrives in the first ten
+turns. It is a showcase and its numbers are a first guess; read its header before copying them.
+
 ## There is no build step, ever
 
 Plain JavaScript ES modules. No bundler, no compiler, no `dist/`, no dependencies — nothing

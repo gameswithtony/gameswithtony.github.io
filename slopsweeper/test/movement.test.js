@@ -18,7 +18,7 @@ const OPEN = {
 /** @param {number} seed */
 function pavedBoard(seed) {
   const s = init(OPEN, seed);
-  s.con = s.con.map((_, i) => (i === s.origin || i === s.dest ? CON_NONE : CON_HAND));
+  s.con = s.con.map((_, i) => (i === s.origin || i === s.dests[0] ? CON_NONE : CON_HAND));
   return s;
 }
 
@@ -44,7 +44,7 @@ test('every step strictly reduces distance to the destination', () => {
     assert.equal(dist[st.to], dist[st.from] - 1, 'movement must be monotone (SPEC §6.3.1)');
   }
   assert.equal(end.users[0].state, 'arrived');
-  assert.equal(end.users[0].at, end.dest);
+  assert.equal(end.users[0].at, end.dests[0]);
 });
 
 test('a trip never re-enters a visited cell', () => {
@@ -52,7 +52,7 @@ test('a trip never re-enters a visited cell', () => {
   const visited = s.users[0].visited;
   assert.equal(new Set(visited).size, visited.length);
   assert.equal(visited[0], s.origin);
-  assert.equal(visited[visited.length - 1], s.dest);
+  assert.equal(visited[visited.length - 1], s.dests[0]);
 });
 
 test('the tie-break is seeded: same seed, same walk', () => {

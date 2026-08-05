@@ -5,11 +5,11 @@
 
 import { LEVEL_DEFAULTS } from './rules.js';
 import {
-  CON_BETA, CON_HAND, CON_NONE, conCaps, isFlagged, isHandBuildable, levelParams, setLevelParams,
-  stopsBlast,
+  CON_BETA, CON_HAND, CON_NONE, conCaps, destIndex, everyDest, isEndpoint, isFlagged,
+  isHandBuildable, levelParams, setLevelParams, stopsBlast,
 } from './state.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
-import { canProgress, gateOpen, stepCandidates, waypointField } from './routing.js';
+import { canProgress, gateOpen, stepCandidates, waypointFields } from './routing.js';
 import { drawShape, legalPlacements, placementCells, rollMines } from './generate.js';
 import { fromState, initStreams } from './rng.js';
 import { assertValidLevel } from './validate.js';
@@ -37,6 +37,8 @@ export function init(def, seed) {
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
     betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
+    itineraries: def.itineraries ?? LEVEL_DEFAULTS.itineraries,
+    destRefill: def.destRefill ?? LEVEL_DEFAULTS.destRefill,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
@@ -53,7 +55,7 @@ export function init(def, seed) {
     con: emptyCon(m),
     bbox: m.bbox,
     origin: m.origin,
-    dest: m.dest,
+    dests: m.dests,
     blocks: [],
     users: [],
     schedule: {
@@ -266,12 +268,12 @@ export function placeRejection(s, cell) {
  */
 function handTargetRejection(s, cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= s.w * s.h) return `cell ${cell} is off the board`;
-  if (cell === s.origin || cell === s.dest) return 'endpoints are not buildable';
+  if (isEndpoint(s, cell)) return 'endpoints are not buildable';
   if (!isHandBuildable(s.terrain[cell], s.con[cell])) {
     return conCaps(s.con[cell]).occupies ? 'cell is already built' : `cannot build on ${s.terrain[cell]}`;
   }
   for (const j of n4(s, cell)) {
-    if (j === s.origin || j === s.dest) return '';
+    if (isEndpoint(s, j)) return '';
     if (conCaps(s.con[j]).handFrom) return '';
   }
   return 'must touch an endpoint or a tile that is already built';
@@ -407,13 +409,16 @@ function runTick(d, ev) {
   // waiting, which is what it would look like anyway (OPEN #1; default 1 = every tick).
   const { userMoveEvery } = levelParams(d);
   if (d.tick % userMoveEvery === 0) {
-    // One field per movement phase, exactly where the plain distance field used to be
+    // One field set per movement phase, exactly where the plain distance field used to be
     // computed (PLAN §7.1.3). Since 2026-08-05 it is the *waypoint* field: users walk to the
-    // nearest waypoint their component owns rather than to B unconditionally. With no beta
-    // on the board it is the distance field, cell for cell.
-    const wf = waypointField(d);
-    departures(d, ev, wf);
-    movement(d, ev, wf);
+    // nearest waypoint their component owns rather than to B unconditionally; and since the
+    // itinerary revision later the same day there is one such field per distinct remaining
+    // list among the live users, because "the nearest waypoint" is only a question once you
+    // say nearest to *whom*. On a level with one destination that is one list, one field, one
+    // computation — the distance field, cell for cell, as it always was.
+    const fields = waypointFields(d);
+    departures(d, ev, fields);
+    movement(d, ev, fields);
     traversal(d, ev);
   }
   // Step 5 — stranding: users with no remaining path simply stall each tick and are
@@ -430,14 +435,20 @@ function runTick(d, ev) {
  *
  * "An open path" now means "somewhere worth walking to" (SPEC §6.2, rev. 2026-08-05): B, or
  * a beta staged between here and B. Which is the same sentence when there is no beta.
+ *
+ * The gate is asked once **per queued user** since itineraries (rev. 2026-08-05), against
+ * that user's own field, because two users at the same origin on the same tick may owe
+ * different destinations and the route to one of them can be open while the other is not. On
+ * a level where everyone carries the same list this is one question, asked N times, with one
+ * answer — the flush, unchanged.
  * @param {GameState} d
  * @param {Ev[]} ev
- * @param {import('./routing.js').WaypointField} wf
+ * @param {import('./routing.js').FieldSet} fields
  */
-function departures(d, ev, wf) {
-  if (!gateOpen(d, wf)) return;
+function departures(d, ev, fields) {
   for (const u of d.users) {
     if (u.state !== 'queued') continue;
+    if (!gateOpen(d, fields.for(u.todo))) continue;
     u.state = 'moving';
     u.at = d.origin;
     u.visited = [d.origin];
@@ -449,12 +460,14 @@ function departures(d, ev, wf) {
 /**
  * @param {GameState} d
  * @param {Ev[]} ev
- * @param {import('./routing.js').WaypointField} wf
+ * @param {import('./routing.js').FieldSet} fields
  */
-function movement(d, ev, wf) {
+function movement(d, ev, fields) {
   const move = fromState(d.rng.move);
+  const { patience: limit, destRefill } = levelParams(d);
   for (const u of d.users) {
     if (u.state !== 'moving') continue;
+    const wf = fields.for(u.todo);
     u.stalled = false;
     // The progress guard is asked BEFORE the move stream is touched, and the ordering is
     // load-bearing rather than tidy: a user held in place by it must draw no random number,
@@ -486,6 +499,11 @@ function movement(d, ev, wf) {
       // its remaining `gaveUp` and buys `killed` instead), and a no-beta game must play
       // exactly as it played before this feature existed. Relaxing §6.3.3 in general is a
       // real and probably good change; it is a different one, and it is the spec owner's.
+      //
+      // Itineraries (2026-08-05) did not widen the scope, and did not need to: the one way a
+      // multi-destination walker's own waypoint set moves under it is by reaching a stop, and
+      // `visit` starts the fresh trail there and then. A stale trail from any *other* cause
+      // still strands a walker on a beta-free board, exactly as it always did.
       options = stepCandidates(d, wf.dist, u.at, [u.at]);
       if (options.length > 0) u.visited = [u.at];
     }
@@ -497,13 +515,55 @@ function movement(d, ev, wf) {
     ev.push({ t: 'step', user: u.id, from: u.at, to });
     u.at = to;
     u.visited.push(to);
-    if (to === d.dest) {
-      u.state = 'arrived';
-      d.stats.served++;
-      ev.push({ t: 'arrived', user: u.id });
-    }
+    visit(d, ev, u, to, limit, destRefill);
   }
   d.rng.move = move.getState();
+}
+
+/**
+ * **Visit on contact** (user decision 2026-08-05, SPEC §6). Stepping onto a destination that
+ * is still on the walker's list ticks it off *there and then* — whether or not it was the
+ * waypoint the field was steering toward. A user routed to C that happens to cross B on the
+ * way has been to B, and pretending otherwise would mean walking it back later to stand on a
+ * cell it has already stood on, which nobody would believe.
+ *
+ * Stepping onto a destination that is **not** on the list does nothing at all: no event, no
+ * refill, no bookkeeping. It is a passable cell, and that is the whole of its behaviour.
+ *
+ * The last stop is arrival, priced exactly as arrival always was — `arrived`, `stats.served++`
+ * — so a one-destination level reaches this function on its one and only visit and leaves it
+ * having done precisely what the old two lines did. Everything else here is unreachable
+ * without a second destination on the board.
+ *
+ * The intermediate case pays the patience refill (RULES.DEST_REFILL) and starts a fresh trail.
+ * The trail reset is the no-revisit rule (SPEC §6.3.3) read correctly rather than a special
+ * case: that rule stops a user looping **inside one trip**, and reaching a destination is the
+ * end of a trip. Without it a user that walks A→B would be forbidden from retracing any of it
+ * on the way to C, which on most geometries means it stands on B until its patience runs out.
+ *
+ * @param {GameState} d
+ * @param {Ev[]} ev
+ * @param {User} u
+ * @param {number} cell   the cell just stepped onto
+ * @param {number} limit  the level's patience
+ * @param {number} refill the level's destRefill
+ */
+function visit(d, ev, u, cell, limit, refill) {
+  const di = destIndex(d, cell);
+  if (di < 0) return;
+  const k = u.todo.indexOf(di);
+  if (k < 0) return;
+
+  u.todo.splice(k, 1);
+  if (u.todo.length === 0) {
+    u.state = 'arrived';
+    d.stats.served++;
+    ev.push({ t: 'arrived', user: u.id });
+    return;
+  }
+  u.waited = Math.max(0, u.waited - Math.round(limit * refill));
+  u.visited = [cell];
+  ev.push({ t: 'visited', user: u.id, dest: cell });
 }
 
 /**
@@ -544,13 +604,20 @@ function traversal(d, ev) {
   // The stall test is the general one (rev. 2026-08-05): a user is stranded when it cannot
   // progress, which is now three things at once — nothing to walk to (`dist` -1), standing on
   // the thing it was walking to (`dist` 0, i.e. a beta whose blast-mates are gone), or a
-  // target that is no longer ahead of it. Only standing on B is arrival, and a user there is
-  // not `moving` anyway. With no beta the first case is the only reachable one, which is the
-  // `fresh[u.at] < 0` test this replaces.
-  const fresh = waypointField(d);
+  // target that is no longer ahead of it. With no beta the first case is the only reachable
+  // one, which is the `fresh[u.at] < 0` test this replaces.
+  //
+  // Asked per user against that user's own remaining list, and against a *freshly* built field
+  // set, because a user that ticked a destination off earlier in this same tick is carrying a
+  // list nobody was carrying when the tick began. (The old `u.at === d.dest` skip went with
+  // it: a user standing on a destination is either arrived — and not `moving` — or standing on
+  // one it has already visited, which is a passable cell and gets the general test like any
+  // other.)
+  const fresh = waypointFields(d);
   for (const u of d.users) {
-    if (u.state !== 'moving' || u.at === d.dest) continue;
-    if (fresh.dist[u.at] <= 0 || !canProgress(d, fresh, u.at)) u.stalled = true;
+    if (u.state !== 'moving') continue;
+    const wf = fresh.for(u.todo);
+    if (wf.dist[u.at] <= 0 || !canProgress(d, wf, u.at)) u.stalled = true;
   }
 }
 
@@ -566,7 +633,7 @@ function detonate(d, ev, at, destroyed) {
   /** @type {number[]} */
   const minesLost = [];
   for (const c of blastArea(d, at)) {
-    if (c === d.origin || c === d.dest) continue;   // endpoints are indestructible (PLAN §3.8)
+    if (isEndpoint(d, c)) continue;                 // endpoints are indestructible (PLAN §3.8)
     if (destroyed.has(c)) continue;
     if (!conCaps(d.con[c]).occupies) continue;
     // Other mines in the area go silently: one user, one incident, no chains (SPEC §5).
@@ -603,14 +670,48 @@ function detonate(d, ev, at, destroyed) {
  */
 function spawns(d, ev) {
   const sc = d.schedule;
+  const { itineraries } = levelParams(d);
   while (sc.spawned < sc.total && d.tick >= sc.nextTick) {
     /** @type {User} */
-    const u = { id: d.users.length, at: d.origin, state: 'queued', visited: [], stalled: false, waited: 0 };
+    const u = {
+      id: d.users.length,
+      at: d.origin,
+      state: 'queued',
+      todo: itineraryFor(d, itineraries, d.users.length),
+      visited: [],
+      stalled: false,
+      waited: 0,
+    };
     d.users.push(u);
     sc.spawned++;
     sc.nextTick += sc.every;
     ev.push({ t: 'spawned', user: u.id });
   }
+}
+
+/**
+ * Which destinations user `n` was born owing (user decision 2026-08-05, SPEC §6).
+ *
+ * **Authored and cycled, never rolled.** The level writes the itineraries down and users take
+ * them round-robin in spawn order, so the tenth user's list is a property of the level and not
+ * of the seed. That is a deliberate refusal of the obvious alternative: a random draw would
+ * make two games of the same level ask for different things, and the whole point of the
+ * forecast (SPEC §6.1) is that demand is knowable in advance. It also keeps this out of the
+ * RNG streams entirely, so the determinism contract (PLAN §7.5) never had to hear about it.
+ *
+ * **An empty list means the whole map**, which is what makes a single-destination level
+ * behave exactly as it did before any of this: one destination, every user owing it, arrival
+ * on contact. Levels state itineraries only when they want users to differ.
+ *
+ * @param {GameState} d
+ * @param {string[][]} itineraries  letters, as authored
+ * @param {number} n                spawn order, which is also the user id
+ * @returns {number[]} ascending indexes into `d.dests`
+ */
+function itineraryFor(d, itineraries, n) {
+  if (itineraries.length === 0) return everyDest(d);
+  const letters = itineraries[n % itineraries.length];
+  return letters.map((ch) => ch.charCodeAt(0) - 'B'.charCodeAt(0)).sort((a, b) => a - b);
 }
 
 /**
@@ -730,7 +831,7 @@ function draft(s) {
     ...s,
     con: s.con.slice(),
     blocks: s.blocks.map((b) => ({ id: b.id, cells: b.cells.slice() })),
-    users: s.users.map((u) => ({ ...u, visited: u.visited.slice() })),
+    users: s.users.map((u) => ({ ...u, todo: u.todo.slice(), visited: u.visited.slice() })),
     schedule: { ...s.schedule },
     stats: { ...s.stats },
     rng: { ...s.rng },

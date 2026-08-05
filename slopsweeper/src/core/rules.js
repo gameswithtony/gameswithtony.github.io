@@ -26,6 +26,18 @@ export const RULES = Object.freeze({
   // to stage a long route in stages and nowhere near enough to breadcrumb it. Per-level
   // override with `LevelDef.betaSupply`; 0 turns the verb off for that level.
   BETA_SUPPLY: 3,
+  // What reaching an intermediate destination gives back, as a fraction of the level's
+  // patience (user decision 2026-08-05, SPEC §6). A user with more stops to make has its
+  // cumulative `waited` cut by `round(patience × DEST_REFILL)` — half a bar, floored at zero.
+  //
+  // Half is chosen to make the multi-stop itinerary *possible* without making it free. A user
+  // carrying three destinations has to survive three legs on one patience budget; without a
+  // refill the second leg is walked by someone who has already spent whatever the first leg
+  // cost them, and a long itinerary would simply be a slower way of losing that user. A full
+  // refill is the other failure — it would make every extra stop a free extension of the
+  // clock, and a level would get *easier* the more it asked for. Half keeps arriving somewhere
+  // worth something and keeps the whole trip finite. Per-level override: `LevelDef.destRefill`.
+  DEST_REFILL: 0.5,
   USER_MOVE_EVERY: 1,         // OPEN #1
   ART_PX_PER_TILE: 16,        // SPEC §10.8 (revised 2026-08-04: finer art grid, calmer tiles)
   FONT_MIN_DEVICE_PX: 10,     // zoom tiers derive from this, never tuned apart (SPEC §10.8)
@@ -44,6 +56,8 @@ export const RULES = Object.freeze({
  * @property {number} mineDensity
  * @property {number} patience
  * @property {number} betaSupply
+ * @property {string[][]} itineraries  destination letters per user, cycled by spawn order
+ * @property {number} destRefill       patience returned on reaching an intermediate stop
  * @property {'compact' | 'awkward' | 'heavy' | string[]} shapePool
  * @property {number} userMoveEvery
  * @property {number} blastRadius
@@ -60,6 +74,12 @@ export const LEVEL_DEFAULTS = Object.freeze({
   shapePool: 'compact',
   patience: RULES.USER_PATIENCE,
   betaSupply: RULES.BETA_SUPPLY,
+  // EMPTY MEANS EVERY DESTINATION (2026-08-05). A level that lists no itineraries hands every
+  // user the whole map's list, which on a one-destination level is the list it always had —
+  // that is the mechanism by which the six shipped levels play byte-for-byte as they did, and
+  // it is why the default is `[]` rather than something clever like `[['B']]`.
+  itineraries: Object.freeze([]),
+  destRefill: RULES.DEST_REFILL,
   userMoveEvery: RULES.USER_MOVE_EVERY,
   blastRadius: RULES.BLAST_RADIUS,
 });

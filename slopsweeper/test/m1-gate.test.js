@@ -14,7 +14,7 @@ test('a hand-only playthrough of plain reaches phase won', () => {
   assert.equal(s.h, 20);
 
   const a = cellXY(s, s.origin);
-  const b = cellXY(s, s.dest);
+  const b = cellXY(s, s.dests[0]);
   assert.equal(a.y, b.y, 'plain runs straight across');
 
   // One tile per tick, straight from A to B.

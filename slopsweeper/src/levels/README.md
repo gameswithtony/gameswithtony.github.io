@@ -50,7 +50,16 @@ fits at all, in exactly one position, so four Generates in five refund (§4). Bl
 | ` ` (space) | `VOID` | exactly the same as `.` |
 | `^` | `VOLCANO` | an obstacle *inside* the play space: unbuildable, and it **stops blasts** |
 | `A` | `OCEAN` | the origin endpoint (exactly one) |
-| `B` | `OCEAN` | the destination endpoint (exactly one) |
+| `B` … `H` | `OCEAN` | the destinations, at least one, **contiguous from `B`** and at most seven |
+
+**Destinations** (2026-08-05). `B` alone is the classic level. Add `C` and you have a second
+place users go; the letters must run `B`, `C`, `D`… with no gaps, each appearing at most once,
+and `I` onward is an unknown character rather than an eighth destination. Which users go where
+is `itineraries`, in §3 — by default, everyone goes everywhere.
+
+Everything true of `B` is true of every destination: always passable, never buildable by hand
+or by AI, indestructible in a blast, no clue displayed, invisible to the solver. And only
+reaching the **last** one on a user's list is an arrival — see §3.
 
 The parser is deliberately forgiving, because generated ASCII maps rot at the edges:
 
@@ -82,8 +91,45 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 | `patience` | `20` (`RULES.USER_PATIENCE`) | cumulative ticks a user will spend unable to move before it gives up and leaves for good |
 | `betaSupply` | `3` (`RULES.BETA_SUPPLY`) | beta milestones the player may ship (SPEC §4.7); `0` switches the verb off for this level |
+| `itineraries` | `[]` | which destinations each user must visit, as letters, cycled by spawn order; `[]` means **every user visits every destination** |
+| `destRefill` | `0.5` (`RULES.DEST_REFILL`) | fraction of `patience` handed back when a user reaches a stop that is not its last |
 
 `arrivals` is the difficulty dial. Everything else is texture.
+
+**Itineraries** are the second half of multiple destinations (added 2026-08-05), and they are
+where the axis gets interesting. Write them as arrays of letters:
+
+```js
+itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']]
+```
+
+- **Cycled by spawn order, never rolled.** User 0 takes the first list, user 1 the second, user
+  2 the third, user 3 the first again. The demand is a property of the level, so it reads the
+  same on every seed — which is what makes the HUD forecast honest and the sim comparable.
+- **Any order within a list.** A user owing `B` and `D` goes to whichever is nearer and then to
+  the other. If you need a forced sequence, that is two destinations and two itineraries, not
+  one itinerary and a wish.
+- **Visited on contact.** A user routed to `C` that happens to cross `B` has been to `B`, and
+  it comes off the list on the spot. A user stepping onto a destination that is **not** on its
+  list does nothing at all — it is just a built cell it can walk on.
+- **Only the last stop is an arrival**, and a user is worth exactly one point however many
+  stops it made. Long itineraries buy the level texture, not score.
+- **Each intermediate stop refunds `round(patience × destRefill)`** off that user's cumulative
+  `waited`, floored at zero. At the default half bar, a three-stop user gets two half-refills
+  on the way round, which is what makes a three-stop itinerary a trip rather than a slow way of
+  losing somebody. `destRefill: 0` is a real setting — it says a stop buys only the walk, which
+  is exactly what a **beta** buys, and it is the honest choice for a level where the
+  destinations are meant to feel like milestones rather than like relief.
+
+Two authoring notes learned putting `delta` together:
+
+- **Itineraries change what "connected" is worth.** With everyone visiting everywhere, a level
+  is one connectivity problem and partial progress serves nobody. With a mixed list, closing
+  the cheapest route already delivers a third of the users, so the player has a reason to
+  finish one leg before starting the next. That is a genuinely different level from the same
+  map with `itineraries` left out — try both before you decide which one you are shipping.
+- **A single-stop itinerary is the level's tutorial.** Whichever destination it names becomes
+  the trunk everything else branches off, because it is the one route that pays immediately.
 
 **Beta** is the third build verb (added 2026-08-05). It costs one turn and lands by exactly
 Place's target rules, and what it buys is that users treat it as an intermediate destination:
@@ -211,11 +257,12 @@ registered level.
 **Errors** (the level refuses to load):
 
 - an unknown map character
-- not exactly one `A` and one `B`
+- not exactly one `A`; no `B`; a repeated destination letter; a gap in `B`, `C`, `D`…
 - an endpoint with no buildable neighbour — nothing could ever connect to it
-- no ocean connectivity from `A` to `B` — unwinnable by construction
+- no ocean connectivity from `A` to **any** destination, each named — unwinnable by construction
+- an itinerary that is empty, names a letter the map does not carry, or visits one twice
 - a board over 64×64 (a performance ceiling, not a target — the corpus runs 32×20 to 50×30)
-- a nonsense schedule, density, pool, or count
+- a nonsense schedule, density, pool, count, or `destRefill` outside [0, 1]
 
 **Warnings** (worth a look, not fatal):
 
@@ -373,3 +420,82 @@ got through, so it reads high everywhere by design. Anything at 0% served across
 policy sweep is a level nobody can play; anything near 100% is a level with no decision in it.
 Read the spread between `genRush`, `balanced` and `careful`, and read `gaveUp` against
 `killed` to see which pressure is actually biting.
+
+---
+
+## 8. Worked example — `delta`, with three destinations
+
+The brief: *SPEC §9.2.2's trunk decision, made of geometry — one shared spine serving three
+destinations is turn-efficient and one defect takes all three down, while an independent route
+costs far more turns and fails on its own.* And then, on top of it, three different itineraries
+asking three different questions of the same board.
+
+```js
+// @ts-check
+
+/** @type {import('./index.js').LevelDef} */
+export const delta = {
+  id: 'delta',
+  name: 'The Delta',
+  map: `
+..................##########
+..................#########B
+..................##########
+############......##########
+######^^####......####^^^^^^
+######^^####......##########
+############################
+A##########################C
+############################
+####^^^^^^##......##########
+####^^^^^^##......####^^^^^^
+############......##########
+############################
+###########################D
+############################
+`,
+  arrivals: { count: 9, firstTick: 2, every: 4 },
+  mineDensity: 0.12,
+  patience: 26,
+  betaSupply: 4,
+  itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']],
+  shapePool: 'compact+awkward',
+};
+```
+
+Reading it back:
+
+- **28×15.** A west basin with `A` on its edge, two three-row necks east into a north-south
+  spine, and three lobes off that spine — `B` top, `C` straight ahead, `D` bottom — each sealed
+  from its neighbours by a volcano bar running to the east wall.
+- **`C` is the trunk**: a straight 26-tile shot along row 7. `B` and `D` are eleven tiles each
+  off the spine that route already paid for — cheap, and sharing a single point of failure in
+  the north neck. **The southern neck is the other answer**: thirty-odd tiles round the reef at
+  the bottom of the basin to reach `D` on its own, and it fails independently. That is the
+  trunk decision, and the basin makes you commit to a direction before you know what generation
+  will do to you.
+- **Both necks are three rows tall**, so of `compact+awkward` only `R12` crosses them (§4) —
+  the same trick `strait` plays, doubled and pulled apart. The necks are where you build by hand.
+- **`itineraries: [['C'], ['B','D'], ['B','C','D']]`** spans the range deliberately: a single
+  stop, a two-stop that never touches the trunk's own destination, and the full tour. So users
+  0, 3, 6 are served by the trunk alone; users 1, 4, 7 need both branches; users 2, 5, 8 need
+  everything and get half a bar of patience back twice on the way round. Closing the C route
+  first therefore *delivers* a third of the level, which is what makes the build order a
+  decision rather than a checklist.
+- **`betaSupply: 4`** rather than three, because a three-legged trip has more places worth
+  staging from than a one-legged one.
+
+**It is a showcase, not a tuned level, and the sim says so**: at these numbers hand-only clears
+it at ~89% served, so it currently sits in `plain`'s class — a control, not a level with a
+floor. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
+to 2 moves hand-only about ten points and the AI policies not at all). The dials with something
+to say are `blastRadius`, `mineDensity`, and the geometry: lengthen the trunk, or make the
+branches share more of it. Read §6 — deaths, not delays — before reaching for `arrivals`.
+
+The loop is the same one:
+
+```
+node src/sim/validate.js delta                       # structure, itineraries included
+node src/sim/run.js --level delta --games 200        # winnable? by whom? how hard?
+node --test                                          # nothing else broke
+```

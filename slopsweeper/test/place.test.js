@@ -95,7 +95,7 @@ test('the branch test is "any structure", but the TARGET rules are untouched', (
   assert.match(why(at(s, 2, 1)), /cannot build on volcano/);
   assert.match(why(at(s, 0, 0)), /cannot build on void/);
   assert.match(why(s.origin), /endpoints are not buildable/);
-  assert.match(why(s.dest), /endpoints are not buildable/);
+  assert.match(why(s.dests[0]), /endpoints are not buildable/);
   assert.match(why(-1), /off the board/);
   assert.match(why(s.w * s.h), /off the board/);
   // Slop is structure to build *from*, never ground to build *on*.
@@ -116,7 +116,7 @@ test('placement is refused off structure, on non-ocean terrain, on endpoints and
   assert.match(why(at(s, 2, 1)), /cannot build on volcano/);
   assert.match(why(at(s, 0, 0)), /cannot build on void/);
   assert.match(why(s.origin), /endpoints are not buildable/);
-  assert.match(why(s.dest), /endpoints are not buildable/);
+  assert.match(why(s.dests[0]), /endpoints are not buildable/);
   assert.match(why(-1), /off the board/);
   assert.match(why(s.w * s.h), /off the board/);
 

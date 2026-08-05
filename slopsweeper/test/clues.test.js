@@ -132,7 +132,7 @@ test('silent mine destruction lowers the clues around it and the block badge (PL
   s.con[doomed] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.con[survivor] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [survivor, trigger, doomed] }];
-  s.users = [{ id: 0, at: cellAt(s, 2, 1), state: 'moving', visited: [s.origin, cellAt(s, 2, 1)], stalled: false, waited: 0 }];
+  s.users = [{ id: 0, at: cellAt(s, 2, 1), state: 'moving', todo: [0], visited: [s.origin, cellAt(s, 2, 1)], stalled: false, waited: 0 }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
 
   const watcher = cellAt(s, 4, 0);

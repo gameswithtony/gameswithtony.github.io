@@ -104,12 +104,12 @@ test('the hash covers everything a tick can change, in a fixed order', () => {
   assert.ok(changed((s) => { s.rng.gen = (s.rng.gen + 1) >>> 0; }));
   assert.ok(changed((s) => { s.stats.detonations++; }));
   assert.ok(changed((s) => { s.phase = { k: 'won' }; }));
-  assert.ok(changed((s) => { s.users = [{ id: 0, at: 1, state: 'moving', visited: [1], stalled: false, waited: 0 }]; }));
+  assert.ok(changed((s) => { s.users = [{ id: 0, at: 1, state: 'moving', todo: [0], visited: [1], stalled: false, waited: 0 }]; }));
   assert.ok(changed((s) => { s.blocks = [{ id: 0, cells: [1, 2] }]; }));
   // Patience is the economy now, so two boards differing only in how close a user is to
   // giving up must not hash the same.
   assert.ok(changed((s) => {
-    s.users = [{ id: 0, at: 1, state: 'moving', visited: [1], stalled: false, waited: 9 }];
+    s.users = [{ id: 0, at: 1, state: 'moving', todo: [0], visited: [1], stalled: false, waited: 9 }];
   }));
 
   // A mined and an unmined hidden cell must not collide — the sim would stop seeing blasts.

@@ -1,8 +1,17 @@
 // @ts-check
-// The 5×7 procedural bitmap font (SPEC §10.8, revised 2026-08-04). Glyph set is exactly what
-// clues need: 0-9, '-' and '+' — the range and open-ended forms ship now so the skill tiers of
-// SPEC §7.2 are purely additive. Every glyph is bit rows drawn as art-pixel fillRects;
-// `fillText` never touches the board canvas.
+// The 5×7 procedural bitmap font (SPEC §10.8, revised 2026-08-04). Glyph set is what clues
+// need — 0-9, '-' and '+', with the range and open-ended forms shipping now so the skill tiers
+// of SPEC §7.2 are purely additive — plus 'A' through 'H' since 2026-08-05, which is what the
+// endpoints wear. Every glyph is bit rows drawn as art-pixel fillRects; `fillText` never
+// touches the board canvas.
+//
+// WHY EIGHT LETTERS AND NOT AS MANY AS TODAY'S LEVELS USE. A level's stops are named down the
+// alphabet from the origin's 'A', so the glyph a board asks for is a function of how many
+// destinations somebody authored into it. Cutting the table at the current corpus would mean a
+// level author's ordinary Tuesday afternoon producing a blank tile, and the missing-glyph path
+// in `drawText` is a silent skip: the board would say nothing rather than say something wrong.
+// 'H' is exactly where the charmap legend stops (grid.js's `LAST_DEST`), so a table that runs
+// to 'H' is a table the level format can never outrun, for eight rows of it.
 //
 // Why 5×7 and not 6×8: a clue may be a RANGE, three glyphs wide, and three glyphs have to fit
 // inside one 16-art-pixel tile or they bleed onto the neighbouring cell. 5×7 at the default
@@ -31,6 +40,17 @@ const GLYPHS = Object.freeze({
   '9': [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
   '-': [0b00000, 0b00000, 0b00000, 0b01110, 0b00000, 0b00000, 0b00000],
   '+': [0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000],
+  // The endpoint letters. Same five columns, same seven rows and the same one-art-pixel strokes
+  // as the digits, so a 'B' on one tile and a '3' on the tile beside it read as one alphabet
+  // rather than as two fonts sharing a board.
+  'A': [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+  'B': [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
+  'C': [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110],
+  'D': [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110],
+  'E': [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
+  'F': [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000],
+  'G': [0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111],
+  'H': [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
 });
 
 /**

@@ -90,6 +90,12 @@ The capability table exists so these are additive. Listed to validate the schema
 - **Users** are entities that spawn at an origin endpoint and travel to a destination endpoint.
 - Users cannot enter unbuilt `OCEAN`. All adjacency for movement is orthogonal (4-way).
 
+*(Revised 2026-08-05 by owner decision — **the "later levels" arrived.** A level marks **one origin, `A`, and one or more destinations, `B`, `C`, `D`… contiguous from B**. There is still exactly one spawn: users all come from A, and the variation is in where they are going, not where they are from.*
+
+*What an endpoint **is** did not change, and the list is worth stating once because it was previously written out at nine separate call sites as "the origin or B": an endpoint is always passable, never buildable by hand or by generation, indestructible in a blast, displays no clue, and is invisible to the solver. Every destination has all five properties.*
+
+*Users are unchanged in kind and gain one field: **an itinerary**, the set of destinations that user has to visit, in any order (§6). A level with one destination gives every user the one-element itinerary, which is the game as it was — and that is the mechanism, not a coincidence.)*
+
 ---
 
 ## 3. Turn structure
@@ -316,6 +322,29 @@ Rationale: returning to origin would double-punish an event that already cost th
 
 All waiting users — gated at origin, stalled mid-route, or stranded by a blast — count identically toward the waiting penalty (§8.2).
 
+### 6.5 Itineraries — DECIDED 2026-08-05 (owner decision)
+
+With several destinations on the board (§2.4), "where is this user going" stops being a property of the level and becomes a property of the user. **Each user carries an itinerary: a list of destinations it must visit, in any order.** A list of one is legal and is the common case.
+
+**The order is the user's, not the level's.** A user owing B and D visits whichever is nearer first, by the same routing that has always sent it to the nearest waypoint (§6.2) — the itinerary is a *set* of obligations, and the walk is what turns it into a sequence. Levels that want a forced order should use two destinations and two itineraries, not one itinerary and a rule.
+
+**Itineraries are authored and cycled, never rolled.** The level lists them — `[['B'], ['B','C'], ['D']]` — and users take them round-robin in spawn order. A level that lists none gives **every user every destination**. Two deliberate consequences:
+
+- **The demand is knowable in advance**, which is what §6.1's forecast is for. A random draw would make the same level ask for different things on different seeds, and the dosage judgement of §8.3 is unmakeable against a demand that moves.
+- **A single-destination level is untouched**, because "every user visits every destination" is "every user visits B". This is the whole regression argument, and it is a mechanism rather than a promise.
+
+**Visited on contact.** Stepping onto a destination still on the list ticks it off *immediately*, whether or not it was the one the user was routed toward — a user sent to C that crosses B on the way has been to B. Stepping onto a destination **not** on the list does nothing whatsoever: it is a passable cell, like any other built cell.
+
+**The last stop is arrival**, priced exactly as arrival always was: the user leaves the board, the level scores a point (§8). A user is worth one point however many destinations it visited, because the point is the *user served*, not the mileage. Intermediate stops score nothing.
+
+**Reaching an intermediate stop refunds half a bar of patience**: `waited ← max(0, waited − round(patience × destRefill))`, `destRefill` defaulting to 0.5 and overridable per level in [0, 1]. This is the one genuinely new number and it exists to make long itineraries *possible* rather than merely slower:
+
+- With **no** refill, the second leg is walked by a user who has already spent whatever the first leg cost, so a three-stop itinerary is close to a slow way of losing that user, and the level gets harder in proportion to how much it asks for. That is backwards.
+- With a **full** refill, every extra stop is a free extension of the clock and a level gets *easier* the more it asks for, which is worse.
+- **Half** makes arriving somewhere worth something and keeps the whole trip finite. It is a first number, not a measured one (§10.2: the sim tunes it, not play).
+
+Note what the refill is not: it is not a reward for distance and it does not stack. Camping on a **beta** still buys nothing but the walk (§4.7) — a milestone is not a destination, and the difference between them is exactly this line.
+
 ---
 
 ## 7. The skill system
@@ -449,6 +478,12 @@ Ranked by design value, not implementation order:
 
 1. **Arrival cadence.** The primary difficulty dial. Tightening it raises the floor.
 2. **Multiple endpoints.** A, B, C with required connections. The value is not size, it is the **trunk decision**: one shared path serving A→B and A→C is turn-efficient but a single mine takes down both, while separate paths cost far more turns and fail independently. Monolith versus isolation, felt rather than stated.
+
+   *(**Shipped 2026-08-05.** A level marks `A` plus `B`, `C`, `D`… (§2.4) and `src/levels/delta.js` is the first one to use it — two three-row necks into a shared spine with three lobes off it, so the trunk decision arrives in the first ten turns. The axis works exactly as written above and needs nothing else to be worth using.*
+
+   *What **itineraries** (§6.5) add on top is a second dial on the same axis, and it is the more interesting one: the demand no longer has to be uniform. With every user visiting every destination, a three-destination level is one big connectivity problem. With `[['C'], ['B','D'], ['B','C','D']]` it is three different problems sharing a board — a third of the users are served by the trunk alone, a third never stop in the middle, and a third pay for the whole tour and get patience back twice for doing it. That turns "which routes do I build" into "which routes do I build **first**", because partial connectivity now serves part of the demand. The trunk decision and the dosage decision (§8.3) start pulling on the same turn, which is the whole point of the level design chapter.*
+
+   *Mid-level requirements (§9.2.3) remain unbuilt and are now a much smaller change than they were: a new destination appearing on tick N is an edit to `dests` and to the live itineraries, and every routing consequence is already in place.)*
 3. **Mid-level requirements.** A new endpoint opens on tick N. If the player got there by generating, they now have a board they can walk on but cannot build from (§4.1/§9.3), and must spend turns analyzing already-shipped ground before they can respond. Strongest difficulty mechanism in the design, because it is made of consequence rather than grid size.
 4. **Shape pool.** Later levels draw awkward, perimeter-heavy shapes. Harder to place and harder to read, compounding correctly.
 5. **Inherited board.** One specific mid-campaign level starts with a partially built board of `AI_HIDDEN` tiles the player did not generate and has no mine counts for. Use once.

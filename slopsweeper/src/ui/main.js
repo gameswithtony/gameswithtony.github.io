@@ -14,7 +14,7 @@ import { levelParams, setLevelParams } from '../core/state.js';
 import { randomSeed } from '../core/rng.js';
 import { getLevel, levelIds } from '../levels/index.js';
 import * as cam from './camera.js';
-import { createRenderer, ghostCells } from './renderer.js';
+import { createRenderer, dests, ghostCells } from './renderer.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
 import { createRoster } from './roster.js';
@@ -37,7 +37,7 @@ const SAVE_KEY = 'slop-sweeper.save';
  * against a core that is still moving. Costing a player one in-progress game at a version
  * bump is the right trade against reviving a state the reducer no longer understands.
  */
-const SAVE_V = 2;   // 2: beta blocks — `Con` gained a variant and `stats` gained `betas`
+const SAVE_V = 3;   // 3: multi-destination — `dest` became `dests`, and a User gained `todo`
 
 /** localStorage must never be load-bearing: the game runs with storage unavailable (PLAN §4). */
 const store = {
@@ -72,9 +72,14 @@ function parseSave(raw) {
     const s = save.state;
     if (!s || typeof s !== 'object') return null;
     if (!Array.isArray(s.terrain) || !Array.isArray(s.con) || !Array.isArray(s.users)
-      || !Array.isArray(s.blocks) || !s.phase || !s.stats || !s.schedule || !s.rng || !s.bbox
+      || !Array.isArray(s.blocks) || !Array.isArray(s.dests) || !s.phase || !s.stats
+      || !s.schedule || !s.rng || !s.bbox
       || typeof s.w !== 'number' || typeof s.h !== 'number' || typeof s.seed !== 'number'
-      || typeof s.tick !== 'number' || s.terrain.length !== s.w * s.h || s.con.length !== s.terrain.length) {
+      || typeof s.tick !== 'number' || s.terrain.length !== s.w * s.h || s.con.length !== s.terrain.length
+      // A user's itinerary is the one per-element check here, because it is the field the whole
+      // walk is decided from: a user restored without one would queue at A forever and the
+      // board would look correct while doing it.
+      || !s.users.every((u) => u && Array.isArray(u.todo))) {
       return null;
     }
     if (save.labDef !== null && (typeof save.labDef !== 'object' || typeof save.labDef?.map !== 'string')) return null;
@@ -512,8 +517,32 @@ function boot() {
   // other action — a blast clearing the flag off a cell it destroyed, say — which arrives on
   // the same drain but is nobody's button press.
   bus.on('flagged', () => { renderer.invalidate(); requestDraw(); });
-  bus.on('arrived', (/** @type {{ user: number }} */ ev) => {
-    fx.pop(s.dest, fx.remaining(ev.user));
+  /**
+   * Where a stop happened, for the pop that marks it. The events name the user rather than the
+   * tile, and the user is standing on the stop by the time the drain runs — so their own cell
+   * is the answer, and it stays the answer however many destinations a level grows. `visited`
+   * carries the cell too; it is preferred when it is one of ours, and disagreeing with the
+   * walker is not a thing this is willing to do silently.
+   * @param {{ user: number, dest?: number }} ev
+   * @returns {number} -1 when the user is already off the board
+   */
+  function stopCell(ev) {
+    if (typeof ev.dest === 'number' && dests(s).includes(ev.dest)) return ev.dest;
+    const u = s.users.find((x) => x.id === ev.user);
+    return u ? u.at : -1;
+  }
+
+  bus.on('arrived', (/** @type {{ user: number, dest?: number }} */ ev) => {
+    const at = stopCell(ev);
+    if (at >= 0) fx.pop(at, fx.remaining(ev.user));
+  });
+  // A stop that is not the last one: the walk continues, and the reason the countdown in the
+  // HUD just got better is not visible anywhere else on the board. The pop says a stop landed,
+  // the toast says what it bought — a beta's toast names its consequence the same way.
+  bus.on('visited', (/** @type {{ user: number, dest?: number }} */ ev) => {
+    const at = stopCell(ev);
+    if (at >= 0) fx.pop(at, fx.remaining(ev.user));
+    hud.toast('STOP REACHED — PATIENCE RESTORED');
   });
 
   // Every generated block ships at least two defects now, so the old "got away with it"

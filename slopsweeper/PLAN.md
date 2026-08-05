@@ -311,6 +311,7 @@ export type Con =                                     // §2.2, complete
 export interface User {
   id: number; at: number
   state: 'queued' | 'moving' | 'arrived'
+  todo: number[]                                      // indexes into dests still to visit (2026-08-05)
   visited: number[]                                   // current-trip no-revisit set (§6.3)
   stalled: boolean                                    // no legal move this tick → counts waiting
 }
@@ -320,7 +321,7 @@ export interface GameState {
   w: number; h: number
   terrain: Terrain[]; con: Con[]                      // dense, parallel, row-major
   bbox: { x0: number; y0: number; x1: number; y1: number }   // playable bbox (§10.7)
-  origin: number; dest: number
+  origin: number; dests: number[]                     // 'B','C','D'… — no `dest` (2026-08-05)
   blocks: { id: number; cells: number[] }[]           // live cells; badge counts derived
   users: User[]
   schedule: { total: number; spawned: number; nextTick: number; every: number }
@@ -356,6 +357,7 @@ export type Ev =
   | { t: 'reveal'; cell: number }                     // traversal reveal (§5)
   | { t: 'detonate'; at: number; destroyed: number[]; minesLost: number[] }
   | { t: 'step'; user: number; from: number; to: number }
+  | { t: 'visited'; user: number; dest: number }       // intermediate stop only (2026-08-05)
   | { t: 'departed'; user: number } | { t: 'arrived'; user: number }
   | { t: 'spawned'; user: number } | { t: 'requeued'; user: number }
   | { t: 'confidence'; delta: number; reason: 'waiting' | 'detonation' }
@@ -365,10 +367,39 @@ export type Ev =
 Information discipline: `detonate.minesLost` exists for the sim's metrics; the renderer must
 never visualize which destroyed cells held mines (§5: destroyed silently).
 
+> **Frozen-shape deltas, 2026-08-05 (user decision — multi-destination itineraries, SPEC
+> §2.4/§6.5).** Four, and the first is the one everything else follows from:
+>
+> - **`GameState.dest: number` → `GameState.dests: number[]`.** `dests[i]` is the cell marked
+>   `String.fromCharCode(66 + i)`, so `dests[0]` is 'B'. **There is no `s.dest` any more**, and
+>   the deletion is the point rather than a side effect: a singular field holding the first of
+>   several is exactly the shape that lets a single-destination assumption survive unnoticed,
+>   and there were nine sites reading it. They are now `isEndpoint(s, i)` / `isDest(s, i)` /
+>   `destIndex(s, i)`, exported from `state.js` and typed structurally so `validate.js` can ask
+>   the same question of a parsed map. `origin` did not move — 'A' is still the only spawn.
+> - **`User.todo: number[]`**, indexes into `dests`, assigned at spawn from the level's cycled
+>   itinerary list and kept ascending so every iteration over it has a defined order. The order
+>   within it carries no meaning (§6.5: any order).
+> - **`Ev` gains `{ t: 'visited', user, dest }`** for an intermediate stop, carrying the *cell*
+>   because every consumer of an event is drawing on a board. The final stop emits `arrived`
+>   unchanged, so a UI never has to reconstruct arrival from two events.
+> - **`LevelDef` gains `itineraries?: string[][]` and `destRefill?: number`** (default
+>   `RULES.DEST_REFILL = 0.5`); `parseMap` returns `dests` instead of `dest`. Charmap legend:
+>   `'B'`…`'H'`, contiguous from B, at least one, cap at 'H' — all three enforced in `parseMap`
+>   so `init()` and the Level Lab get the same message.
+>
+> `routing.js` grew with it: `potentialField(s, destCell)` is per-destination and cached per
+> destination; `compositePotential(s, mask)` is the elementwise **min** over a walker's
+> remaining destinations; `waypointField(s, mask?)` and `waypointFields(s)` produce one field
+> per distinct remaining-set among the live users; `canProgress(s, wf, at)` kept its arity by
+> carrying the composite on the field; `gateOpen(s, wf?)` kept both of its. One new export,
+> `pathComplete(s)` — every destination reachable from the origin — because the sim bots' "the
+> job is done" is a stronger question than the gate's and used to be the same one.
+
 ```ts
 // module signatures (frozen; notation shorthand — implemented with JSDoc in the .js files)
 // core/grid.js
-parseMap(text: string): { w; h; terrain; origin; dest; bbox }
+parseMap(text: string): { w; h; terrain; origin; dests; bbox }
 n4(g, i): number[]; n8(g, i): number[]      // precomputed at init, VOID filtered — THE accessor (§10.7)
 // core/rng.js
 mulberry32(seed): () => number
@@ -379,12 +410,18 @@ rotationsOf(shapeIdx): [dx, dy][][]                    // normalized, deduped (s
 legalPlacements(s, shapeIdx): RotAnchors[]             // computed BEFORE the turn commits (§4.2)
 // core/routing.js
 passable(s, i): boolean
-distField(s, seeds?): Int32Array                       // BFS from dest (default) over passable
-potentialField(s): Int32Array                          // to dest over EVER-passable; terrain-only,
-                                                       //   cached per level (added 2026-08-05)
-waypointField(s): { dist; targetPot; hasBeta }         // to each component's best waypoint (§6.2)
-canProgress(s, wf, at): boolean                        // targetPot[at] < potential[at] — the guard
-gateOpen(s, wf?): boolean                              // a waypoint ahead is reachable (§6.2)
+distField(s, seeds?): Int32Array                       // BFS from every dest (default) over passable
+potentialField(s, destCell): Int32Array                // to ONE dest over EVER-passable; terrain-only,
+                                                       //   cached per (terrain, destCell)
+compositePotential(s, mask): Int32Array                // min over a walker's remaining dests; for a
+                                                       //   one-element mask, that field by identity
+waypointField(s, mask?): { dist; targetPot; pot; hasBeta }   // component's best waypoint (§6.2)
+waypointFields(s): { for(mask) }                       // one field per distinct live remaining-set
+canProgress(s, wf, at): boolean                        // targetPot[at] < wf.pot[at] — the guard
+gateOpen(s, wf?): boolean                              // with a field: can THIS list leave the origin;
+                                                       //   without: can anybody stuck get unstuck (HUD)
+pathComplete(s): boolean                               // every dest reachable from A — the sim's
+                                                       //   "nothing left to build" (added 2026-08-05)
 // core/reduce.js
 init(level: LevelDef, seed: number): GameState
 reduce(s, a: Action): { s: GameState; ev: Ev[] }       // pure; clones what it changes
@@ -409,7 +446,7 @@ Level definition (a JSDoc `@typedef` in `levels/index.js`):
 export interface LevelDef {
   id: string              // with map, the only required field (§9.1)
   name?: string           // default: id
-  map: string             // charmap: '.'/space VOID · '#' OCEAN · '^' VOLCANO · 'A' origin · 'B' dest
+  map: string             // charmap: '.'/space VOID · '#' OCEAN · '^' VOLCANO · 'A' origin · 'B'…'H' dests
                           // rows right-padded with VOID — trailing whitespace can never break a level
   arrivals?: { count: number; firstTick: number; every: number }   // default 10 / 6 / 4
   mineDensity?: number    // Binomial p per block cell (§3.6); default 0.25
@@ -417,6 +454,8 @@ export interface LevelDef {
   userMoveEvery?: number  // default 1 (OPEN #1: parameterized)
   blastRadius?: number    // default 1 = tile + orthogonals (§5)
   betaSupply?: number     // default RULES.BETA_SUPPLY = 3; 0 switches the verb off (§4.7)
+  itineraries?: string[][]  // letters per user, cycled by spawn order; omitted/[] = all dests (§6.5)
+  destRefill?: number       // patience back on an intermediate stop; default RULES.DEST_REFILL = 0.5
 }
 ```
 
@@ -484,6 +523,49 @@ resolves someone who never got to leave the origin.
 > games across six levels and six policies — and `test/beta.test.js` compares the waypoint
 > field against `distField` cell by cell, and both gates against each other, on every tick of
 > a real bot game.
+
+> **Revised again 2026-08-05 (user decision — multi-destination itineraries, SPEC §6.5).**
+> Steps 2–4 now read a **field set** where they read one field, computed in the same place and
+> at the same moment: one waypoint field per *distinct remaining-set* among the users alive
+> this tick, because "the nearest waypoint" is only a question once you say nearest to whom. A
+> level with one destination has one live list, so it computes one field, once — the same field,
+> in the same slot. Four amendments:
+>
+> - **Step 2, departures.** The gate is asked **per queued user**, against that user's own
+>   field, rather than once for the queue. Two users at the same origin on the same tick may
+>   owe different destinations, and the route to one can be open while the other is not. Where
+>   everyone carries the same list this is one question asked N times with one answer, so the
+>   flush of §3.9 is unchanged.
+> - **Step 3, movement.** Each user steps on its own mask's field, and stepping onto a cell in
+>   its own remaining set **visits on contact**: the stop comes off the list there and then,
+>   target or not. If the list still has entries the user pays no arrival — it takes the
+>   patience refill (`waited ← max(0, waited − round(patience × destRefill))`), starts a fresh
+>   no-revisit trail, and walks on; `visited` is emitted. If the list is now empty it is
+>   `arrived`, `stats.served++`, exactly as before. The guard-before-RNG rule is untouched and
+>   still load-bearing.
+>
+>   The trail reset on an intermediate stop is not a new rule: SPEC §6.3.3 forbids revisits
+>   **within one trip**, and reaching a destination ends a trip. Without it a user that walked
+>   A→B could not retrace any of it toward C, which on most geometries means standing on B
+>   until its patience runs out.
+> - **Step 4, traversal.** The post-blast stranding recompute builds a **fresh** field set and
+>   asks each user against its own list, because a user that ticked a destination off earlier
+>   in this same tick is carrying a list nobody was carrying when the tick began. The old
+>   `u.at === d.dest` skip went with it: a moving user standing on a destination has either
+>   arrived (and is not `moving`) or is standing on one it already visited, which is a passable
+>   cell and gets the general test.
+> - **Step 6, spawns.** A user is born with its itinerary: `itineraries[id % itineraries.length]`
+>   as letters resolved to ascending `dests` indexes, or every destination when the level lists
+>   none. **No RNG** — the lists are a property of the level, not of the seed (SPEC §6.5), so
+>   §7.5's streams never had to hear about this.
+>
+> **The regression guarantee is measured again, the same way.** `node src/sim/run.js --level
+> plain --level channel --level atoll --level caldera --level strait --level sprawl --games 50
+> --seed 1` prints the six-level table byte-identical to the pre-itinerary run, and
+> `test/itinerary.test.js` asserts the one-destination case directly: the composite over a
+> one-element mask **is** that destination's potential field by object identity, the per-mask
+> waypoint field is `distField` cell for cell, and `pathComplete` and `gateOpen` are both the
+> old topological question, on every tick of a real bot game.
 
 ### 7.2 Placement legality (§4.2)
 

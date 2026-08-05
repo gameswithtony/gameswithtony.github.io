@@ -24,9 +24,17 @@ import { CON_NONE } from './state.js';
  * @property {number} h
  * @property {Terrain[]} terrain
  * @property {number} origin
- * @property {number} dest
+ * @property {number[]} dests
  * @property {BBox} bbox
  */
+
+/**
+ * Destination letters, in order, starting at 'B' (SPEC §2.4, rev. 2026-08-05). The cap is not
+ * arithmetic shyness: seven destinations is already far past the point where a player can hold
+ * the itineraries in their head, and a letter past 'H' in a charmap is much more likely to be
+ * a typo than a level. Reaching the cap should be a design conversation, so it is an error.
+ */
+const LAST_DEST = 'H';
 
 /** @type {Record<string, Terrain>} */
 const LEGEND = {
@@ -35,8 +43,11 @@ const LEGEND = {
   '#': 'ocean',
   '^': 'volcano',
   'A': 'ocean',   // endpoints sit on ocean terrain (SPEC §10.7)
-  'B': 'ocean',
 };
+// 'B'…'H' are destinations and all sit on ocean too, so the legend rows are generated rather
+// than typed out — one row per letter is exactly the same row, and writing seven of them by
+// hand is how the eighth ends up different.
+for (let c = 'B'.charCodeAt(0); c <= LAST_DEST.charCodeAt(0); c++) LEGEND[String.fromCharCode(c)] = 'ocean';
 
 /**
  * Forgiving by design (PLAN §9.1): space is an alias of '.', rows are right-padded to the
@@ -60,7 +71,8 @@ export function parseMap(text) {
   /** @type {Terrain[]} */
   const terrain = new Array(w * h).fill('void');
   let origin = -1;
-  let dest = -1;
+  /** @type {Map<string, number>} destination letter → cell, so gaps can be named */
+  const marked = new Map();
 
   for (let y = 0; y < h; y++) {
     const line = lines[y];
@@ -77,17 +89,36 @@ export function parseMap(text) {
       if (ch === 'A') {
         if (origin !== -1) throw new Error(`parseMap: more than one 'A' (row ${y + 1}, column ${x + 1})`);
         origin = i;
-      } else if (ch === 'B') {
-        if (dest !== -1) throw new Error(`parseMap: more than one 'B' (row ${y + 1}, column ${x + 1})`);
-        dest = i;
+      } else if (ch >= 'B' && ch <= LAST_DEST) {
+        if (marked.has(ch)) throw new Error(`parseMap: more than one '${ch}' (row ${y + 1}, column ${x + 1})`);
+        marked.set(ch, i);
       }
     }
   }
 
   if (origin === -1) throw new Error("parseMap: map has no origin 'A'");
-  if (dest === -1) throw new Error("parseMap: map has no destination 'B'");
+  if (!marked.has('B')) throw new Error("parseMap: map has no destination 'B'");
 
-  return { w, h, terrain, origin, dest, bbox: playableBBox(w, h, terrain) };
+  // Contiguous from 'B', so `dests[i]` and `String.fromCharCode(66 + i)` are the same fact read
+  // two ways and nothing downstream has to carry a letter around. A map with 'B' and 'D' but no
+  // 'C' is refused rather than silently renumbered: renumbering would move the level's own
+  // itineraries onto different cells than the author drew.
+  /** @type {number[]} */
+  const dests = [];
+  for (let c = 'B'.charCodeAt(0); c <= LAST_DEST.charCodeAt(0); c++) {
+    const letter = String.fromCharCode(c);
+    const cell = marked.get(letter);
+    if (cell === undefined) {
+      const later = [...marked.keys()].filter((k) => k > letter).sort();
+      if (later.length) {
+        throw new Error(`parseMap: map has '${later[0]}' but no '${letter}' — destinations run B, C, D… with no gaps`);
+      }
+      break;
+    }
+    dests.push(cell);
+  }
+
+  return { w, h, terrain, origin, dests, bbox: playableBBox(w, h, terrain) };
 }
 
 /**

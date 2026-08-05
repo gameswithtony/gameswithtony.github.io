@@ -21,7 +21,7 @@ const LINE = { id: 'blast-line', map: ['#########', 'A#######B', '#########'].jo
  * @returns {import('../src/core/state.js').GameState}
  */
 function users(s, at) {
-  s.users = at.map((cell, id) => ({ id, at: cell, state: /** @type {const} */ ('moving'), visited: [s.origin, cell], stalled: false, waited: 0 }));
+  s.users = at.map((cell, id) => ({ id, at: cell, state: /** @type {const} */ ('moving'), todo: [0], visited: [s.origin, cell], stalled: false, waited: 0 }));
   s.schedule = { ...s.schedule, total: at.length, spawned: at.length };
   return s;
 }

@@ -34,15 +34,16 @@ import { initials, pickPost } from './linkedup.js';
  */
 const HELP = [
   ['THE GOAL', [
-    'Welcome to Slopsweeper! You are a coder with software to ship. Users arrive at A, and each one wants to reach B, the thing they came to do.',
-    'Build a path of code from A to B. The moment a path exists, users walk it on their own.',
-    'Every user who reaches B is a point. One is a win. All of them is a perfect run.',
+    'Welcome to Slopsweeper! You are a coder with software to ship. Users arrive at A, and each one carries a list of destinations to visit, the things they came to do. On many levels that list is just B.',
+    'Build paths of code between the letters. The moment a user can reach one of their stops, they walk there on their own, in any order they can manage.',
+    'A user who finishes their whole list exits and scores you a point. One is a win. Every user is a perfect run.',
   ]],
   ['TURNS', [
     'Tap a cell, then pick an action from the bar at the bottom. Each button shows its cost in turns.',
     'Users move while you work: after every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
     'Users are not patient. Each turn one of them stands stuck, they lose one patience, and it never comes back. A user who runs out leaves for good.',
-    'Tap the WAITING counter any time to see each user by name and how many turns they have left.',
+    'There is one way to win patience back: a user who reaches one of their stops, with more still to visit, gets half the bar back.',
+    'Tap the WAITING counter any time to see each user by name, which stops they still owe, and how many turns they have left.',
   ]],
   ['WRITE CODE', [
     'PLACE writes one tile of code by hand. One turn. It must touch code already built. Hand-written code never has bugs.',
@@ -63,7 +64,7 @@ const HELP = [
   ]],
   ['BETAS', [
     'You get a few beta releases per run. The BETA button counts them down.',
-    'A beta is one tile, one turn, placed like a hand tile. Users walk out to a beta and wait there instead of standing at A. That keeps them moving and stages them closer to B, but it does not score. Only B scores.',
+    'A beta is one tile, one turn, placed like a hand tile. Users walk out to a beta and wait there instead of standing at A. That keeps them moving and stages them closer to their next stop, but it does not score. Only finishing the list scores.',
     'Careful: users will cross unreviewed AI code to reach a beta.',
   ]],
   ['CONTROLS', [

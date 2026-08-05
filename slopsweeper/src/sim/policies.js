@@ -25,9 +25,9 @@
 // corpus was tuned against.
 
 import { mulberry32 } from '../core/rng.js';
-import { isHandBuildable, isKnownEmpty, levelParams } from '../core/state.js';
+import { everyDest, isHandBuildable, isKnownEmpty, levelParams } from '../core/state.js';
 import { n4, n8 } from '../core/grid.js';
-import { distField, gateOpen, passable, potentialField } from '../core/routing.js';
+import { compositePotential, distField, passable, pathComplete } from '../core/routing.js';
 import { betaRejection, clue, legalActions, placeRejection } from '../core/reduce.js';
 import { placementCells } from '../core/generate.js';
 
@@ -152,12 +152,19 @@ export function anchorCounts(s) {
  * built from build cost rather than from the distance field, and it is legal information —
  * it reads terrain, construction kinds and nothing else.
  *
+ * *(Revised 2026-08-05 with itineraries: the survey is taken toward **one** destination at a
+ * time — see `nextDest` — because "the cheapest completion" is only a number once there is a
+ * single thing being completed. A bot therefore closes the routes one after another, in the
+ * order the board makes cheapest, which is the least clever competent thing to do and is
+ * deliberately no more than that: the harness measures levels, and a bot with opinions about
+ * multi-destination strategy would be measuring its own.)*
+ *
  * @param {GameState} s
  * @returns {{ remaining: number, handCell: number, handOnRoute: boolean, plan: Uint8Array }}
  */
 export function survey(s) {
-  const toDest = buildCost(s, s.dest);
   const fromOrigin = buildCost(s, s.origin);
+  const toDest = buildCost(s, nextDest(s, fromOrigin));
   const remaining = toDest[s.origin];
   let handCell = -1;
   let bestCost = INF;
@@ -174,6 +181,33 @@ export function survey(s) {
 }
 
 /**
+ * **The destination the bot is currently building toward** (added 2026-08-05 with itineraries).
+ *
+ * The nearest one it has not yet connected — nearest by build cost, so "nearest" means turns
+ * of work rather than tiles of map — and when every destination is already connected, 'B', at
+ * which point `survey` reports `remaining: 0` and the policies stop building. Ties break on
+ * destination order, so the choice is a pure function of the board.
+ *
+ * On a one-destination level this is `s.dests[0]` unconditionally and every caller reads
+ * exactly as it read before: connected or not, there is nowhere else to point.
+ *
+ * @param {GameState} s
+ * @param {Int32Array} fromOrigin  build cost from the origin, which the caller already has
+ * @returns {number} a cell in `s.dests`
+ */
+export function nextDest(s, fromOrigin) {
+  let best = -1;
+  let bestCost = INF;
+  for (const d of s.dests) {
+    const cost = fromOrigin[d];
+    if (cost <= 0 || cost >= bestCost) continue;   // 0 = already connected, nothing left to do
+    bestCost = cost;
+    best = d;
+  }
+  return best < 0 ? s.dests[0] : best;
+}
+
+/**
  * Ghost placement (PLAN §13). `coverage` maximises progress toward B; `edge` gives up to
  * EDGE_SLACK turns of that progress to land against coastline and known ground instead.
  * The delta between them is the measurement the corpus exists to take.
@@ -183,8 +217,8 @@ export function survey(s) {
  */
 export function chooseGhost(s, style) {
   if (s.phase.k !== 'placing') throw new Error('chooseGhost: not placing');
-  const toDest = buildCost(s, s.dest);
   const fromOrigin = buildCost(s, s.origin);
+  const toDest = buildCost(s, nextDest(s, fromOrigin));
   const anchors = anchorCounts(s);
 
   /** @type {{ cell: number, rot: 0|1|2|3, cover: number, legible: number }[]} */
@@ -401,9 +435,12 @@ function analyzeTarget(s, block, plan) {
  * "this is going badly and I still have time to act on it", which is what the modifier is
  * for; a human would read the board instead.
  *
- * **Where.** The legal beta cell closest to B by `potentialField` — the field that measures
+ * **Where.** The legal beta cell closest to B by the potential field — the field that measures
  * route progress over ground that could ever be walked, which is exactly "how far along is
- * this". Ties by ascending index, so the choice is a pure function of the board.
+ * this". Ties by ascending index, so the choice is a pure function of the board. With several
+ * destinations it is the composite over all of them (rev. 2026-08-05): the bot does not know
+ * whose beta it is shipping, so it stages toward whichever destination is nearest, which is
+ * the best a policy with no model of the itineraries can honestly do.
  *
  * All legal information: the supply and the patience limit are printed rules, the field is
  * terrain, and the waiting is on screen in the forecast (SPEC §6.1).
@@ -418,7 +455,7 @@ function betaMove(s) {
   );
   if (!pressed) return null;
 
-  const pot = potentialField(s);
+  const pot = compositePotential(s, everyDest(s));
   let best = -1;
   let bestPot = INF;
   for (let i = 0; i < s.con.length; i++) {
@@ -477,18 +514,25 @@ export function makePolicy(spec, seed) {
   const rng = mulberry32(seed >>> 0);
   const mem = freshMemory();
 
+  // Every base opens with the same line: **build until the job is done, then wait**. It used
+  // to read `gateOpen(s)` and now reads `pathComplete(s)` (rev. 2026-08-05). On one
+  // destination those are the same question — the gate was topological and the job was one
+  // route — and on several they are not: users can be walking to B while C is still open
+  // water, and a bot that downed tools when *somebody* could move would abandon every
+  // itinerary that named C. Only the arity-1 `gateOpen` moved meaning; this is the caller that
+  // never wanted it.
   /** @param {GameState} s @returns {Action} */
   let decide;
   switch (base) {
     case 'handOnly':
       decide = (s) => {
-        if (gateOpen(s)) return { t: 'wait' };
+        if (pathComplete(s)) return { t: 'wait' };
         return handStep(survey(s)) ?? { t: 'wait' };
       };
       break;
     case 'genRush':
       decide = (s) => {
-        if (gateOpen(s)) return { t: 'wait' };
+        if (pathComplete(s)) return { t: 'wait' };
         const v = survey(s);
         bookProgress(mem, v.remaining);
         // It never reviews. Before the 2026-08-04 §4.1 override that meant a walled-off gap
@@ -500,7 +544,7 @@ export function makePolicy(spec, seed) {
       break;
     case 'balanced':
       decide = (s) => {
-        if (gateOpen(s)) return { t: 'wait' };
+        if (pathComplete(s)) return { t: 'wait' };
         const v = survey(s);
         bookProgress(mem, v.remaining);
         // Cadence, but only against generations that admitted to defects. Reviewing clean
@@ -517,7 +561,7 @@ export function makePolicy(spec, seed) {
       break;
     case 'careful':
       decide = (s) => {
-        if (gateOpen(s)) return { t: 'wait' };
+        if (pathComplete(s)) return { t: 'wait' };
         const v = survey(s);
         bookProgress(mem, v.remaining);
         // Review every generation that admitted to defects before building past it.

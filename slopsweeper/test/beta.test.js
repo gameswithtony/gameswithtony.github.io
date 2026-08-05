@@ -94,7 +94,7 @@ test('a beta lands exactly where a hand tile lands, and nowhere else', () => {
   assert.match(why(at(2, 1)), /cannot build on volcano/);
   assert.match(why(at(0, 0)), /cannot build on void/);
   assert.match(why(s.origin), /endpoints are not buildable/);
-  assert.match(why(s.dest), /endpoints are not buildable/);
+  assert.match(why(s.dests[0]), /endpoints are not buildable/);
   assert.match(why(-1), /off the board/);
   assert.match(why(s.w * s.h), /off the board/);
 
@@ -194,17 +194,17 @@ test('A BETA THAT IS NOT THE BEST WAYPOINT CHANGES NOTHING', () => {
 
 test('the potential field is terrain-only, cached, and blind to what is built', () => {
   const s = init(getLevel('plain'), 1);
-  const before = potentialField(s);
-  assert.equal(before[s.dest], 0);
+  const before = potentialField(s, s.dests[0]);
+  assert.equal(before[s.dests[0]], 0);
   assert.ok(before[s.origin] > 0);
 
   const built = { ...s, con: s.con.slice() };
   for (let i = 1; i <= 8; i++) built.con[s.origin + i] = CON_HAND;
-  assert.equal(potentialField(built), before, 'construction cannot move it — that is the point');
+  assert.equal(potentialField(built, built.dests[0]), before, 'construction cannot move it — that is the point');
 
   // Volcano and void are out by capability row, never by name.
   const caldera = init(getLevel('caldera'), 1);
-  const pot = potentialField(caldera);
+  const pot = potentialField(caldera, caldera.dests[0]);
   for (let i = 0; i < caldera.terrain.length; i++) {
     if (caldera.terrain[i] === 'volcano' || caldera.terrain[i] === 'void') {
       assert.equal(pot[i], -1, `cell ${i} is ${caldera.terrain[i]} and can never be on a route`);
@@ -386,9 +386,9 @@ test('a blast destroys a beta, kills its campers, and refunds nothing', () => {
   s.blocks = [{ id: 0, cells: [mined] }];
   // Two campers on the beta, one walker still down the corridor behind them.
   s.users = [
-    { id: 0, at: 3, state: 'moving', visited: [s.origin, 1, 2, 3], stalled: true, waited: 2 },
-    { id: 1, at: 3, state: 'moving', visited: [s.origin, 1, 2, 3], stalled: true, waited: 2 },
-    { id: 2, at: 1, state: 'moving', visited: [s.origin, 1], stalled: false, waited: 0 },
+    { id: 0, at: 3, state: 'moving', todo: [0], visited: [s.origin, 1, 2, 3], stalled: true, waited: 2 },
+    { id: 1, at: 3, state: 'moving', todo: [0], visited: [s.origin, 1, 2, 3], stalled: true, waited: 2 },
+    { id: 2, at: 1, state: 'moving', todo: [0], visited: [s.origin, 1], stalled: false, waited: 0 },
   ];
   s.schedule = { ...s.schedule, total: 3, spawned: 3 };
   assert.equal(s.stats.betas, 1);

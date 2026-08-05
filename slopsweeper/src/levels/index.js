@@ -9,16 +9,20 @@ import { atoll } from './atoll.js';
 import { caldera } from './caldera.js';
 import { strait } from './strait.js';
 import { sprawl } from './sprawl.js';
+import { delta } from './delta.js';
 
 /**
  * @typedef {object} LevelDef
  * @property {string} id
- * @property {string} map        charmap: '.'/space VOID · '#' OCEAN · '^' VOLCANO · 'A' origin · 'B' dest
+ * @property {string} map        charmap: '.'/space VOID · '#' OCEAN · '^' VOLCANO · 'A' origin · 'B'…'H' destinations
  * @property {string} [name]     default: id
  * @property {{ count: number, firstTick: number, every: number }} [arrivals]
  * @property {number} [mineDensity]
  * @property {number} [patience]
  * @property {number} [betaSupply]
+ * @property {string[][]} [itineraries]  destination letters per user, cycled by spawn order;
+ *                                       omitted or empty = every user visits every destination
+ * @property {number} [destRefill]       patience returned on an intermediate stop; default 0.5
  * @property {'compact' | 'awkward' | 'heavy' | string[]} [shapePool]
  * @property {number} [userMoveEvery]
  * @property {number} [blastRadius]
@@ -56,6 +60,8 @@ export function resolveLevel(def) {
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
     betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
+    itineraries: def.itineraries ?? LEVEL_DEFAULTS.itineraries,
+    destRefill: def.destRefill ?? LEVEL_DEFAULTS.destRefill,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
@@ -89,3 +95,7 @@ register(atoll);
 register(caldera);
 register(strait);
 register(sprawl);
+// The multi-destination showcase (2026-08-05). Registered last so the six tuned levels keep
+// their order — `--all` reads down the registry, and the corpus rows should stay where the
+// tuning notes in PLAN §9 left them.
+register(delta);

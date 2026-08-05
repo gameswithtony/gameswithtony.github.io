@@ -51,13 +51,17 @@ export function serializeState(s) {
     s.seed,
     s.tick,
     `${s.w}x${s.h}`,
-    `${s.origin}>${s.dest}`,
+    // Every endpoint (rev. 2026-08-05). Terrain is not hashed, so the destination set is the
+    // only thing pinning *which* cells the level is asking for.
+    `${s.origin}>${s.dests.join('.')}`,
     s.con.map(conToken).join(','),
     s.blocks.map((b) => `${b.id}:${b.cells.join('.')}`).join('|'),
     // `waited` and `state` are the whole economy since the points revision, so both are in
     // the fingerprint: two boards that differ only in how close a user is to giving up are
-    // genuinely different boards.
-    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.waited}/${u.visited.join('.')}`).join('|'),
+    // genuinely different boards. `todo` joins them on the same argument (rev. 2026-08-05):
+    // two users standing on the same cell with the same clock, one owing C and one owing
+    // nothing more than B, are about to walk in different directions.
+    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.waited}/${u.todo.join('.')}/${u.visited.join('.')}`).join('|'),
     `${s.schedule.total}/${s.schedule.spawned}/${s.schedule.nextTick}/${s.schedule.every}`,
     phaseToken(s.phase),
     `${s.rng.gen}/${s.rng.move}`,

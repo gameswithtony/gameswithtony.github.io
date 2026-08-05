@@ -13,7 +13,7 @@ import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
 import { crisp } from './atlas.js';
-import { drawTray, stencilDims, IMPATIENT_AT, patienceSpent } from './renderer.js';
+import { drawTray, endpointLetters, stencilDims, IMPATIENT_AT, patienceSpent } from './renderer.js';
 import * as cam from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -315,7 +315,13 @@ export function createHud(h) {
     dom.wait.disabled = !globals.includes('wait');       // always visible, per spec owner
     // Run is Wait on a timer, offered only once there is something to watch: before the
     // departure gate opens, fast-forwarding is just spending the meter (PLAN §12.6).
-    dom.run.disabled = !globals.includes('wait') || !gateOpen(s);
+    // "Something to watch" grew a second clause with itineraries (2026-08-05): gateOpen
+    // counts queued and stalled users who could progress, and on a multi-destination board
+    // the crowd can be split — four walkers mid-route to C while the B-and-D people wait at
+    // A with nowhere to go. The walkers are exactly what fast-forward is for, so anyone
+    // actually moving keeps the button live even while the gate itself reads shut.
+    const anyWalking = s.users.some((u) => u.state === 'moving' && !u.stalled);
+    dom.run.disabled = !globals.includes('wait') || (!gateOpen(s) && !anyWalking);
 
     // Block tray (SPEC §10.6): fixed CSS size, legible whatever the board zoom is doing.
     // Lets the narrow-screen stylesheet give the tray the room the minimap was using,
@@ -446,12 +452,16 @@ function minimapLayout(canvas, s) {
 }
 
 /**
+ * The minimap is the topology view of the topology view: every endpoint is RED and none of them
+ * is lettered, because at one to six device pixels a cell there is nowhere to put a letter and
+ * nothing to gain by trying. Which red dot is which is a question the board answers.
  * @param {GameState} s
  * @param {number} i
+ * @param {Map<number, string>} ends  origin + destinations, built once per draw
  * @returns {string | null}
  */
-function minimapColor(s, i) {
-  if (i === s.origin || i === s.dest) return PALETTE.RED;
+function minimapColor(s, i, ends) {
+  if (ends.has(i)) return PALETTE.RED;
   switch (s.con[i].k) {
     case 'hand': return PALETTE.HAND;
     case 'beta': return PALETTE.OK;      // the tile's own green: betas are findable zoomed out
@@ -481,9 +491,10 @@ function drawMinimap(canvas, s, camera) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const { px, ox, oy } = minimapLayout(canvas, s);
+  const ends = endpointLetters(s);
   for (let y = s.bbox.y0; y <= s.bbox.y1; y++) {
     for (let x = s.bbox.x0; x <= s.bbox.x1; x++) {
-      const color = minimapColor(s, y * s.w + x);
+      const color = minimapColor(s, y * s.w + x, ends);
       if (!color) continue;
       ctx.fillStyle = color;
       ctx.fillRect(ox + x * px, oy + y * px, px, px);

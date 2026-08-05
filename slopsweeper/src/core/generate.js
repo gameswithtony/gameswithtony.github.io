@@ -6,7 +6,7 @@
 
 import { RULES } from './rules.js';
 import { n4 } from './grid.js';
-import { conCaps, isGeneratable } from './state.js';
+import { conCaps, isEndpoint, isGeneratable } from './state.js';
 import { resolvePool, rotationsOf } from './shapes.js';
 
 /** @typedef {import('./state.js').GameState} GameState */
@@ -38,10 +38,10 @@ function genFrontier(s) {
   /** @type {number[]} */
   const out = [];
   for (let i = 0; i < s.con.length; i++) {
-    if (i === s.origin || i === s.dest) continue;      // endpoints are not buildable (PLAN §3.8)
+    if (isEndpoint(s, i)) continue;                    // endpoints are not buildable (PLAN §3.8)
     if (!isGeneratable(s.terrain[i], s.con[i])) continue;
     for (const j of n4(s, i)) {
-      if (j === s.origin || j === s.dest || conCaps(s.con[j]).genFrom) { out.push(i); break; }
+      if (isEndpoint(s, j) || conCaps(s.con[j]).genFrom) { out.push(i); break; }
     }
   }
   return out;
@@ -67,13 +67,13 @@ function coverage(s, ax, ay, cells) {
     // one line down by the capability table, never by these bounds (SPEC §10.7).
     if (x < 0 || y < 0 || x >= s.w || y >= s.h) return null;
     const i = y * s.w + x;
-    if (i === s.origin || i === s.dest) return null;
+    if (isEndpoint(s, i)) return null;
     if (!isGeneratable(s.terrain[i], s.con[i])) return null;
     covered.push(i);
   }
   for (const i of covered) {
     for (const j of n4(s, i)) {
-      if (j === s.origin || j === s.dest || conCaps(s.con[j]).genFrom) return covered;
+      if (isEndpoint(s, j) || conCaps(s.con[j]).genFrom) return covered;
     }
   }
   return null;

@@ -12,6 +12,7 @@
 // and every live block's "this generation introduced N defects" total.
 
 import { n4, n8 } from './grid.js';
+import { isEndpoint } from './state.js';
 import { passable } from './routing.js';
 import { blockMines, cellHasMine, clue } from './reduce.js';
 
@@ -40,7 +41,8 @@ export const NODE_BUDGET = 2_000_000;
  *
  * Endpoints are excluded: they display nothing. They are never `hand` anyway — placement
  * refuses them (PLAN §3.8) — but stating it here means the exclusion survives a future
- * change of mind about that.
+ * change of mind about that. *(All of them, since 2026-08-05: a level may carry several
+ * destinations and every one of them is as silent as B always was.)*
  *
  * *(Revised 2026-08-05, with beta blocks: `beta` joins the list, on the hand-tile argument
  * verbatim — a beta is player-built structure, the renderer draws its count, and the solver
@@ -51,7 +53,7 @@ export const NODE_BUDGET = 2_000_000;
  * @returns {boolean}
  */
 function showsClue(s, i) {
-  if (i === s.origin || i === s.dest) return false;
+  if (isEndpoint(s, i)) return false;
   const k = s.con[i].k;
   return k === 'aiRevealed' || k === 'hand' || k === 'beta';
 }
@@ -248,10 +250,15 @@ function enumerate(vars, constraints) {
 /**
  * Instrumentation, not gameplay — so the definition is pragmatic and stated here rather
  * than implied. The board is `guessForced` when the departure gate is open (users *are*
- * walking) and no route from A to B exists that avoids every cell nobody can prove safe.
- * In other words: every remaining route makes a user cross ground that deduction cannot
- * clear, so somebody is guessing. Hidden cells that are provably safe do not count against
- * it; a closed gate is not a forced guess, it is an unfinished build.
+ * walking) and no route from A to every destination exists that avoids every cell nobody can
+ * prove safe. In other words: every remaining route makes a user cross ground that deduction
+ * cannot clear, so somebody is guessing. Hidden cells that are provably safe do not count
+ * against it; a closed gate is not a forced guess, it is an unfinished build.
+ *
+ * *(Revised 2026-08-05 with itineraries: "every destination" rather than "B". The metric is
+ * about the level's demand rather than any one user's, so it asks for all of them however the
+ * itineraries happen to divide them up — a level where C can only be reached by guessing is a
+ * level that forces a guess. On one destination it is the sentence it always was.)*
  * @param {GameState} s
  * @param {number[]} safe
  * @returns {boolean}
@@ -262,16 +269,17 @@ function guessForced(s, safe) {
   const ok = (i) => passable(s, i) && (s.con[i].k !== 'aiHidden' || proven.has(i));
 
   // The gate itself is topological (SPEC §6.2); if it is shut nobody is crossing anything.
-  if (!reaches(s, (i) => passable(s, i))) return false;
-  return !reaches(s, ok);
+  if (!reachesAll(s, (i) => passable(s, i))) return false;
+  return !reachesAll(s, ok);
 }
 
 /**
  * @param {GameState} s
  * @param {(i: number) => boolean} ok
- * @returns {boolean} whether dest is reachable from origin over cells satisfying `ok`
+ * @returns {boolean} whether every destination is reachable from origin over cells satisfying
+ *   `ok` — endpoints always satisfy it, since `passable` says so and they hold no slop
  */
-function reaches(s, ok) {
+function reachesAll(s, ok) {
   /** @type {Set<number>} */
   const seen = new Set([s.origin]);
   let frontier = [s.origin];
@@ -281,12 +289,11 @@ function reaches(s, ok) {
     for (const i of frontier) {
       for (const j of n4(s, i)) {
         if (seen.has(j) || !ok(j)) continue;
-        if (j === s.dest) return true;
         seen.add(j);
         next.push(j);
       }
     }
     frontier = next;
   }
-  return false;
+  return s.dests.every((d) => seen.has(d));
 }

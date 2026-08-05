@@ -656,6 +656,12 @@ button.ru-row:hover { border-color: var(--select); }
 
 .ru-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ru-state { flex: none; font-size: 10px; letter-spacing: 0.1em; }
+/* The stops still owed, in the letters the board is wearing (B·D). Paper, the name's own tone:
+   the itinerary is a fact about the person, like their name, and the coloured word between them
+   is the only status on the row. Coast was the first choice and is wrong — WAITING is already
+   coast, so "WAITING B·D" came out as one four-character status nobody could parse. Never
+   wraps; the name beside it is the elastic one. */
+.ru-todo { flex: none; font-size: 10px; letter-spacing: 0.08em; color: var(--paper); white-space: nowrap; }
 /* Fixed and right-aligned: the countdowns are a column you read down, not a ragged edge. */
 .ru-left { flex: none; min-width: 78px; text-align: right; font-size: 10px; color: var(--dim); }
 

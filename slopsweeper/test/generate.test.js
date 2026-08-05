@@ -42,14 +42,14 @@ test('every placement lands wholly on free generatable terrain and touches struc
       assert.equal(s.terrain[c], 'ocean');
       assert.equal(s.con[c].k, 'none');
       assert.notEqual(c, s.origin);
-      assert.notEqual(c, s.dest);
+      assert.notEqual(c, s.dests[0]);
     }
   }
   // On a fresh board the only structure is the endpoints, so every legal square hugs one.
   for (const anchor of placements[0].anchors) {
     const cells = /** @type {number[]} */ (placementCells(s, anchor, placements[0].cells));
     assert.ok(
-      cells.some((c) => n4(s, c).some((j) => j === s.origin || j === s.dest)),
+      cells.some((c) => n4(s, c).some((j) => j === s.origin || j === s.dests[0])),
       `anchor ${anchor} touches no structure`,
     );
   }

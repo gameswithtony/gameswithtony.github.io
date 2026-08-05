@@ -220,10 +220,16 @@ export function stopsBlast(terrain) {
  * @property {number} id
  * @property {number} at
  * @property {'queued' | 'moving' | 'arrived' | 'gone'} state  gone = left or killed, for good
+ * @property {number[]} todo     indexes into `GameState.dests` still to visit (rev. 2026-08-05)
  * @property {number[]} visited  current-trip no-revisit set (SPEC §6.3)
  * @property {boolean} stalled   no legal move this tick → counts as waiting (SPEC §6.4)
  * @property {number} waited     CUMULATIVE ticks spent unable to move; at `patience`, gone
  */
+// `todo` is the user's ITINERARY, assigned once at spawn and never re-ordered: the order
+// within it carries no meaning (destinations may be visited in any order) and it is kept
+// ascending purely so every iteration over it is in a defined order. It is indexes rather
+// than cell indices because that is what the routing masks are keyed on, and because it makes
+// `todo` meaningless on any board but its own — which is honest, since it is.
 
 /**
  * @typedef {object} BBox
@@ -264,7 +270,7 @@ export function stopsBlast(terrain) {
  * @property {Con[]} con           dense, parallel to terrain
  * @property {BBox} bbox           playable bounding box (SPEC §10.7)
  * @property {number} origin
- * @property {number} dest
+ * @property {number[]} dests      destination cells, 'B' first (SPEC §2.4, rev. 2026-08-05)
  * @property {Block[]} blocks      live cells; badge counts derived, never stored
  * @property {User[]} users
  * @property {{ total: number, spawned: number, nextTick: number, every: number }} schedule
@@ -278,6 +284,62 @@ export function stopsBlast(terrain) {
 // takes out is not refunded — you shipped it, and it is gone (2026-08-05). Live beta sites
 // need no field of their own: they are the cells whose `con` is `{ k: 'beta' }`, derived from
 // the board like every other question about what is standing.
+//
+// Revised 2026-08-05 (user decision — multi-destination itineraries, SPEC §2.4/§6, §9.2.2):
+// `dest: number` became `dests: number[]`. There is no `s.dest` any more, deliberately and
+// everywhere: a singular field that happened to hold the first of several is the shape that
+// lets a single-destination assumption survive unnoticed in a corner of the code, and there
+// were nine such corners. `dests[i]` is the cell marked with `String.fromCharCode(66 + i)`, so
+// `dests[0]` is 'B', `dests[1]` is 'C', and a one-element `dests` is the game as it was.
+// `origin` did not move: 'A' is still the only spawn.
+
+// --- Endpoints: origin plus every destination -------------------------------------
+// Endpoints are always passable, never buildable, indestructible in blasts, display no clue
+// and are invisible to the solver (PLAN §3.8). Every one of those rules used to be written as
+// `i === s.origin || i === s.dest` at the site that needed it; with several destinations that
+// idiom stops being writable, so it is a predicate now — the same move `isPassable` made for
+// terrain. Structural typing keeps it usable from `validate.js`, which asks the question of a
+// freshly parsed map that is not a GameState yet.
+
+/** @typedef {{ origin: number, dests: number[] }} Endpoints */
+
+/**
+ * @param {Endpoints} e
+ * @param {number} i
+ * @returns {number} which destination this cell is (0 = 'B'), or -1
+ */
+export function destIndex(e, i) {
+  return e.dests.indexOf(i);
+}
+
+/**
+ * @param {Endpoints} e
+ * @param {number} i
+ * @returns {boolean}
+ */
+export function isDest(e, i) {
+  return e.dests.includes(i);
+}
+
+/**
+ * @param {Endpoints} e
+ * @param {number} i
+ * @returns {boolean}
+ */
+export function isEndpoint(e, i) {
+  return i === e.origin || e.dests.includes(i);
+}
+
+/**
+ * The full itinerary: every destination, ascending. It is what a user gets when the level
+ * lists no itineraries at all, and what the departure gate falls back to when it is asked
+ * about a board with nobody standing on it.
+ * @param {Endpoints} e
+ * @returns {number[]}
+ */
+export function everyDest(e) {
+  return e.dests.map((_, i) => i);
+}
 
 /**
  * `flag` is the one action that costs nothing: it toggles an annotation and no tick runs
@@ -310,12 +372,19 @@ export function stopsBlast(terrain) {
  *   | { t: 'detonate', at: number, destroyed: number[], minesLost: number[] }
  *   | { t: 'step', user: number, from: number, to: number }
  *   | { t: 'departed', user: number }
+ *   | { t: 'visited', user: number, dest: number }                  // rev. 2026-08-05
  *   | { t: 'arrived', user: number }
  *   | { t: 'spawned', user: number }
  *   | { t: 'userLost', user: number, at: number, reason: 'gaveUp' | 'detonation' }
  *   | { t: 'won', served: number, total: number }
  *   | { t: 'lost', served: number, total: number }} Ev
  */
+// `visited` is the *intermediate* stop (rev. 2026-08-05): a user stepped onto a destination
+// that was still on its list and has more to visit, so it ticked that stop off and carried on.
+// `dest` is the cell, not the index, because every consumer of an event is drawing on a board.
+// The last stop does not emit it — it emits `arrived`, exactly as it always did, because the
+// last stop *is* arrival and a UI that had to reconstruct that from two events would get it
+// wrong on the single-destination levels where the two coincide.
 
 // --- Level parameters ride beside the state, not inside it ------------------------
 // GameState (§6) is frozen and carries only the level id, but the tick pipeline needs the

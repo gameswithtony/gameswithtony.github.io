@@ -6,7 +6,7 @@
 // this file ever starts having opinions about difficulty it has grown into a designer.
 
 import { LEVEL_DEFAULTS } from './rules.js';
-import { caps } from './state.js';
+import { caps, isEndpoint } from './state.js';
 import { n4, parseMap } from './grid.js';
 import { resolvePool } from './shapes.js';
 
@@ -59,19 +59,32 @@ export function validateLevel(def) {
     errors.push(`board is ${m.w}×${m.h}; the ceiling is ${MAX_DIM}×${MAX_DIM}`);
   }
 
-  for (const [label, end] of /** @type {[string, number][]} */ ([['A', m.origin], ['B', m.dest]])) {
-    const other = end === m.origin ? m.dest : m.origin;
-    const reachable = n4(m, end).some((j) => j === other || caps(m.terrain[j]).handBuildable);
+  // Every endpoint, not just the pair: 'A' plus 'B', 'C', 'D'… (rev. 2026-08-05). An endpoint
+  // beside another endpoint is connected already, which is why the test asks whether the
+  // neighbour is *any* endpoint rather than whether it is the one other one.
+  /** @type {[string, number][]} */
+  const endpoints = [['A', m.origin], ...m.dests.map((d, i) => /** @type {[string, number]} */ ([letter(i), d]))];
+  for (const [label, end] of endpoints) {
+    const reachable = n4(m, end).some((j) => isEndpoint(m, j) || caps(m.terrain[j]).handBuildable);
     if (!reachable) errors.push(`endpoint '${label}' has no buildable neighbour, so nothing can ever connect to it`);
   }
 
+  // Every destination has to be reachable from 'A' over ground that could ever carry a route,
+  // and each one is named when it is not — "the level is unwinnable" is not a useful sentence
+  // on a three-destination map unless it says which leg is the impossible one.
   const reach = oceanReach(m, m.origin);
-  if (!reach.has(m.dest)) {
-    errors.push("no ocean connectivity from 'A' to 'B' — the level is unwinnable by construction");
-  } else {
-    const len = oceanDistance(m);
-    if (len < DEGENERATE_PATH) warnings.push(`degenerate path length: A and B are ${len} steps apart`);
+  const unreachable = m.dests.filter((d) => !reach.has(d));
+  for (const d of unreachable) {
+    errors.push(`no ocean connectivity from 'A' to '${letter(m.dests.indexOf(d))}' — the level is unwinnable by construction`);
   }
+  if (unreachable.length === 0) {
+    const near = oceanDistance(m);
+    if (near.len < DEGENERATE_PATH) {
+      warnings.push(`degenerate path length: A and ${letter(near.to)} are ${near.len} steps apart`);
+    }
+  }
+
+  checkItineraries(def, m, errors);
 
   const stranded = strandedOcean(m, reach);
   if (stranded > 0) {
@@ -79,6 +92,48 @@ export function validateLevel(def) {
   }
 
   return { errors, warnings };
+}
+
+/**
+ * @param {number} i
+ * @returns {string} the charmap letter for destination `i` — 0 is 'B'
+ */
+function letter(i) {
+  return String.fromCharCode('B'.charCodeAt(0) + i);
+}
+
+/**
+ * Itineraries are letters, so they are checked against the letters the map actually carries
+ * (PLAN §9.1). Structural only, like everything else here: whether a level *should* send a
+ * user to C and D but never B is a design question, and this file does not have those.
+ * @param {LevelDef} def
+ * @param {import('./grid.js').ParsedMap} m
+ * @param {string[]} errors
+ */
+function checkItineraries(def, m, errors) {
+  const list = def.itineraries;
+  if (list === undefined) return;
+  if (!Array.isArray(list)) {
+    errors.push('itineraries must be an array of destination-letter arrays');
+    return;
+  }
+  const known = new Set(m.dests.map((_, i) => letter(i)));
+  list.forEach((entry, n) => {
+    if (!Array.isArray(entry) || entry.length === 0) {
+      errors.push(`itineraries[${n}] must be a non-empty array of destination letters`);
+      return;
+    }
+    /** @type {Set<string>} */
+    const seen = new Set();
+    for (const ch of entry) {
+      if (typeof ch !== 'string' || !known.has(ch)) {
+        errors.push(`itineraries[${n}] names '${ch}', which is not a destination on this map`);
+      } else if (seen.has(ch)) {
+        errors.push(`itineraries[${n}] visits '${ch}' twice`);
+      }
+      if (typeof ch === 'string') seen.add(ch);
+    }
+  });
 }
 
 /**
@@ -101,6 +156,14 @@ function checkNumbers(def, errors, warnings) {
     errors.push(`mineDensity must be a probability in [0, 1] (got ${density})`);
   } else if (density < DENSITY_RANGE[0] || density > DENSITY_RANGE[1]) {
     warnings.push(`mineDensity ${density} is outside the tuned range ${DENSITY_RANGE[0]}–${DENSITY_RANGE[1]}`);
+  }
+
+  // A fraction, not a count: `0` is a level where reaching an intermediate destination buys
+  // nothing but the walk (the beta rule, applied to real endpoints) and `1` is one where it
+  // resets the clock outright. Both are settings somebody might mean, so both are legal.
+  const refill = def.destRefill ?? LEVEL_DEFAULTS.destRefill;
+  if (typeof refill !== 'number' || !Number.isFinite(refill) || refill < 0 || refill > 1) {
+    errors.push(`destRefill must be a fraction in [0, 1] (got ${refill})`);
   }
 
   try {
@@ -147,8 +210,11 @@ function oceanReach(m, from) {
 }
 
 /**
+ * The *nearest* destination and how far off it is, over buildable water. The degenerate-path
+ * warning is about whether the level is a formality, and a level is a formality the moment any
+ * one of its destinations is two steps from the door.
  * @param {import('./grid.js').ParsedMap} m
- * @returns {number} steps from A to B over buildable water
+ * @returns {{ len: number, to: number }} `to` indexes `m.dests`; `len` Infinity if none is reachable
  */
 function oceanDistance(m) {
   /** @type {Map<number, number>} */
@@ -161,15 +227,16 @@ function oceanDistance(m) {
       const d = (dist.get(i) ?? 0) + 1;
       for (const j of n4(m, i)) {
         if (dist.has(j)) continue;
-        if (j !== m.dest && !caps(m.terrain[j]).handBuildable) continue;
+        const at = m.dests.indexOf(j);
+        if (at < 0 && !caps(m.terrain[j]).handBuildable) continue;
         dist.set(j, d);
-        if (j === m.dest) return d;
+        if (at >= 0) return { len: d, to: at };
         next.push(j);
       }
     }
     frontier = next;
   }
-  return Infinity;
+  return { len: Infinity, to: 0 };
 }
 
 /**
@@ -178,7 +245,9 @@ function oceanDistance(m) {
  * @returns {number}
  */
 function strandedOcean(m, fromOrigin) {
-  const fromDest = oceanReach(m, m.dest);
+  /** @type {Set<number>} */
+  const fromDest = new Set();
+  for (const d of m.dests) for (const c of oceanReach(m, d)) fromDest.add(c);
   let n = 0;
   for (let i = 0; i < m.terrain.length; i++) {
     if (!caps(m.terrain[i]).handBuildable) continue;

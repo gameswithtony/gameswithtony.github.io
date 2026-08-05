@@ -12,7 +12,7 @@ const CORRIDOR = { id: 'gate-corridor', map: 'A##B', arrivals: { count: 3, first
 /** Hand-place the users the schedule would have produced, so the tests control the clock. */
 function queue(/** @type {import('../src/core/state.js').GameState} */ s, /** @type {number} */ n) {
   for (let i = 0; i < n; i++) {
-    s.users.push({ id: s.users.length, at: s.origin, state: 'queued', visited: [], stalled: false, waited: 0 });
+    s.users.push({ id: s.users.length, at: s.origin, state: 'queued', todo: [0], visited: [], stalled: false, waited: 0 });
   }
   s.schedule = { ...s.schedule, total: n, spawned: n };
   return s;

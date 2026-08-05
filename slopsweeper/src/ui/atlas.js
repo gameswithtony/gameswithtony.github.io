@@ -93,7 +93,8 @@ function tileNames() {
   for (const kind of ['ocean', 'volcano', 'hand', 'hidden']) {
     for (let v = 0; v < VARIANTS; v++) names.push(`${kind}${v}`);
   }
-  names.push('revealed', 'mine', 'origin', 'dest', 'tintOk', 'tintRed', 'tintSelect', 'tintUser');
+  names.push('revealed', 'mine', 'origin', 'dest', 'originFar', 'destFar');
+  names.push('tintOk', 'tintRed', 'tintSelect', 'tintUser');
   names.push('flag', 'flagFar', 'beta', 'betaFar');
   for (let m = 0; m < 16; m++) names.push(`coastS${m}`);
   for (let m = 0; m < 16; m++) names.push(`coastC${m}`);
@@ -178,6 +179,8 @@ function paint(ctx, name, ox, oy, px) {
     case 'mine': return paintMine(p);
     case 'origin': return paintEndpoint(p, true);
     case 'dest': return paintEndpoint(p, false);
+    case 'originFar': return paintEndpointFar(p, true);
+    case 'destFar': return paintEndpointFar(p, false);
     case 'flag': return paintFlag(p);
     case 'flagFar': return paintFlagFar(p);
     case 'beta': return paintBeta(p);
@@ -298,13 +301,47 @@ function paintMine(p) {
 }
 
 /**
- * The two endpoints, at a size that reads without zooming: A is a solid source block, B is a
- * bullseye. The pair has to be distinguishable at a glance on a 50×30 board, which is what
- * the sixteen-pixel grid is for.
+ * The endpoints at mid and near, where they wear their letters (2026-08-05). A board can carry
+ * one origin and a whole list of destinations now, so the thing that says *which* stop this is
+ * has to be the letter, and the letter is renderer.js's to drop on top — nothing in this file
+ * knows the font exists, exactly as nothing in it knows a clue digit does.
+ *
+ * What the tile owes the letter is somewhere legible to sit. `drawTextCentered` puts a 5×7
+ * glyph at art rows 5–11, columns 6–10 (the same arithmetic paintBeta reasons from), so both
+ * endpoints carry a PAPER slab covering that box with a margin, and the glyph goes on in INK:
+ * the highest-contrast pair in the palette, on the one tile a player has to identify from
+ * across the board.
+ *
+ * The old distinction survives as the slab's *shape* rather than as a mark the letter would
+ * have to cover. A is filled, which is what a solid source looks like; a destination cuts a
+ * RED ring into the same silhouette and reads as the target it always was. Same outline on
+ * both, so a row of endpoints reads as one family of thing, and the filled one is the door
+ * everybody comes in through.
  * @param {Pen} p
  * @param {boolean} isOrigin
  */
 function paintEndpoint(p, isOrigin) {
+  p(0, 0, PALETTE.RED, ART, ART);
+  border(p, PALETTE.INK);
+  // The slab sits a hair right of centre because the glyph box does: an odd 5-wide run cannot
+  // centre in an even 16-wide tile, and a slab centred the other way would show the mismatch.
+  p(3, 2, PALETTE.PAPER, 11, 13);
+  if (isOrigin) return;
+  p(4, 3, PALETTE.RED, 9, 11);       // a ring cut out of the slab: the target it always was
+  p(5, 4, PALETTE.PAPER, 7, 9);      // and the plaque inside it, one art pixel clear of the glyph
+}
+
+/**
+ * The far tier: no letters (SPEC §10.5 calls this tier the topology view, and a 7-art-pixel
+ * glyph at one device pixel each is under the legibility floor by construction), so the tile
+ * goes back to the marks it wore before letters existed — A a solid source block, B a bullseye,
+ * both chunky enough to tell apart at a glance on a 50×30 board. The same trade `flagFar` and
+ * `betaFar` make: what has to survive zoomed out is *where the endpoints are*, and at this
+ * distance every destination is simply a destination.
+ * @param {Pen} p
+ * @param {boolean} isOrigin
+ */
+function paintEndpointFar(p, isOrigin) {
   p(0, 0, PALETTE.RED, ART, ART);
   border(p, PALETTE.INK);
   const c = ART >> 1;

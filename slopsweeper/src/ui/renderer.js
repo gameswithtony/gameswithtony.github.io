@@ -69,6 +69,50 @@ const STROKE_ART = 2;
 export const IMPATIENT_AT = 2 / 3;
 
 /**
+ * The board's destination cells (2026-08-05). A level used to have exactly one and core called
+ * it `s.dest`; it now has a list, in board order, and index k of that list is the stop the
+ * player reads as `stopLetter(k)`.
+ *
+ * The read is guarded because it is the one field the UI and core are crossing on: a page
+ * loaded against either shape has to draw a board rather than throw, and a `dest` that has not
+ * become a `dests` yet is a one-stop itinerary, which is exactly what it always meant. The fall
+ * back to `[]` is not defensive theatre either — the Level Lab boots hand-typed definitions.
+ * When the trees have met, this collapses to `s.dests`.
+ * @param {GameState} s
+ * @returns {number[]}
+ */
+export function dests(s) {
+  const e = /** @type {{ dests?: number[], dest?: number }} */ (/** @type {unknown} */ (s));
+  if (Array.isArray(e.dests)) return e.dests;
+  return typeof e.dest === 'number' ? [e.dest] : [];
+}
+
+/**
+ * The letter of the k-th destination. 'A' is the origin and belongs to nobody's itinerary, so
+ * the stops start at 'B' — which is why a one-destination level, the shape every level had
+ * until today, still says exactly what it always said.
+ * @param {number} k  index into `dests(s)`
+ * @returns {string}
+ */
+export function stopLetter(k) {
+  return String.fromCharCode(66 + k);
+}
+
+/**
+ * Cell → the letter that endpoint wears, origin included. Built once per pass rather than
+ * asked per cell: this is read inside the visible-window loop, and a fresh array per cell over
+ * fifteen hundred of them is the kind of thing that only shows up on somebody else's phone.
+ * @param {GameState} s
+ * @returns {Map<number, string>}
+ */
+export function endpointLetters(s) {
+  /** @type {Map<number, string>} */
+  const out = new Map([[s.origin, 'A']]);
+  dests(s).forEach((cell, k) => out.set(cell, stopLetter(k)));
+  return out;
+}
+
+/**
  * How far through its patience a user is, 0…1. Reads `waited` and the level's own threshold
  * and nothing else — no core query the HUD does not already make. Defensive about both,
  * because a level with no patience configured must not make every user look doomed.
@@ -117,11 +161,15 @@ function blockOf(con) {
  * @param {number} x
  * @param {number} y
  * @param {Tier} tier
+ * @param {Map<number, string>} ends  cell → endpoint letter, origin included
  * @returns {string} atlas tile name
  */
-function tileName(s, i, x, y, tier) {
-  if (i === s.origin) return 'origin';
-  if (i === s.dest) return 'dest';
+function tileName(s, i, x, y, tier, ends) {
+  // Endpoints change art with the tier rather than gaining detail on it, like the beta below:
+  // mid and near wear a slab for the letter the glyph pass drops on top, and far goes back to
+  // the marks that survive one device pixel per art pixel.
+  if (i === s.origin) return tier === 'far' ? 'originFar' : 'origin';
+  if (ends.has(i)) return tier === 'far' ? 'destFar' : 'dest';
   const v = variantOf(x, y, s.seed);
   switch (s.con[i].k) {
     case 'hand': return `hand${v}`;
@@ -203,6 +251,7 @@ export function createRenderer(canvas) {
     cctx.fillStyle = PALETTE.VOID;
     cctx.fillRect(0, 0, cam.cw, cam.ch);
 
+    const ends = endpointLetters(s);
     const win = visibleCells(cam, s);
     // Rectangular *iteration* over the visible window is fine; playability is decided by the
     // VOID test below, never by the loop bounds (SPEC §10.7).
@@ -212,7 +261,7 @@ export function createRenderer(canvas) {
         if (s.terrain[i] === 'void') continue;
         const dx = cam.ox + x * t;
         const dy = cam.oy + y * t;
-        at.blit(cctx, tileName(s, i, x, y, tier), dx, dy);
+        at.blit(cctx, tileName(s, i, x, y, tier, ends), dx, dy);
 
         let side = 0;
         if (isVoid(s, x, y - 1)) side |= 1;
@@ -254,6 +303,22 @@ export function createRenderer(canvas) {
     }
 
     if (tier === 'far') return;
+
+    // Endpoint letters (mid and near). A itself is on the board rather than only in the rules
+    // text, because "users arrive at A and owe you a walk to B, D" is unreadable on a board
+    // where nothing is labelled — the roster's itinerary column and the tiles have to be the
+    // same alphabet or the list is a list of somebody else's letters.
+    //
+    // Drawn here rather than baked into the atlas for the reason the clue digits are: the
+    // letter is a fact about *this* board, one glyph per endpoint per rebuild against a
+    // hundreds-of-cells tile pass, and a lettered tile per stop would put the level's topology
+    // inside a cache keyed on artPx alone. INK on the slab the tile carries for it, which is
+    // the highest-contrast pair in the palette.
+    for (const [cell, letter] of ends) {
+      const x = cell % s.w, y = Math.floor(cell / s.w);
+      if (x < win.x0 || x > win.x1 || y < win.y0 || y > win.y1) continue;
+      drawTextCentered(cctx, letter, cam.ox + x * t + t / 2, cam.oy + y * t + t / 2, px, PALETTE.INK);
+    }
 
     // Clue digits (mid and near). Derived live from the mine set on every rebuild, so the
     // never-wrong rule holds with no invalidation logic of its own (PLAN §3.5). Nothing here

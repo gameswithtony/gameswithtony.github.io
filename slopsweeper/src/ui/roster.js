@@ -14,7 +14,7 @@
 // reach into core's PRNG stream. The panel is a view of the state, exactly like the board is.
 
 import { levelParams } from '../core/state.js';
-import { IMPATIENT_AT, patienceSpent } from './renderer.js';
+import { IMPATIENT_AT, patienceSpent, stopLetter } from './renderer.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
 /** @typedef {import('../core/state.js').User} User */
@@ -142,6 +142,27 @@ function statusOf(s, u) {
 }
 
 /**
+ * The stops this user still owes, as the letters the board is wearing (2026-08-05). `u.todo`
+ * is indexes into the level's destination list, so the letters come out of the same arithmetic
+ * the tiles do — one place decides that stop 0 is 'B' and both readers ask it.
+ *
+ * Ascending, always, whatever order the itinerary was authored in: the column is scanned down
+ * a list of rows, and a "D·B" three rows above a "B·D" would read as two different errands
+ * rather than as the same two stops in a different mood. The order a user actually walks them
+ * in is theirs to decide anyway (SPEC §6.3 — they take whatever is reachable).
+ *
+ * The read is guarded: `todo` is core's newest field, and a roster that throws on a state
+ * without one would take the whole panel down over a decoration.
+ * @param {User} u
+ * @returns {string} '' when there is nothing to say
+ */
+function todoLetters(u) {
+  const todo = /** @type {{ todo?: number[] }} */ (/** @type {unknown} */ (u)).todo;
+  if (!Array.isArray(todo) || todo.length === 0) return '';
+  return todo.map(stopLetter).sort().join('·');
+}
+
+/**
  * @param {string} id
  * @returns {HTMLElement}
  */
@@ -221,6 +242,14 @@ export function createRoster(h) {
     node.append(make('span', 'ru-name', name), make('span', 'ru-state', st.word));
 
     if (!st.done) {
+      // The itinerary rides between the status and the countdown, which is the reading order of
+      // the row: who, what they are doing, WHERE THEY STILL HAVE TO GO, how long you have. It
+      // is two characters per stop and the name is the only elastic thing on the row, so a
+      // narrow panel eats into the name — the one field that can lose its tail and still be the
+      // person you were looking for. Resolved rows get none of this: an itinerary is a debt,
+      // and theirs is settled one way or the other.
+      const stops = todoLetters(u);
+      if (stops) node.append(make('span', 'ru-todo', stops));
       const left = Math.max(0, patience - (u.waited ?? 0));
       const cd = make('span', 'ru-left', `LEAVES IN ${left}`);
       // The same two-thirds the board's dot uses, imported rather than restated: one warning

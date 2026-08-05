@@ -193,7 +193,7 @@ test('a review that detonates strands the users it cuts off, on the same tick', 
   s.con[cellAt(s, 2, 1)] = { k: 'aiHidden', mine: true, block: 0, flagged: false };
   s.con[cellAt(s, 3, 1)] = { k: 'aiHidden', mine: false, block: 0, flagged: false };
   s.blocks = [{ id: 0, cells: [cellAt(s, 1, 1), cellAt(s, 2, 1), cellAt(s, 3, 1)] }];
-  s.users = [{ id: 0, at: cellAt(s, 1, 1), state: 'moving', visited: [s.origin, cellAt(s, 1, 1)], stalled: false, waited: 0 }];
+  s.users = [{ id: 0, at: cellAt(s, 1, 1), state: 'moving', todo: [0], visited: [s.origin, cellAt(s, 1, 1)], stalled: false, waited: 0 }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
 
   const { s: done, ev } = reduce(s, { t: 'analyze', cell: cellAt(s, 2, 1) });
@@ -236,7 +236,7 @@ test('only unreviewed AI tiles can be reviewed', () => {
   const { s, at } = board(['..o......', '.........', '.........', '.........', '.........']);
   const cell = at(2, 0);
   assert.deepEqual(legalActions(s, cell), ['analyze', 'flag']);
-  for (const c of [s.origin, s.dest, at(8, 4), -1, s.w * s.h]) {
+  for (const c of [s.origin, s.dests[0], at(8, 4), -1, s.w * s.h]) {
     assert.equal(legalActions(s, c).includes('analyze'), false);
     assert.equal(reduce(s, { t: 'analyze', cell: c }).ev[0].t, 'rejected');
   }

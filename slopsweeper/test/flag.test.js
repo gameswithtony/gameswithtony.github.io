@@ -135,7 +135,7 @@ test('a blast takes the flag with the cell', () => {
   s.con[cellAt(s, 2, 1)] = CON_HAND;
   s.con[cellAt(s, 3, 1)] = CON_HAND;
   s.blocks = [{ id: 0, cells: [neighbour, trigger] }];
-  s.users = [{ id: 0, at: s.origin, state: 'moving', visited: [s.origin], stalled: false, waited: 0 }];
+  s.users = [{ id: 0, at: s.origin, state: 'moving', todo: [0], visited: [s.origin], stalled: false, waited: 0 }];
   s.schedule = { ...s.schedule, total: 1, spawned: 1 };
 
   s = reduce(s, { t: 'flag', cell: neighbour }).s;
@@ -151,7 +151,7 @@ test('flag is illegal during placing, off the board, and on anything but slop', 
   const { s, cells } = withSlop(1, [[2, 1, false]]);
   assert.equal(legalActions(s, cells[0]).includes('flag'), true);
 
-  for (const c of [s.origin, s.dest, cellAt(s, 4, 2), -1, s.w * s.h, 1.5]) {
+  for (const c of [s.origin, s.dests[0], cellAt(s, 4, 2), -1, s.w * s.h, 1.5]) {
     assert.equal(legalActions(s, /** @type {number} */ (c)).includes('flag'), false);
     assert.equal(reduce(s, { t: 'flag', cell: /** @type {number} */ (c) }).ev[0].t, 'rejected');
   }
