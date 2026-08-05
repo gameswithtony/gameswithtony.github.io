@@ -88,28 +88,29 @@ test('the validator takes both itinerary shapes, and only a boolean for ordered'
 });
 
 test('an ordered list is assigned in AUTHORED order; a loose one is still ascending', () => {
+  //  Revised 2026-08-05 (owner decision — the walker cast list, SPEC §6.6): the round-robin is
+  //  gone and the two entries are dealt by seed, so this asserts what an entry *becomes* rather
+  //  than which user gets it. THE ORDERED BIT SURVIVES CASTING is the load-bearing half — a
+  //  shuffle that dropped or mixed up the flag would hand somebody a sequence as a set.
   const level = {
     ...LINE,
     arrivals: { count: 4, firstTick: 0, every: 1 },
     itineraries: [{ stops: ['C', 'B'], ordered: true }, ['C', 'B']],
   };
-  const { s } = waits(init(/** @type {any} */ (level), 1), 4);
-  assert.equal(s.users.length, 4);
-
-  // dests are B=cell 2 (index 0) and C=cell 4 (index 1).
-  assert.deepEqual(s.users[0].todo, [1, 0], 'C first, because the level wrote C first');
-  assert.equal(s.users[0].ordered, true);
-  assert.deepEqual(s.users[1].todo, [0, 1], 'the same letters, loose, sort ascending as they always did');
-  assert.equal(s.users[1].ordered, false, 'and the bit is written out rather than left absent');
-
-  // Cycling is blind to the shape: round-robin by spawn order, no RNG, same every seed.
-  assert.deepEqual(s.users[2].todo, s.users[0].todo);
-  assert.equal(s.users[2].ordered, true);
-  assert.deepEqual(s.users[3].todo, s.users[1].todo);
-  assert.equal(s.users[3].ordered, false);
-  const other = waits(init(/** @type {any} */ (level), 99999), 4).s;
-  assert.deepEqual(other.users.map((u) => `${u.todo.join('')}${u.ordered ? '!' : ''}`),
-    s.users.map((u) => `${u.todo.join('')}${u.ordered ? '!' : ''}`), 'a different seed cannot deal a different hand');
+  for (const seed of [1, 2, 7, 99999]) {
+    const { s } = waits(init(/** @type {any} */ (level), seed), 4);
+    assert.equal(s.users.length, 4);
+    // dests are B=cell 2 (index 0) and C=cell 4 (index 1). Two entries over four arrivals is two
+    // of each, whatever order they came out in.
+    const dealt = s.users.map((u) => `${u.todo.join('')}${u.ordered ? '!' : ''}`);
+    assert.deepEqual(dealt.slice().sort(), ['01', '01', '10!', '10!'],
+      `seed ${seed}: the mix moved, or the ordered bit did not survive the deal`);
+    for (const u of s.users) {
+      if (u.ordered) assert.deepEqual(u.todo, [1, 0], 'C first, because the level wrote C first');
+      else assert.deepEqual(u.todo, [0, 1], 'the same letters, loose, sort ascending as they always did');
+      assert.equal(typeof u.ordered, 'boolean', 'and the bit is written out rather than left absent');
+    }
+  }
 });
 
 test('effectiveMask is the whole routing story: [todo[0]] when ordered, todo itself when not', () => {

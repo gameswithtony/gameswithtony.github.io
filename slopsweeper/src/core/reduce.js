@@ -6,8 +6,9 @@
 import { LEVEL_DEFAULTS } from './rules.js';
 import {
   CON_BETA, CON_HAND, CON_NONE, conCaps, destIndex, effectiveMask, everyDest, isEndpoint,
-  isFlagged, isHandBuildable, levelParams, setLevelParams, stopsBlast,
+  isFlagged, isHandBuildable, levelParams, patienceLimit, setLevelParams, stopsBlast,
 } from './state.js';
+import { arrivalCount, castFor } from './casting.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
 import { canProgress, gateOpen, stepCandidates, waypointFields } from './routing.js';
 import { drawShape, legalPlacements, placementCells, rollMines } from './generate.js';
@@ -31,13 +32,22 @@ import { assertValidLevel } from './validate.js';
 export function init(def, seed) {
   assertValidLevel(def);
   const m = parseMap(def.map);
+  const arrivals = def.arrivals ?? LEVEL_DEFAULTS.arrivals;
   /** @type {LevelParams} */
   const params = {
-    arrivals: def.arrivals ?? LEVEL_DEFAULTS.arrivals,
+    arrivals,
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
     betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
     itineraries: def.itineraries ?? LEVEL_DEFAULTS.itineraries,
+    walkers: def.walkers ?? LEVEL_DEFAULTS.walkers,
+    // THE DEAL, and the only line in `init` that is a function of the seed as well as the
+    // level (owner decision 2026-08-05, SPEC §6.6). It draws on a private stream created and
+    // dropped inside `casting.js`, so `s.rng` below is the pair it has always been and every
+    // game that predates casting replays unchanged. It is re-derived rather than stored: a
+    // restore boots the definition, re-associates these parameters (ui/main.js), and gets this
+    // identical array back, because it is a pure function of two things a save already carries.
+    cast: castFor(def, m.dests.length, arrivals, seed >>> 0),
     destRefill: def.destRefill ?? LEVEL_DEFAULTS.destRefill,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
@@ -58,11 +68,17 @@ export function init(def, seed) {
     dests: m.dests,
     blocks: [],
     users: [],
+    // THE SCHEDULE SHAPE DID NOT MOVE (owner decision 2026-08-05, SPEC §6.1). Explicit arrival
+    // turns are a second way to *write* a schedule, not a second thing to store: `total` and
+    // `nextTick` mean exactly what they meant, and `spawns` advances `nextTick` down the
+    // authored list instead of by a cadence. `every` is 0 on that form and that is the honest
+    // answer rather than a placeholder — a listed schedule has no cadence, nothing divides by
+    // it, and a number that claimed one would be a lie the hash would then carry around.
     schedule: {
-      total: params.arrivals.count,
+      total: arrivalCount(arrivals),
       spawned: 0,
-      nextTick: params.arrivals.firstTick,
-      every: params.arrivals.every,
+      nextTick: arrivals.at ? arrivals.at[0] : arrivals.firstTick,
+      every: arrivals.at ? 0 : arrivals.every,
     },
     phase: { k: 'play' },
     rng: initStreams(seed),
@@ -470,7 +486,7 @@ function departures(d, ev, fields) {
  */
 function movement(d, ev, fields) {
   const move = fromState(d.rng.move);
-  const { patience: limit, destRefill } = levelParams(d);
+  const { destRefill } = levelParams(d);
   for (const u of d.users) {
     if (u.state !== 'moving') continue;
     const wf = fields.for(effectiveMask(u));
@@ -521,7 +537,7 @@ function movement(d, ev, fields) {
     ev.push({ t: 'step', user: u.id, from: u.at, to });
     u.at = to;
     u.visited.push(to);
-    visit(d, ev, u, to, limit, destRefill);
+    visit(d, ev, u, to, destRefill);
   }
   d.rng.move = move.getState();
 }
@@ -554,14 +570,20 @@ function movement(d, ev, fields) {
  * then D does not get credit for wandering past D on the way to B, and it will have to come
  * back. Contact with a destination it never owed is unchanged and was already nothing.
  *
+ * **HALF A BAR MEANS HALF OF *THIS WALKER'S* BAR** (owner decision 2026-08-05, SPEC §6.6). The
+ * refill is `round(limit × destRefill)` and `limit` is now `patienceLimit(d, u)` rather than the
+ * level's number: a walker cast with a twelve-tick bar gets six back at a stop, not thirteen.
+ * Any other reading makes the refill a bigger fraction of a short bar than of a long one, which
+ * would hand the impatient walkers — the ones a cast writes *because* they are fragile — the
+ * largest relief in the game. On a level whose cast sets no override the two expressions are the
+ * same number, so nothing measured before today moves.
  * @param {GameState} d
  * @param {Ev[]} ev
  * @param {User} u
  * @param {number} cell   the cell just stepped onto
- * @param {number} limit  the level's patience
  * @param {number} refill the level's destRefill
  */
-function visit(d, ev, u, cell, limit, refill) {
+function visit(d, ev, u, cell, refill) {
   const di = destIndex(d, cell);
   if (di < 0) return;
   const k = u.todo.indexOf(di);
@@ -575,7 +597,7 @@ function visit(d, ev, u, cell, limit, refill) {
     ev.push({ t: 'arrived', user: u.id });
     return;
   }
-  u.waited = Math.max(0, u.waited - Math.round(limit * refill));
+  u.waited = Math.max(0, u.waited - Math.round(patienceLimit(d, u) * refill));
   u.visited = [cell];
   ev.push({ t: 'visited', user: u.id, dest: cell });
 }
@@ -684,9 +706,9 @@ function detonate(d, ev, at, destroyed) {
  */
 function spawns(d, ev) {
   const sc = d.schedule;
-  const { itineraries } = levelParams(d);
+  const { arrivals, cast } = levelParams(d);
   while (sc.spawned < sc.total && d.tick >= sc.nextTick) {
-    const { todo, ordered } = itineraryFor(d, itineraries, d.users.length);
+    const { todo, ordered } = itineraryFor(d, cast[d.users.length]);
     /** @type {User} */
     const u = {
       id: d.users.length,
@@ -704,46 +726,47 @@ function spawns(d, ev) {
     };
     d.users.push(u);
     sc.spawned++;
-    sc.nextTick += sc.every;
+    // Two schedules, two ways to find the next turn, and the cadence branch is character for
+    // character the line it always was — the explicit form reads the turn straight off the
+    // list it was authored as. Past the end of the list `nextTick` is left where it stands,
+    // which nothing observes: the loop guard `spawned < total` has already closed.
+    sc.nextTick = arrivals.at ? (arrivals.at[sc.spawned] ?? sc.nextTick) : sc.nextTick + sc.every;
     ev.push({ t: 'spawned', user: u.id });
   }
 }
 
 /**
- * Which destinations user `n` was born owing (user decision 2026-08-05, SPEC §6).
+ * Which destinations this user was born owing (user decision 2026-08-05, SPEC §6).
  *
- * **Authored and cycled, never rolled.** The level writes the itineraries down and users take
- * them round-robin in spawn order, so the tenth user's list is a property of the level and not
- * of the seed. That is a deliberate refusal of the obvious alternative: a random draw would
- * make two games of the same level ask for different things, and the whole point of the
- * forecast (SPEC §6.1) is that demand is knowable in advance. It also keeps this out of the
- * RNG streams entirely, so the determinism contract (PLAN §7.5) never had to hear about it.
+ * **Cast, not cycled** (owner decision 2026-08-05, SPEC §6.6 — supersedes the round-robin this
+ * function was written for). The level's roles are dealt against the arrival count once, at
+ * `init`, on a private stream; `casting.js` owns that entirely and this function is handed the
+ * one entry belonging to this spawn. So the demand is still fixed and forecastable from turn
+ * one — the whole cast exists before the first user walks — and it is no longer the *same* hand
+ * every game, which is the change: a level replayed is a level that asks in a different order,
+ * and on an oversized cast sometimes asks different questions altogether.
  *
- * **An empty list means the whole map**, which is what makes a single-destination level
- * behave exactly as it did before any of this: one destination, every user owing it, arrival
- * on contact. Levels state itineraries only when they want users to differ.
+ * **No entry means the whole map.** An empty cast is what `LEVEL_DEFAULTS` hands back for a
+ * state whose parameters were never associated, and it means what the empty itinerary list
+ * always meant: every destination, ascending, loose. On a one-destination level that is "this
+ * user owes B", which is the game every level shipped before any of this existed.
  *
- * **Two shapes, one cycle** (owner decision 2026-08-05, SPEC §6.5). An entry is either the
- * original `string[]` — a set of obligations, taken in whatever order the walk finds them,
- * stored ascending because the order carries no meaning — or `{ stops, ordered }`, and with
- * `ordered: true` the list is a **sequence**: stored in the order the author wrote it, because
- * now the order is the whole content, and `todo[0]` is the only stop that is live. The cycling
- * is untouched and blind to which shape it just handed out; a level may mix the two freely,
- * which `delta` does.
+ * **Two shapes, one deal** (owner decision 2026-08-05, SPEC §6.5). A cast entry's `stops` is
+ * either a set of obligations, taken in whatever order the walk finds them and stored ascending
+ * because the order carries no meaning — or, with `ordered: true`, a **sequence**: stored in the
+ * order the author wrote it, because now the order is the whole content, and `todo[0]` is the
+ * only stop that is live. The deal is blind to which shape it just handed out; a level may mix
+ * the two freely, which `delta` does.
  *
  * @param {GameState} d
- * @param {import('./rules.js').Itinerary[]} itineraries  letters, as authored
- * @param {number} n                spawn order, which is also the user id
+ * @param {import('./rules.js').WalkerDef} [entry]  this spawn's cast entry, if there is one
  * @returns {{ todo: number[], ordered: boolean }} indexes into `d.dests`: ascending when the
  *   list is loose, authored order when it is ordered
  */
-function itineraryFor(d, itineraries, n) {
-  if (itineraries.length === 0) return { todo: everyDest(d), ordered: false };
-  const entry = itineraries[n % itineraries.length];
-  const loose = Array.isArray(entry);
-  const letters = loose ? entry : entry.stops;
-  const todo = letters.map((ch) => ch.charCodeAt(0) - 'B'.charCodeAt(0));
-  if (loose || entry.ordered !== true) return { todo: todo.sort((a, b) => a - b), ordered: false };
+function itineraryFor(d, entry) {
+  if (!entry) return { todo: everyDest(d), ordered: false };
+  const todo = entry.stops.map((ch) => ch.charCodeAt(0) - 'B'.charCodeAt(0));
+  if (entry.ordered !== true) return { todo: todo.sort((a, b) => a - b), ordered: false };
   return { todo, ordered: true };
 }
 
@@ -760,15 +783,19 @@ function itineraryFor(d, itineraries, n) {
  *
  * Stranding needs no special case any more, which is the tidiest thing about this design: a
  * stranded user is a blocked user, blocked is waiting, and patience resolves it.
+ *
+ * **The bar is per walker since casting** (owner decision 2026-08-05, SPEC §6.6): the limit is
+ * asked of `patienceLimit(d, u)` inside the loop rather than hoisted out of it, because it is
+ * now a property of the person and not of the level. On a level whose cast sets no override the
+ * helper returns `levelParams(d).patience` for everybody and this is the same loop it was.
  * @param {GameState} d
  * @param {Ev[]} ev
  */
 function patience(d, ev) {
-  const limit = levelParams(d).patience;
   for (const u of d.users) {
     if (u.state !== 'queued' && !(u.state === 'moving' && u.stalled)) continue;
     u.waited++;
-    if (u.waited < limit) continue;
+    if (u.waited < patienceLimit(d, u)) continue;
     u.state = 'gone';
     u.stalled = false;
     d.stats.lost++;

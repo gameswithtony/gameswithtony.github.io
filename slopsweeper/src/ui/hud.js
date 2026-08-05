@@ -8,7 +8,7 @@
 
 import { RULES } from '../core/rules.js';
 import { legalActions } from '../core/reduce.js';
-import { isFlagged, levelParams } from '../core/state.js';
+import { isFlagged, levelParams, patienceLimit } from '../core/state.js';
 import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
@@ -33,23 +33,33 @@ import * as cam from './camera.js';
  * @property {() => void} onRun        fast-forward toggle (PLAN §12.6)
  * @property {(steps: number) => void} onZoom   ±1 artPx, anchored at the viewport centre
  * @property {() => void} onRoster     the WAITING chip: open the user roster (roster.js)
+ * @property {() => void} onMenu       the ☰: open the drawer (drawer.js)
  */
 
 /**
  * `{left}` in a label or a title is the beta supply still on the shelf, substituted at build
  * time. A token rather than a second table because BETA is the one verb whose button has to
  * say how much of it is left — everything else in this game is metered in turns, and turns are
- * already in the cost badge.
- * @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>}
+ * in the tooltip.
+ *
+ * THE BADGE IS THE KEY NOW (owner decision 2026-08-05). It used to be the turn cost, and the
+ * cost was the right thing to put there while the mouse was the only way in: a player deciding
+ * between two verbs is deciding how to spend a turn. But the cost of PLACE is one fact you
+ * learn in your first minute and never look up again, and the key is a thing you want on the
+ * button every single turn you play from the keyboard. So the cost moved into the title, where
+ * a fact you consult twice belongs, and the letter took the badge. The free verbs keep their
+ * colouring (`.verb.free`), which is what carries "this one costs nothing" now that no number
+ * is doing it — and it always carried it better than the 0 did.
+ * @type {Partial<Record<ActionKind, { label: string, key: string, title: string }>>}
  */
 const VERBS = {
-  place: { label: 'PLACE', cost: '1', title: 'Build one tile by hand (SPEC §4.1)' },
-  beta: { label: 'BETA ×{left}', cost: '1', title: 'Ship a beta here — users walk out to it and wait there — {left} left' },
-  analyze: { label: 'ANALYZE', cost: '1', title: 'Review this cell — a zero opens its neighbours too' },
-  placeBlock: { label: 'COMMIT BLOCK', cost: '1', title: 'Commit the generated block here' },
-  generate: { label: 'GENERATE', cost: '0', title: 'Draw a block — the turn is charged when you commit it' },
-  flag: { label: 'FLAG', cost: '0', title: 'Mark a suspected defect — costs no turn, and users refuse to walk through it' },
-  wait: { label: 'WAIT', cost: '1', title: 'Let a turn pass' },
+  place: { label: 'PLACE', key: 'P', title: 'Build one tile by hand (SPEC §4.1) · 1 turn · key P' },
+  beta: { label: 'BETA ×{left}', key: 'B', title: 'Ship a beta here — users walk out to it and wait there — {left} left · 1 turn · key B' },
+  analyze: { label: 'ANALYZE', key: 'A', title: 'Review this cell — a zero opens its neighbours too · 1 turn · key A' },
+  placeBlock: { label: 'COMMIT BLOCK', key: '↵', title: 'Commit the generated block here · 1 turn · key Enter' },
+  generate: { label: 'GENERATE', key: 'G', title: 'Draw a block — the turn is charged when you commit it · free · key G' },
+  flag: { label: 'FLAG', key: 'F', title: 'Mark a suspected defect — costs no turn, and users refuse to walk through it · key F' },
+  wait: { label: 'WAIT', key: 'W', title: 'Let a turn pass · 1 turn · key W' },
 };
 
 /** Verbs that spend no turn. They get GENERATE's colouring, which is what "free" looks like here. */
@@ -150,7 +160,13 @@ function el(id) {
 export function createHud(h) {
   const dom = {
     hud: el('hud'),
+    // The level picker, the seed link, the turn counter and the remaining count live in the
+    // drawer (drawer.js) since the top bar went walker-first. They are written here on every
+    // update exactly as they were when they were on the bar — a node behind a scrim is still a
+    // node, and giving the drawer its own render pass would be a second answer to a question
+    // this function already answers.
     level: /** @type {HTMLSelectElement} */ (el('f-level')),
+    menu: el('btn-menu'),
     restart: el('btn-restart'),
     seed: el('seed'),
     tick: el('tick'),
@@ -189,6 +205,7 @@ export function createHud(h) {
   let lastMinimap = null;
 
   dom.level.addEventListener('change', () => h.onLevel(dom.level.value));
+  dom.menu.addEventListener('click', () => h.onMenu());
   dom.restart.addEventListener('click', () => h.onRestart());
   dom.seed.addEventListener('click', () => h.onCopySeed());
   dom.generate.addEventListener('click', () => h.onAction('generate'));
@@ -252,7 +269,12 @@ export function createHud(h) {
     dom.scLost.textContent = String(s.stats.lost ?? 0);
     dom.scLost.style.color = (s.stats.lost ?? 0) > 0 ? PALETTE.RED : '';
 
-    // The forecast trio is persistent, not optional polish (SPEC §6.1).
+    // REMAINING reads out of the drawer now rather than off the bar (2026-08-05). SPEC §6.1's
+    // persistent demand forecast is not weakened by that: it asks that the player can budget
+    // turns against the demand still coming, and SERVED x/y states both ends of that on the bar
+    // — the remainder is the gap between two numbers that are always on screen — while NEXT IN
+    // carries the cadence. This line is the same subtraction spelled out for anyone who would
+    // rather read it than do it, which is a convenience and belongs where conveniences live.
     dom.remaining.textContent = String(s.schedule.total - s.stats.served);
     // Counting down to the ACTION that produces the spawn, not to the tick counter. The
     // pipeline spawns before `tick++` (PLAN §7.1), so a user scheduled for tick N appears
@@ -265,22 +287,30 @@ export function createHud(h) {
     // of them has left. The count says you are behind; the countdown says how long you have
     // to stop being behind, which is the half a player can still answer. Campers on a beta
     // are in both numbers — a beta stages the walk, it does not stop the clock.
+    //
+    // "The least patient of them" is a per-walker question since casting (SPEC §6.6, 2026-08-05):
+    // the bar is `patienceLimit(s, u)`, so a walker cast with a short one can be the worst case
+    // while carrying the *smallest* `waited` on the board. Comparing raw `waited` — or measuring
+    // everybody against the level's number — would put the wrong name on the chip precisely when
+    // the level had gone to the trouble of writing an impatient walker.
     let waiting = 0;
     let soonest = 0;
     /** @type {import('../core/state.js').User | null} */
     let worst = null;
-    const patience = levelParams(s).patience;
     for (const u of s.users) {
       if (u.state !== 'queued' && !(u.state === 'moving' && u.stalled)) continue;
       waiting++;
-      const left = Math.max(0, patience - (u.waited ?? 0));
+      const left = Math.max(0, patienceLimit(s, u) - (u.waited ?? 0));
       if (!worst || left < soonest) { worst = u; soonest = left; }
     }
     dom.waiting.textContent = String(waiting);
     // Nobody waiting means there is no countdown to show — not a zero, which would read as
     // "somebody leaves this turn", the exact opposite of what an empty queue means.
     dom.soonest.textContent = worst ? `·${soonest}` : '';
-    dom.soonest.classList.toggle('urgent', !!worst && patienceSpent(s, worst) >= IMPATIENT_AT);
+    // The alarm is on the WHOLE CHIP now that the chip is the biggest thing on the bar: border,
+    // label and countdown go red together (styles.css), because a bar whose job is to be seen
+    // from across the room may not say "somebody is about to walk out" in one small digit.
+    dom.roster.classList.toggle('urgent', !!worst && patienceSpent(s, worst) >= IMPATIENT_AT);
 
     // Action bar — rebuilt only when what it offers changes, so buttons stay clickable.
     // The flag state is part of the key: FLAG and UNFLAG are the same verb wearing different
@@ -302,7 +332,9 @@ export function createHud(h) {
         b.className = FREE_VERBS.has(kind) ? 'verb free' : `verb${kind === 'beta' ? ' beta' : ''}`;
         b.title = v.title.replaceAll('{left}', String(betas));
         const label = kind === 'flag' && flagged ? 'UNFLAG' : v.label.replaceAll('{left}', String(betas));
-        b.innerHTML = `${label} <i>${v.cost}</i>`;
+        // UNFLAG wears F too: it is the same key on the same cell, and a toggle whose badge
+        // changed with its word would be two controls pretending to be one.
+        b.innerHTML = `${label} <i>${v.key}</i>`;
         b.addEventListener('click', () => h.onAction(kind));
         dom.actionbar.append(b);
       }

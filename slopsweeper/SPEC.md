@@ -373,6 +373,45 @@ itineraries: [['C'], ['B', 'D'], { stops: ['B', 'C', 'D'], ordered: true }]
 
 **What it is for.** A set of stops is a routing problem; a sequence is a *schedule*, and it prices the legs against each other. With `['B','C','D']` loose, closing any one leg serves somebody. Ordered, closing the last leg first serves nobody until the first one opens, so the build order stops being a matter of taste. `delta`'s third itinerary carries it for exactly that reason (§9.2.2).
 
+### 6.6 The walker cast — DECIDED 2026-08-05 (owner decision)
+
+*(Added the same day, and it does overturn one line above: §6.5's "**authored and cycled**" is now "**authored and dealt**". Everything else in §6.5 stands, including the guarantee that a single-destination level is untouched.)*
+
+**A level authors a cast, and every run deals it.** The cast is a pool of *walkers*, not a list of routes:
+
+```js
+walkers: [
+  { stops: ['C'] },
+  { stops: ['B', 'D'] },
+  { stops: ['B', 'C', 'D'], ordered: true },
+  { stops: ['C'], patience: 12 },
+]
+```
+
+`stops` and `ordered` are an itinerary's, with the identical rules and the identical validation. `patience` is the new field and the reason the shape exists at all: a cast that could only vary *where* people go would be an itinerary list wearing a new name.
+
+`walkers` and `itineraries` are **mutually exclusive** — a definition carrying both is a validation error rather than a merge or a precedence rule, because the two fields answer the same question and a level with both is an author who changed their mind halfway. An `itineraries` level is read as a cast of walkers with no patience override, so there is one code path downstream and the older field keeps working.
+
+**The deal is seeded, resolved once, and never stored.** At `init(def, seed)` the pool is dealt against the arrival count into a per-spawn list: entry *k* is the person who walks out on arrival *k*. Three properties, each load-bearing:
+
+- **The demand is still knowable in advance.** The *whole* cast exists before the first turn, so §6.1's forecast is as honest as it was — the player can be shown every stop the level will ask for. This is what rules out the obvious alternative of rolling each user at spawn.
+- **The same seed always deals the same hand**, so a share link, a replay and a refresh are the same game. The deal comes off a **private stream** derived from the seed, created and dropped inside the resolution; the generation and movement streams (PLAN §7.5) are not advanced by a single step, which is how the six tuned levels stayed bit-identical.
+- **Nothing about a walker is saved.** A walker's `id` *is* its casting slot, so its stops, its order and its bar are re-derivable from `(LevelDef, seed)` — which a save already carries. A refresh mid-game rebuilds the identical cast. This is why a per-walker feature landed with no save version and no migration.
+
+**Two branches, decided by the count, and the count is how an author states their intent:**
+
+- **Pool ≥ arrivals — a seeded SUBSET.** Shuffle the pool and take the first *N*. An oversized cast means **some members simply do not appear this run**: twelve roles over nine arrivals is a level that asks nine of twelve possible questions and never the same nine. Opting out costs nothing — write exactly *N* roles and every one is cast, in a shuffled order.
+- **Pool < arrivals — cycle, then shuffle.** The pool is repeated head-to-tail to exactly *N* entries **first**, and only then shuffled, so **the authored mix is exact**: three roles over nine arrivals is 3/3/3 on every seed, four is 3/2/2/2, and only the running order moves. Rolling each slot independently would let a seed deal six of one role and none of another, which turns a mix the author balanced into a lottery and turns the §6.1 forecast into a distribution. **Ratios are authored; order is rolled.**
+
+**Per-walker patience.** `patience` on a cast entry replaces the level's bar *for that walker only*, and it is a bar, not a modifier — an impatient walker on a 12 against a level's 26 leaves after twelve cumulative waiting ticks (§6.4), wherever it is standing. Two consequences worth stating because both are the point:
+
+- **Half a bar is half of that walker's bar.** The intermediate-stop refill (§6.5) is `round(ownPatience × destRefill)`. Any other reading would hand the largest relief in the game to precisely the walkers a cast writes *because* they are fragile.
+- **Every display reads the walker's own bar**, not the level's: the board's impatience shading, the roster's per-person countdown, its gave-up-versus-killed wording, and the HUD's worst-case chip. A walker on a short bar can be the worst case on the board while carrying the *smallest* waiting count, and a HUD that measured everybody against the level's number would name the wrong person exactly when the level had gone to the trouble of writing an impatient one.
+
+**Explicit arrival turns.** `arrivals` may now be `{ at: [2, 5, 9] }` instead of `{ count, firstTick, every }` — the turns spelled out, strictly increasing, and the list's length is the user count. It is the same schedule field in a second shape, for levels whose pressure is a *burst* rather than a cadence, and the two shapes are mutually exclusive on the same reasoning as `walkers`/`itineraries`. Nothing about the schedule's stored form changed: the next arrival is still one number, read off the list instead of added to.
+
+**What the cast is for.** §6.5 made the level's demand richer; this makes it *unrepeatable*. Two games of a level with a cast ask the same questions in a different order, and on an oversized cast they ask different questions — so the second playthrough is a fresh read of the same geometry rather than a faster execution of a remembered plan. Measured on `delta` the day it landed: hand-only had delivered exactly 7 of 9 in all 200 games, a flat line; with the cast it spreads 6–9 for the same mean and posts the level's first non-zero perfect rate.
+
 ---
 
 ## 7. The skill system

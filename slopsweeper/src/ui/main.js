@@ -18,6 +18,7 @@ import { createRenderer, dests, ghostCells } from './renderer.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
 import { createRoster } from './roster.js';
+import { createDrawer } from './drawer.js';
 import { createEffects } from './particles.js';
 import { PALETTE } from './palette.js';
 
@@ -253,19 +254,56 @@ function boot() {
     onJump: (cell) => jumpTo(cell),
   });
 
+  // The menu drawer (drawer.js): the level, the seed link, the turn counter and the remaining
+  // count, moved off the walker-first top bar on 2026-08-05.
+  const drawer = createDrawer();
+
+  /**
+   * Is some panel holding the keyboard? Asked before every keystroke (input.js). The list is
+   * every layer that can be over the board, and it is a list rather than a flag because each of
+   * them owns its own open state and none of them should have to tell the others.
+   * `body.starting` is on it for the frame or two before start.js lands: the board is covered
+   * then, and a covered board must not be playable.
+   * @returns {boolean}
+   */
+  function panelOpen() {
+    return document.body.classList.contains('starting')
+      || roster.isOpen() || drawer.isOpen() || !!endScreen?.isOpen();
+  }
+
+  /**
+   * One verb, whatever pressed it — a button in the action bar, a global, or a letter key.
+   * Both paths meet HERE and go on as the same `{ t, cell, rot? }` tuple, which is SPEC §10.9's
+   * rule kept honestly: the keyboard adds a way to name an intent, not a way to reach the
+   * reducer.
+   *
+   * The legality gate is why this is one function. The action bar only ever draws verbs
+   * `legalActions()` returned, so on that path the check below is dead code — but the keyboard
+   * has no bar in front of it, and a `rejected` event is treated as a UI bug in this file (it
+   * console.warns). So the guard sits in front of the dispatch, and a hotkey can only ever do
+   * what the bar would have offered for that cell.
+   * @param {import('../core/state.js').ActionKind} kind
+   */
+  function act(kind) {
+    const cell = view.selected;
+    switch (kind) {
+      case 'generate': return legalActions(s).includes('generate') ? dispatch({ t: 'generate' }) : undefined;
+      case 'wait': return legalActions(s).includes('wait') ? dispatch({ t: 'wait' }) : undefined;
+      case 'place':
+        return cell >= 0 && legalActions(s, cell).includes('place') ? dispatch({ t: 'place', cell }) : undefined;
+      case 'beta':
+        return cell >= 0 && legalActions(s, cell).includes('beta') ? dispatch({ t: 'beta', cell }) : undefined;
+      case 'analyze':
+        return cell >= 0 && legalActions(s, cell).includes('analyze') ? dispatch({ t: 'analyze', cell }) : undefined;
+      case 'flag': return toggleFlag();
+      // Its own gate: the ghost must be valid, not merely some rotation of it (confirmBlock).
+      case 'placeBlock': return confirmBlock();
+      default: return undefined;
+    }
+  }
+
   const hud = createHud({
-    onAction: (kind) => {
-      switch (kind) {
-        case 'generate': return dispatch({ t: 'generate' });
-        case 'wait': return dispatch({ t: 'wait' });
-        case 'place': return view.selected >= 0 && dispatch({ t: 'place', cell: view.selected });
-        case 'beta': return view.selected >= 0 && dispatch({ t: 'beta', cell: view.selected });
-        case 'analyze': return view.selected >= 0 && dispatch({ t: 'analyze', cell: view.selected });
-        case 'flag': return toggleFlag();
-        case 'placeBlock': return confirmBlock();
-        default: return undefined;
-      }
-    },
+    onAction: act,
     onRotate: rotate,
     onConfirm: confirmBlock,
     onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); else restart(); },
@@ -274,7 +312,11 @@ function boot() {
     onCopySeed: copySeed,
     onRun: toggleRun,
     onZoom: zoomStep,
-    onRoster: () => roster.toggle(s),
+    // The two panels are mutually exclusive by construction. Neither has to know how to layer
+    // itself against the other, which is a cheaper guarantee than any z-index argument, and it
+    // means a tap on a scrim is never ambiguous about which sheet it is dismissing.
+    onRoster: () => { drawer.close(); roster.toggle(s); },
+    onMenu: () => { roster.close(); drawer.toggle(); },
   });
   // Same union `startWith` builds: a restored Lab game boots straight past `startWith`, and
   // without this its own level would be missing from the dropdown, which would then display
@@ -292,7 +334,13 @@ function boot() {
     onRotate: rotate,
     onConfirm: confirmBlock,
     onEscape: () => select(-1),
-    onFlag: toggleFlag,
+    // The keyboard half (2026-08-05). It reaches nothing the pointer does not: `onCursor` is
+    // `select` with the camera made to follow, and `onVerb` is the same `act` the buttons call.
+    getSelected: () => view.selected,
+    onCursor: moveCursor,
+    onVerb: act,
+    onRun: runKey,
+    isBlocked: panelOpen,
     wake: selfHeal,
   });
 
@@ -339,6 +387,7 @@ function boot() {
     view.selected = -1;
     view.rot = 0;
     roster.close();          // a new game's roster is a new set of people; open it yourself
+    drawer.close();          // and a level switch is made FROM the drawer: it has done its job
     endScreen?.close();
     hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
     const url = new URL(location.href);
@@ -404,6 +453,39 @@ function boot() {
     }
     renderer.invalidate();
     refresh();
+  }
+
+  /**
+   * The keyboard cursor landing on a cell: the same selection a tap makes, plus the one thing a
+   * tap never needs — the camera has to go and find it. A finger can only select what is already
+   * on screen, so `select` has never had to move the view and must not start; an arrow key can
+   * walk the cursor straight off the edge of the viewport, and a selection you cannot see is a
+   * turn about to be spent somewhere you are not looking.
+   * @param {number} cell
+   */
+  function moveCursor(cell) {
+    select(cell);
+    ensureVisible(cell);
+  }
+
+  /**
+   * Centre on a cell, but ONLY when it is at or past the edge of the viewport. The margin is one
+   * whole tile, so the cursor is re-centred a step before it leaves rather than the moment it
+   * has: a cursor that only recentres once it is already gone spends every step at the very edge
+   * of the screen, which is the worst place to read a board from.
+   *
+   * When it is comfortably visible nothing happens at all. A camera that recentred on every
+   * arrow press would make the board slide under a player who was only looking around, and
+   * `centerOnCell` clamps to the pan range anyway, so on a board that fits the viewport this is
+   * a no-op however the cursor moves.
+   * @param {number} cell
+   */
+  function ensureVisible(cell) {
+    const r = cam.cellRect(camera, s, cell);
+    const t = cam.tilePx(camera);
+    if (r.x < t || r.y < t || r.x + r.size > camera.cw - t || r.y + r.size > camera.ch - t) {
+      jumpTo(cell);          // the minimap's and the roster's own centring path, deliberately
+    }
   }
 
   /**
@@ -613,6 +695,17 @@ function boot() {
     else startRun();
   }
 
+  /**
+   * Space. The gate is the BUTTON'S OWN disabled flag rather than a second copy of the rule
+   * that sets it — hud.js decides when fast-forward is worth offering (there has to be somebody
+   * who could move, PLAN §12.6), and asking it that way means the key and the button can never
+   * drift apart. Pressing a disabled button does nothing; so does this.
+   */
+  function runKey() {
+    if (/** @type {HTMLButtonElement} */ (hud.runButton()).disabled) return;
+    toggleRun();
+  }
+
   function startRun() {
     if (running || s.phase.k !== 'play') return;
     running = true;
@@ -654,7 +747,11 @@ function boot() {
   const isRunBtn = (t) => t instanceof Node && runBtn.contains(t);
   document.addEventListener('pointerdown', (e) => { if (!isRunBtn(e.target)) stopRun(); }, true);
   document.addEventListener('click', (e) => { if (!isRunBtn(e.target)) stopRun(); }, true);
-  window.addEventListener('keydown', () => stopRun(), true);
+  // Space is the Run button's key, so it is spared here for exactly the reason the button is:
+  // pressing it is how you start, and a rule that stopped the run on any input would make the
+  // toggle unable to toggle. Every other key still stops it, arrows included — looking around
+  // mid-fast-forward is precisely the moment you wanted it to stop.
+  window.addEventListener('keydown', (e) => { if (e.key !== ' ') stopRun(); }, true);
 
   // --- frame model ------------------------------------------------------------------
 

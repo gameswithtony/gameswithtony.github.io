@@ -21,10 +21,10 @@ it was, which the sim table and `test/beta.test.js` both check rather than assum
 
 **Multi-destination itineraries** land the same day (SPEC §2.4/§6.5, §9.2.2): a level may mark
 `B`, `C`, `D`… as well as `A`, and each user carries a list of the ones it has to visit, in any
-order. The lists are authored by the level and handed out round-robin by spawn order, so the
-demand is a property of the level and not of the seed; a level that lists none sends every user
-everywhere, which is why a one-destination level is the game it always was — measured, not
-promised. Reaching a stop that is not the last one refunds half a bar of patience and the walk
+order. The lists are authored by the level and handed out by spawn order (round-robin then; dealt
+from the seed since the walker cast, below — the *mix* is still the level's), and a level that
+lists none sends every user everywhere, which is why a one-destination level is the game it
+always was — measured, not promised. Reaching a stop that is not the last one refunds half a bar of patience and the walk
 carries on; the last one is arrival and scores the point, however far the user went to earn it.
 `src/levels/delta.js` is the first level built for it — two necks into one spine with three
 lobes hanging off it, so SPEC §9.2.2's trunk-versus-branches decision arrives in the first ten
@@ -42,6 +42,20 @@ as a pathfinding bug rather than as a wall you built. It is view-layer only — 
 field, nothing in the tick pipeline reads it. `delta`'s third itinerary is ordered, which cost
 it eleven points of hand-only served; the six tuned levels' sim rows are byte-identical, which
 is checked rather than promised.
+
+**The walker cast** lands last on 2026-08-05 (SPEC §6.6). A level authors a *cast* — `walkers:
+[{ stops, ordered?, patience? }, …]` — and **every run deals it from the seed**: the same seed
+always deals the same hand, so a share link and a refresh are the same game, while a replay asks
+the same questions in a different order. Fewer roles than arrivals keeps the authored mix exact
+(three over nine is 3/3/3) and shuffles only the running order; more roles than arrivals draws a
+*subset*, so some of what a level can ask simply does not come up this run. `patience` on a role
+is that walker's own bar, and every countdown on screen reads it rather than the level's.
+`arrivals` gained a second shape with it — `{ at: [2, 5, 9] }`, the turns spelled out — for
+levels whose pressure is a burst rather than a cadence. **Nothing was stored for any of it**: a
+walker's id is its casting slot, so the whole cast re-derives from `(LevelDef, seed)` on restore,
+and there is no save version, no migration and no new state field. The deal draws on a private
+stream, so the six tuned levels' 36 sim rows are byte-identical again — compared, not asserted.
+`delta` is the worked example: four roles over nine arrivals, one of them impatient.
 
 ## There is no build step, ever
 

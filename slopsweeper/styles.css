@@ -22,13 +22,21 @@
 
   /* Fixed chrome heights — the board is everything left over (see body below). Each
      breakpoint declares the height its own layout needs; nothing is ever content-driven.
-       ≥900px  topbar 1 row  (44) · footer 1 row  (82)
-       560-899 topbar 2 rows (64) · footer 2 rows (96)
-       ≤559px  topbar 3 rows (96) · footer 2 rows (96)
-     Every element whose text can change length (seed, tick, level, forecast values) is
-     given a fixed width below, so which row an item lands on depends on the viewport and
-     nothing else. */
-  --top-h: 44px;
+       ≥900px  topbar 1 row  (46) · footer 1 row  (82)
+       560-899 topbar 1 row  (46) · footer 2 rows (98)
+       ≤559px  topbar 2 rows (72) · footer 2 rows (98)
+     The top bar lost a row at every band on 2026-08-05, and it lost it by losing content:
+     the level picker, the seed, the turn counter and the remaining count went into #drawer,
+     leaving three items up here and a WAITING chip big enough to be seen from across the
+     room. The arithmetic for each band is in the media queries below.
+     46 rather than the 44 the one-row bar used to run at: the walker chip measures 26.7 (a
+     19px number, 6 of padding, 2 of border) and the row's own content is 41.7 of it, so 44
+     would fit. The extra two are deliberate air around the one thing up here that is meant
+     to be looked at, and they are the whole cost of the change to the board's height.
+     Every element whose text can change length (the strip's three values, and the seed and
+     tick inside the drawer) is still given a fixed width, so which row an item lands on
+     depends on the viewport and nothing else. */
+  --top-h: 46px;
   --hud-h: 82px;
 
 }
@@ -86,7 +94,7 @@ body {
   flex-wrap: nowrap;        /* wrapping here used to move the board (see #actionbar) */
 }
 
-.field, .chip, .forecast > span, .forecast > button, .hint {
+.field, .chip, .hint {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -94,7 +102,12 @@ body {
   color: var(--dim);
 }
 
+/* Fixed height as well as fixed widths. The menu button carries a 13px glyph where every other
+   chip carries 11px text, and a chip 2px shorter than the one beside it is the kind of thing
+   nobody can name and everybody can see. 25 is the natural height of an 11px line in this box
+   (15.4 + 8 of padding + 2 of border), rounded up, so no chip changes size to obey it. */
 .chip {
+  height: 25px;
   padding: 4px 8px;
   border: 1px solid var(--edge);
   border-radius: 3px;
@@ -106,37 +119,6 @@ body {
   flex: none;
 }
 
-/* Widths that must not depend on their contents: a ten-digit random seed or a four-digit
-   tick must wrap the top bar exactly the way a one-digit one does. */
-#seed { width: 128px; justify-content: center; overflow: hidden; white-space: nowrap; }
-#tick { display: inline-block; min-width: 30px; text-align: right; }
-/* 18px holds the two digits every one of these values can reach (arrivals top out in the
-   teens, the next-arrival countdown at the level's cadence). Trimmed from 22 when the waiting
-   item grew its second number — the row-packing arithmetic in the media queries below is
-   what pays for that, and it had to come from somewhere. */
-.forecast b { display: inline-block; min-width: 18px; text-align: right; }
-
-/* The waiting item is a BUTTON: it opens the roster (src/ui/roster.js). It keeps the chip's
-   border so it reads as tappable among the forecast's plain spans, and a FIXED width so a
-   two-digit count or a two-digit countdown cannot rewrap the top bar — the same rule every
-   other variable-length item up here follows. 102px holds the worst case measured in Chrome —
-   WAITING 12 ·20 comes to 99 with its padding and gaps, and the three left over are the
-   difference between a fixed width and a lucky one. */
-#btn-roster {
-  width: 102px;
-  gap: 4px;
-  padding: 4px 6px;
-  justify-content: center;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* Inside the chip the numbers pack tight against their labels; the fixed width above is what
-   holds the layout still, so a min-width here would only push the pair off-centre. */
-#btn-roster b { min-width: 0; }
-#fc-soonest { color: var(--dim); }
-#fc-soonest.urgent { color: var(--red); }
-
 /* Label variants, swapped by the breakpoints below: `narrow` at ≤899, `tiny` at ≤559. */
 .narrow-only, .tiny-only { display: none; }
 
@@ -144,25 +126,86 @@ body {
 
 b { color: var(--paper); font-weight: 700; }
 
-/* 8px rather than the 12 it carried before the waiting item became a two-number chip: the
-   trio is the last thing on the top bar's single row at ≥900, and the row's own worst case
-   (131 + 66 + 128 + 80 + 148 + trio, five 8px gaps, 20 of padding) is what pays for the chip.
-   Measured in Chrome at the widest labels every item can show. */
-.forecast {
+/* The menu button. Fixed width for the same reason everything up here is: the ☰ loses its word
+   below 900px (see the media query), and a button that resized on a breakpoint would move the
+   walker strip a few pixels sideways for no reason a player could name. */
+#btn-menu { width: 74px; justify-content: center; }
+#btn-menu .burger { font-size: 13px; line-height: 1; }
+
+/* --- the walker strip (owner decision 2026-08-05) -----------------------------------
+   The three items that say how the run is going, in the order you need them: how many people
+   are standing still and for how much longer, when the next one lands, and what the score is
+   so far. Nothing else is allowed onto this bar. */
+#walkers {
   display: flex;
-  gap: 8px;
-  margin-left: auto;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;      /* a beat of air after RESTART: the strip is a different subject */
+  min-width: 0;
+  flex: none;
 }
 
-/* The score chip stands exactly where the confidence meter did, at exactly its widths — the
-   topbar's row packing is measured to the pixel in the media queries below, and a wider chip
-   pushed the spec-mandated forecast trio (SPEC §6.1) onto a clipped fourth row. Below 900px
-   it drops its words for a compact `9/12 ✕2`, the way the tray's ROTATE becomes ROT. */
-#score { width: 148px; justify-content: center; gap: 4px; }
+#walkers .chip { flex: none; }
+
+/* THE TENSION METER. Everything else in the chrome is 11px and this is 19px, deliberately:
+   it is the one number in the game that decides whether you are winning, and the owner's call
+   on 2026-08-05 was that it should be the thing the eye lands on when it comes back up from
+   the board. It is still a BUTTON — it opens the roster (src/ui/roster.js), which is where the
+   two numbers turn back into people.
+   Fixed width, like every variable-length item this bar has ever carried, and LEFT-ALIGNED
+   inside it rather than centred: the countdown comes and goes (an empty queue has none to
+   show), and centred content would slide the word WAITING sideways every time somebody
+   started or stopped waiting. 136 against a worst case of 132.2 measured in Chrome — WAITING
+   12 ·20, the widest thing it can say — which is the same three-and-a-bit px of slack the
+   footer's tightest row has always run on. The narrow band's own number is below. */
+#btn-roster {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 136px;
+  padding: 3px 9px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  font: inherit;
+  color: var(--dim);
+  cursor: pointer;
+  flex: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#btn-roster .wl-label { font-size: 11px; letter-spacing: 0.1em; color: var(--coast); }
+#btn-roster b { font-size: 19px; line-height: 1; color: var(--paper); }
+/* The countdown is a hair smaller and a shade quieter than the count, and sits right against
+   it: they are one reading — four people, five turns — not two chips that happen to be
+   adjacent. Written as `#btn-roster #fc-soonest` rather than `#fc-soonest`, because the rule
+   above it is `#btn-roster b` and an id alone loses to an id plus a type. The plain form was
+   the first draft and did nothing at all. */
+#btn-roster #fc-soonest { font-size: 15px; color: var(--dim); }
+#btn-roster:hover { border-color: var(--select); }
+
+/* Red is not a tint on one number here: the countdown, the word and the border all go at once,
+   so the chip reads as an alarm from the far side of the screen rather than as a digit that
+   changed colour. The threshold is renderer.js's IMPATIENT_AT — the same two thirds of a
+   patience bar the board's own dot uses, because the board and the bar may never disagree
+   about who is in trouble. Declared after :hover so an alarmed chip stays red under the
+   cursor; the two selectors weigh the same and source order is the whole rule. */
+#btn-roster.urgent { border-color: var(--red); background: rgba(212, 64, 92, 0.14); }
+#btn-roster.urgent .wl-label, #btn-roster.urgent #fc-soonest { color: var(--red); }
+
+/* NEXT IN and SERVED · LOST: the arrival forecast SPEC §6.1 requires, kept on the bar when
+   REMAINING went into the drawer. Ordinary chip size, because they are context for the big
+   number rather than competition for it. */
+.wk-next { width: 86px; justify-content: center; }
+/* 156, not the 148 this chip carried while it was competing for room with four other items:
+   SERVED 12/12 · LOST 12 measures 151.6 in Chrome, so 148 was clipping the worst case it can
+   actually reach on a twelve-user level. The walker strip is the only thing on the bar now,
+   and the first thing that room bought was the score not lying at the end of a bad run. */
+#score { width: 156px; justify-content: center; gap: 4px; }
 #score b { color: var(--paper); }
 #score .sep { color: var(--edge); }
-#score .narrow-only { color: var(--dim); margin-left: 2px; }
+#score .tiny-only { color: var(--dim); margin-left: 2px; }
 
 /* --- board ------------------------------------------------------------------ */
 
@@ -184,8 +227,12 @@ b { color: var(--paper); font-weight: 700; }
   image-rendering: pixelated;
 }
 
+/* Above the panel scrims (35): SEED is copied from inside the drawer, and the toast that says
+   it worked has to be readable through the thing you copied it from. #board makes no stacking
+   context of its own, so these compete in the root context and 36 is enough. */
 #toast, #notice {
   position: absolute;
+  z-index: 36;
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 12px;
@@ -603,7 +650,9 @@ body.starting #board > * { visibility: hidden; }
   background: var(--chrome);
 }
 
-.roster-head {
+/* The drawer's head is the roster's head — same object, same card, other edge — so it shares
+   the rules rather than restating them a hundred lines further down. */
+.roster-head, .drawer-head {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -612,7 +661,7 @@ body.starting #board > * { visibility: hidden; }
   border-bottom: 1px solid var(--edge);
 }
 
-.roster-head h2 {
+.roster-head h2, .drawer-head h2 {
   margin: 0;
   font-size: 12px;
   font-weight: 400;
@@ -621,7 +670,8 @@ body.starting #board > * { visibility: hidden; }
 }
 
 .roster-head .hint { margin-left: auto; font-size: 10px; }
-#roster-close { padding: 4px 8px; flex: none; }
+.drawer-head h2 { margin-right: auto; }
+#roster-close, #drawer-close { padding: 4px 8px; flex: none; }
 
 /* The list scrolls INSIDE the card, like every other overlay here: the page behind it is a
    fixed-height grid and must not learn that a long roster exists. */
@@ -690,15 +740,100 @@ button.ru-row:hover { border-color: var(--select); }
 
 .ru-empty { padding: 10px 7px; font-size: 11px; color: var(--dim); }
 
-/* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
+/* --- the menu drawer (src/ui/drawer.js) ---------------------------------------------
+   The roster's twin on the other edge of the screen, and deliberately built out of the same
+   parts: scrim you can tap through, card hung under the top bar rather than over it, Esc to
+   dismiss. Under the bar because the ☰ that opened it stays visible and stays the button that
+   puts it away, which is the whole gesture on a phone.
+   Same z-index 35 as the roster, and the two are never open at once (main.js closes one to
+   open the other) — so there is no layering question to answer, which is the only kind of
+   layering answer worth having. Same 0.55 scrim too: this is read against the board, because
+   half of what you come in here for is to see which level you are standing on. */
+#drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 8px;
+  padding-top: calc(var(--top-h) + 6px);
+  /* Inset from the footer as well as the header at every width, unlike the roster: this card
+     is four rows tall and will never need the room, so the two bars stay uncovered and the
+     drawer reads as something that opened *between* them. */
+  padding-bottom: calc(var(--hud-h) + env(safe-area-inset-bottom, 0px) + 6px);
+  background: rgba(13, 16, 22, 0.55);
+}
+
+#drawer-card {
+  display: flex;
+  flex-direction: column;
+  width: min(280px, 100%);
+  max-height: 100%;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  animation: drawer-in 120ms ease-out;
+}
+
+/* The one animation in the chrome, and it is 120ms because its whole job is to say which edge
+   the panel came from. A keyframe rather than a transition: the panel is display:none between
+   openings, so there is no start frame for a transition to run from. */
+@keyframes drawer-in {
+  from { transform: translateX(-10px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #drawer-card { animation: none; }
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* One row shape for every line in here — label left, value right — so LEVEL, TURN and
+   REMAINING read as one list rather than as three controls that happen to be stacked. */
+.drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+
+/* Inside the drawer the panel is a fixed 280px, so a ten-digit seed or a four-digit tick can
+   no longer reach the top bar at all. That is the quiet win of the move: these two used to be
+   load-bearing on the bar's row packing, and now they are load-bearing on nothing. */
+.drawer-row select { width: 130px; flex: none; }
+.drawer-row b { min-width: 30px; text-align: right; }
+#seed { justify-content: center; overflow: hidden; white-space: nowrap; }
+
+/* --- ≤899px: two-row footer, and the topbar still fits on one -----------------------
    One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
    squeezing the action bar to nothing — and a clipped verb button whose centre lands on
    Generate steals a turn. So the footer becomes a fixed two-row grid: the verbs (or the
    block tray) get a full row to themselves, Generate/Wait and the minimap get the other.
    Row heights are fixed, so the board still never moves at runtime.
        footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
-       topbar row 1 (fixed widths) 133+67+128+83+88 + 4×6 = 523 ≤ 544 at 560px;
-       the forecast takes row 2:   26 + 6 + 16 + 12 + 1 border = 61 ≤ 64 = --top-h
+   The TOPBAR keeps its single row all the way down to 560px now, which it never managed while
+   it was carrying five items. It pays for that by dropping the word off the menu button (the
+   ☰ is the control; MENU was the label on it) and by nothing else. Measured in Chrome at 560:
+       ☰ 34 + RESTART 65.8 + strip 390 + 6 lead-in + 2×6 gaps + 16 padding = 515.8 ≤ 544
+       strip = WAITING 136 + 6 + NEXT IN 86 + 6 + SERVED·LOST 156
+   — 36px still to spare at the bottom of the band, which is the first slack this row has had in
+   three revisions. Height is unchanged at 46: the walker chip is the tallest thing up here at
+   every band, and it does not shrink until 560 (below).
    Footer widths at the worst case (280px wide, 268px usable), measured in Chrome:
        row 1 in play    PLACE 76 + 6 + ANALYZE 91                      = 173
        row 1 placing    tray 2+12+32+6+134                             = 186
@@ -709,11 +844,10 @@ button.ru-row:hover { border-color: var(--select); }
    ever close to full — 265 of 268, with the 3px of slack the tray row has always had.
    Between 560 and 899 the row holds all three at full length.                            */
 @media (max-width: 899px) {
-  :root { --top-h: 64px; --hud-h: 98px; }
+  :root { --hud-h: 98px; }
 
   #topbar { gap: 6px; padding: 6px 8px; }
-  .forecast { gap: 8px; width: 100%; margin-left: 0; justify-content: space-between; }
-  #score { width: 88px; gap: 2px; }
+  #btn-menu { width: 34px; }        /* the word goes, the glyph stays: .narrow-hide does it */
   button { padding: 6px 9px; }
 
   #hud {
@@ -788,29 +922,38 @@ button.ru-row:hover { border-color: var(--select); }
   #roster-card { width: 100%; }
 }
 
-/* --- ≤559px: the top bar genuinely needs three rows --------------------------------
-   Row 1 stops fitting level+restart+seed+tick+score (523px of fixed-width content) below
-   ~539px, so the forecast trio — persistent, spec-mandated UI (SPEC §6.1) — was being cut
-   mid-glyph. Three rows of 26 + two 6px gaps + 12 padding + 1 border = 93 ≤ 96 = --top-h.
-   The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT) and is allowed to share
-   a row, so the worst packing in this band is:
-       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [score 76 + fc 183]
-       320px (308 usable): [field + restart + seed 299] [tick + score 165] [fc 183]
-   — three rows at every width in the band, and the trio is never clipped.
-
-   The trio measured 166 before the waiting item became the roster chip and grew a second
-   number. It is 183 now (48 + 48 + 74 and two 6px gaps, measured in Chrome), and most of the
-   difference came from inside the trio rather than from the row: LEFT and NEXT give up 6px of
-   value gutter each — min-width 16 here, and two digits measure 13. Row three lands at
-   76 + 6 + 183 = 265 of 268 at the 280px worst case, which is the same 3px of slack the
-   footer's own tightest row has always run on.                                             */
+/* --- ≤559px: the walker strip takes a row of its own -------------------------------
+   Below 560 the single row runs out (515 of fixed-width content against 268 usable at the
+   280px worst case), so the bar wraps into two — and WHICH two is the whole design of this
+   band. The strip is never the thing that breaks: it is given `width: 100%`, so it always
+   lands whole on row two and the countdown can never be the item that falls off the end.
+   Row one is then the two controls, which are short words that can share any width.
+       280px (268 usable) row 1: ☰ 34 + RESTART 65.8 + 6 gap                   = 105.8
+                           row 2: WAITING 104 + NEXT 64 + SERVED·LOST 82
+                                  + 2×6 gaps                                   = 262 ≤ 268
+   Every one of those three is its own worst case measured in Chrome plus a little — 98.9,
+   62.8 and 78.8 for WAIT 12 ·20, NEXT 12 and 12/12 ✕12 — so six px are left over at the
+   narrowest phone anyone still ships. The strip spreads across whatever more it gets
+   (space-between) rather than huddling at the left.
+   The labels shorten here the way the tray's ROTATE becomes ROT — WAITING to WAIT, NEXT IN to
+   NEXT, LOST to ✕ — and the big number gives up two of its nineteen points. It is still six
+   points larger than anything else on the bar, which is the only property that matters.
+   Heights, measured in Chrome: row 1 is a 25px chip, row 2 the 25.4px walker chip (a 17px
+   number, 6 of padding, 2 of border).
+       25 + 6 gap + 25.4 + 12 padding + 1 border = 69.4 ≤ 72 = --top-h
+   Two rows here cost 4px LESS than the three rows this band used to need, so the phone board
+   is taller than it was before the bar was rethought.                                      */
 @media (max-width: 559px) {
-  :root { --top-h: 96px; }
+  :root { --top-h: 72px; }
   #topbar, #hud { padding-left: 6px; padding-right: 6px; }
-  #score { width: 76px; }
-  .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
-  .forecast b { min-width: 16px; }
-  #btn-roster { width: 74px; padding: 3px 4px; }
+
+  #walkers { width: 100%; margin-left: 0; justify-content: space-between; }
+  #btn-roster { width: 104px; padding: 3px 7px; gap: 4px; }
+  #btn-roster b { font-size: 17px; }
+  #btn-roster #fc-soonest { font-size: 14px; }   /* see the specificity note on the base rule */
+  .wk-next { width: 64px; }
+  #score { width: 82px; gap: 2px; }
+
   .tiny-hide { display: none; }
   .tiny-only { display: inline; }
 }

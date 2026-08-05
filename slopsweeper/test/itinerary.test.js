@@ -156,15 +156,28 @@ const PLUS = {
   patience: 40,
 };
 
-test('itineraries are cycled by spawn order — no RNG, same lists every game', () => {
+test('itineraries are DEALT by seed — the mix is the level, the order is the game', () => {
+  //  Revised 2026-08-05 (owner decision — the walker cast list, SPEC §6.6). This test used to
+  //  assert the round-robin: user 0 takes the first list, user 1 the second, on every seed. That
+  //  guarantee is deliberately GONE. What the level still owns is the *mix* — three entries over
+  //  six arrivals is two of each, on every seed — and what the seed now owns is the order.
   const level = { ...PLUS, itineraries: [['B'], ['C', 'E'], ['B', 'C', 'D', 'E']] };
   const lists = (/** @type {number} */ seed) =>
     waits(init(level, seed), 8).s.users.map((u) => u.todo.join(''));
 
   // dests are B=2, C=14, D=10, E=22 → indexes B0, C1, D2, E3.
-  assert.deepEqual(lists(1), ['0', '13', '0123', '0', '13', '0123']);
-  assert.deepEqual(lists(999), lists(1), 'a different seed cannot deal a different hand');
-  assert.deepEqual(lists(1)[0], lists(1)[3], 'and the cycle wraps at the list length');
+  const counted = (/** @type {string[]} */ hand) => hand.slice().sort().join(' ');
+  const EXPECTED = counted(['0', '0', '13', '13', '0123', '0123']);
+  for (const seed of [1, 2, 3, 999, 20260805]) {
+    assert.equal(counted(lists(seed)), EXPECTED, `seed ${seed} dealt a different mix`);
+  }
+
+  // Same seed, same hand — the determinism half, which is what makes a share link a share link.
+  assert.deepEqual(lists(1), lists(1));
+  assert.deepEqual(lists(999), lists(999));
+  // …and some pair of seeds really does deal a different order, which is the other half. Two
+  // named seeds rather than a sweep: this must fail loudly if the shuffle ever stops shuffling.
+  assert.notDeepEqual(lists(1), lists(2), 'seeds 1 and 2 dealt the identical order');
 });
 
 test('a level that lists none sends every user to every destination', () => {

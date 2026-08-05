@@ -447,3 +447,35 @@ export function setLevelParams(s, p) {
 export function levelParams(s) {
   return PARAMS.get(s.terrain) ?? LEVEL_DEFAULTS;
 }
+
+/**
+ * **How long THIS user will wait** (owner decision 2026-08-05 — the walker cast list, SPEC §6.6).
+ *
+ * Patience used to be one number a level set, and every reader in the game asked
+ * `levelParams(s).patience` for it. A cast may now give a walker its own bar — an impatient
+ * stakeholder who leaves in twelve where the level's own bar is twenty-six — and the moment that
+ * is true, `levelParams(s).patience` stops being the answer to "how long will this person wait"
+ * and becomes the answer to "what does this level default to". Those are different questions and
+ * four places in the codebase were asking the first one with the second one's expression.
+ *
+ * So: **one helper, and every reader asks it.** The reducer's patience step, the intermediate-stop
+ * refill, the board's impatience shading, the roster's LEAVES IN countdown and its gave-up-versus-
+ * killed derivation, and the HUD's worst-case countdown. A second implementation of this lookup
+ * anywhere would mean a user the board says is fine and the reducer has already given up on.
+ *
+ * **The override rides in the cast, which is why nothing was stored.** `u.id` is the casting slot
+ * — spawn k is cast entry k, by construction (`reduce.spawns`) — so the walker's own numbers are
+ * re-derivable from `(LevelDef, seed)` at any moment, which is exactly what a restore does. No
+ * field on `User`, no save version, no migration.
+ *
+ * Defensive on the way in, like every other params read: a state whose parameters were never
+ * associated falls back to `LEVEL_DEFAULTS`, whose cast is empty, and an empty cast means the
+ * level's bar for everybody — the game as it was.
+ * @param {GameState} s
+ * @param {{ id: number }} u
+ * @returns {number}
+ */
+export function patienceLimit(s, u) {
+  const p = levelParams(s);
+  return p.cast?.[u.id]?.patience ?? p.patience;
+}

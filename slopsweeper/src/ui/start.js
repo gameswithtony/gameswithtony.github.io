@@ -69,8 +69,9 @@ const HELP = [
     'Careful: users will cross unreviewed AI code to reach a beta.',
   ]],
   ['CONTROLS', [
+    'Tap a cell to select it, then act from the bar at the bottom. Or stay on the keyboard: arrow keys move the selection, and every button wears its key. P places, G generates, A analyzes, F flags, B ships a beta, W waits, Space runs.',
+    'R rotates a block, Enter commits it, Esc deselects.',
     'Drag to pan. Pinch, scroll, or the + and − buttons to zoom. Tap the minimap to jump anywhere.',
-    'R rotates a block, F flags the selected cell, Enter confirms, Esc deselects.',
     'WAIT passes one turn without building. RUN keeps passing turns until something needs your attention.',
   ]],
 ];
@@ -155,6 +156,7 @@ export function shareText(f) {
  * @property {() => void} help       the "?" in the HUD
  * @property {(f: EndFacts) => void} end
  * @property {() => void} close
+ * @property {() => boolean} isOpen  any of the four is up: the keyboard is not the board's
  */
 
 /**
@@ -412,5 +414,13 @@ export function createStart(h) {
     /** @param {EndFacts} f */
     end: (f) => (f.won ? openWin(f) : openLose(f)),
     close: () => show(null),
+
+    /**
+     * Whether any of the four cards is up. main.js asks before letting a keystroke reach the
+     * board: an end screen is a decision and the rules are a page of text, and neither is a
+     * place where W should pass a turn on the game behind it. Read off the DOM rather than off
+     * a flag of our own, because `show()` is already the single source of that truth.
+     */
+    isOpen: () => Object.values(panels).some((node) => !node.classList.contains('hidden')),
   };
 }

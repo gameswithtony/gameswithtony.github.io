@@ -84,7 +84,7 @@ export function validateLevel(def) {
     }
   }
 
-  checkItineraries(def, m, errors);
+  checkCast(def, m, errors);
 
   const stranded = strandedOcean(m, reach);
   if (stranded > 0) {
@@ -103,51 +103,138 @@ function letter(i) {
 }
 
 /**
- * Itineraries are letters, so they are checked against the letters the map actually carries
- * (PLAN §9.1). Structural only, like everything else here: whether a level *should* send a
- * user to C and D but never B is a design question, and this file does not have those.
+ * The cast, in whichever of its two fields the level wrote it (PLAN §9.1). Structural only, like
+ * everything else here: whether a level *should* send a user to C and D but never B is a design
+ * question, and this file does not have those.
  *
- * Revised 2026-08-05 (owner decision — opt-in ordered visitation, SPEC §6.5): an entry may be
- * the original `string[]` or `{ stops: string[], ordered?: boolean }`. The two shapes are
- * unwrapped to the same `stops` array and then checked by the same loop, so there is exactly
- * one implementation of "these are the rules for a list of stops" and the object form cannot
- * quietly drift into accepting a duplicate the array form refuses. `ordered` is the only new
- * rule: a boolean if it is there at all. Whether ordering a list makes the level *harder* is,
- * again, a design question.
+ * Revised 2026-08-05 (owner decision — the walker cast list, SPEC §6.6). `walkers` is the newer,
+ * wider field and `itineraries` the older, narrower one, and **a level may not carry both**. That
+ * is an error rather than a merge or a precedence rule on purpose: the two fields say the same
+ * kind of thing, so a definition with both is one whose author changed their mind halfway, and
+ * the useful answer is to say so rather than to silently run whichever the code happens to
+ * prefer. Everything else is shared — one `checkStops` implementation, so the two fields cannot
+ * drift into accepting different letters.
  * @param {LevelDef} def
  * @param {import('./grid.js').ParsedMap} m
  * @param {string[]} errors
  */
-function checkItineraries(def, m, errors) {
-  const list = def.itineraries;
-  if (list === undefined) return;
-  if (!Array.isArray(list)) {
-    errors.push('itineraries must be an array of destination-letter arrays');
-    return;
+function checkCast(def, m, errors) {
+  // "Both" means both carrying entries, not both keys existing: `resolveLevel` fills every
+  // optional field from the defaults, so a resolved level always has an `itineraries` and a
+  // `walkers` and one of them is `[]`. An empty list is a level that did not author that field.
+  if (def.itineraries?.length && def.walkers?.length) {
+    errors.push('a level lists either itineraries or walkers, never both — walkers is the wider field, so keep that one');
   }
   const known = new Set(m.dests.map((_, i) => letter(i)));
-  list.forEach((entry, n) => {
-    const object = !Array.isArray(entry) && !!entry && typeof entry === 'object';
-    const stops = object ? /** @type {{ stops: string[] }} */ (entry).stops : entry;
-    if (object && /** @type {{ ordered?: unknown }} */ (entry).ordered !== undefined
-      && typeof /** @type {{ ordered?: unknown }} */ (entry).ordered !== 'boolean') {
-      errors.push(`itineraries[${n}].ordered must be a boolean`);
+
+  if (def.itineraries !== undefined) {
+    if (!Array.isArray(def.itineraries)) {
+      errors.push('itineraries must be an array of destination-letter arrays');
+    } else {
+      def.itineraries.forEach((entry, n) => checkStops(`itineraries[${n}]`, entry, known, errors, false));
     }
-    if (!Array.isArray(stops) || stops.length === 0) {
-      errors.push(`itineraries[${n}] must be a non-empty array of destination letters, or { stops: [...], ordered }`);
+  }
+
+  if (def.walkers !== undefined) {
+    if (!Array.isArray(def.walkers)) {
+      errors.push('walkers must be an array of { stops, ordered?, patience? }');
       return;
     }
-    /** @type {Set<string>} */
-    const seen = new Set();
-    for (const ch of stops) {
-      if (typeof ch !== 'string' || !known.has(ch)) {
-        errors.push(`itineraries[${n}] names '${ch}', which is not a destination on this map`);
-      } else if (seen.has(ch)) {
-        errors.push(`itineraries[${n}] visits '${ch}' twice`);
-      }
-      if (typeof ch === 'string') seen.add(ch);
+    def.walkers.forEach((entry, n) => checkStops(`walkers[${n}]`, entry, known, errors, true));
+  }
+}
+
+/**
+ * One entry of either field: the rules for a list of stops, written once.
+ *
+ * Both shapes — the bare `['B','D']` and the object `{ stops, ordered }` — unwrap to the same
+ * `stops` array and are then checked by the same loop, so the object form cannot quietly drift
+ * into accepting a duplicate the array form refuses. `walkers` accepts the bare array too, and
+ * that is deliberate rather than an oversight: an entry with no options *is* just a list of
+ * stops, and refusing to read one would be this file having an opinion about style.
+ *
+ * `ordered` must be a boolean if it is present at all. `patience` is checked only where it means
+ * something — an `itineraries` entry that carries one is naming a field that field has never had,
+ * and the error says which list it was found in.
+ * @param {string} label       how the message names this entry
+ * @param {unknown} entry
+ * @param {Set<string>} known  the destination letters this map carries
+ * @param {string[]} errors
+ * @param {boolean} allowPatience  true for `walkers`, the only field with a per-walker bar
+ */
+function checkStops(label, entry, known, errors, allowPatience) {
+  const object = !Array.isArray(entry) && !!entry && typeof entry === 'object';
+  const rec = /** @type {{ stops?: unknown, ordered?: unknown, patience?: unknown }} */ (
+    object ? entry : {});
+  const stops = object ? rec.stops : entry;
+  if (rec.ordered !== undefined && typeof rec.ordered !== 'boolean') {
+    errors.push(`${label}.ordered must be a boolean`);
+  }
+  if (rec.patience !== undefined) {
+    if (!allowPatience) {
+      errors.push(`${label} sets a patience, which only a walkers entry may do`);
+    } else if (!Number.isInteger(rec.patience) || /** @type {number} */ (rec.patience) < 1) {
+      errors.push(`${label}.patience must be a positive integer (got ${rec.patience})`);
     }
-  });
+  }
+  if (!Array.isArray(stops) || stops.length === 0) {
+    errors.push(`${label} must be a non-empty array of destination letters, or { stops: [...], ordered }`);
+    return;
+  }
+  /** @type {Set<string>} */
+  const seen = new Set();
+  for (const ch of stops) {
+    if (typeof ch !== 'string' || !known.has(ch)) {
+      errors.push(`${label} names '${ch}', which is not a destination on this map`);
+    } else if (seen.has(ch)) {
+      errors.push(`${label} visits '${ch}' twice`);
+    }
+    if (typeof ch === 'string') seen.add(ch);
+  }
+}
+
+/**
+ * The arrival schedule, in either of its two shapes (owner decision 2026-08-05, SPEC §6.1).
+ *
+ * `{ count, firstTick, every }` is the cadence; `{ at: [...] }` is the list of turns, and its
+ * length is the count. **A definition carrying fields from both is an error, not a merge**: the
+ * two forms answer the same question and a mixture is an author mid-edit, so the useful thing is
+ * to name the collision rather than to pick a winner and ship a schedule nobody wrote.
+ *
+ * The list must be strictly increasing rather than merely sorted, because two users listed on
+ * the same turn is not a thing the schedule can express — `spawns` walks the list one entry per
+ * arrival — and a repeated turn is therefore a typo the author would want back. It must be
+ * non-empty for the same reason `count` must be positive: a level with no arrivals cannot be won
+ * or lost, it just runs.
+ * @param {import('./rules.js').Arrivals} a
+ * @param {string[]} errors
+ */
+function checkArrivals(a, errors) {
+  if (!a || typeof a !== 'object') {
+    errors.push('arrivals must be { count, firstTick, every } or { at: [...] }');
+    return;
+  }
+  const listed = a.at !== undefined;
+  const cadence = a.count !== undefined || a.firstTick !== undefined || a.every !== undefined;
+  if (listed && cadence) {
+    errors.push('arrivals is either { count, firstTick, every } or { at: [...] } — not both');
+    return;
+  }
+  if (listed) {
+    const at = a.at;
+    if (!Array.isArray(at) || at.length === 0) {
+      errors.push('arrivals.at must be a non-empty array of turn numbers');
+      return;
+    }
+    at.forEach((t, i) => {
+      if (!Number.isInteger(t) || t < 0) errors.push(`arrivals.at[${i}] must be a non-negative integer (got ${t})`);
+      else if (i > 0 && t <= at[i - 1]) errors.push(`arrivals.at must be strictly increasing (${at[i - 1]} then ${t})`);
+    });
+    return;
+  }
+  if (!Number.isInteger(a.count) || /** @type {number} */ (a.count) < 1) errors.push(`arrivals.count must be a positive integer (got ${a.count})`);
+  if (!Number.isInteger(a.firstTick) || /** @type {number} */ (a.firstTick) < 0) errors.push(`arrivals.firstTick must be a non-negative integer (got ${a.firstTick})`);
+  if (!Number.isInteger(a.every) || /** @type {number} */ (a.every) < 1) errors.push(`arrivals.every must be a positive integer (got ${a.every})`);
 }
 
 /**
@@ -156,14 +243,7 @@ function checkItineraries(def, m, errors) {
  * @param {string[]} warnings
  */
 function checkNumbers(def, errors, warnings) {
-  const arrivals = def.arrivals ?? LEVEL_DEFAULTS.arrivals;
-  if (!arrivals || typeof arrivals !== 'object') {
-    errors.push('arrivals must be { count, firstTick, every }');
-  } else {
-    if (!Number.isInteger(arrivals.count) || arrivals.count < 1) errors.push(`arrivals.count must be a positive integer (got ${arrivals.count})`);
-    if (!Number.isInteger(arrivals.firstTick) || arrivals.firstTick < 0) errors.push(`arrivals.firstTick must be a non-negative integer (got ${arrivals.firstTick})`);
-    if (!Number.isInteger(arrivals.every) || arrivals.every < 1) errors.push(`arrivals.every must be a positive integer (got ${arrivals.every})`);
-  }
+  checkArrivals(def.arrivals ?? LEVEL_DEFAULTS.arrivals, errors);
 
   const density = def.mineDensity ?? LEVEL_DEFAULTS.mineDensity;
   if (typeof density !== 'number' || !Number.isFinite(density) || density < 0 || density > 1) {

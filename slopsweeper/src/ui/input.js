@@ -1,16 +1,25 @@
 // @ts-check
-// Pointer Events → intents. This module never touches game state: it emits a cell, a
-// rotate, a confirm, or a camera change, and `main.js` is the only thing that dispatches
-// reducer actions — and only ever as `{ t, cell, rot? }` tuples (SPEC §10.9).
+// Pointer Events and the keyboard → intents. This module never touches game state: it emits a
+// cell, a rotate, a confirm, a verb, or a camera change, and `main.js` is the only thing that
+// dispatches reducer actions — and only ever as `{ t, cell, rot? }` tuples (SPEC §10.9).
 //
 // Two-step select→act (SPEC §10.6): a tap on the board selects, and nothing on the board
 // ever spends a turn. Only the action bar does. That kills the tap-vs-pan misfire class by
 // construction, which matters when a misfire costs a scarce turn.
+//
+// THE KEYBOARD IS THE SAME GAME (owner decision 2026-08-05). It stopped being the dev
+// convenience it was and became a full second way to play, and it did that without a second
+// code path: an arrow key produces a CELL INDEX and hands it to the same sink a tap does, and
+// a letter key produces an ActionKind and hands it to the same sink the action bar's buttons
+// do. That is SPEC §10.9's rule read forwards rather than as a promise — input is coordinates,
+// not clicks, so a keyboard is just another way to name a coordinate. Nothing about the
+// keyboard reaches the reducer that the pointer did not already reach.
 
 import { RULES } from '../core/rules.js';
 import * as cam from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
+/** @typedef {import('../core/state.js').ActionKind} ActionKind */
 /** @typedef {import('./camera.js').Camera} Camera */
 
 /**
@@ -22,9 +31,60 @@ import * as cam from './camera.js';
  * @property {() => void} onRotate
  * @property {() => void} onConfirm
  * @property {() => void} onEscape
- * @property {() => void} [onFlag]                  toggle the flag on the selected cell
+ * @property {() => number} getSelected             the one selection, so arrows can step it
+ * @property {(cell: number) => void} onCursor      arrow-key select: same cell, camera follows
+ * @property {(kind: ActionKind) => void} onVerb    a hotkey, gated by legalActions() in main
+ * @property {() => void} onRun                     Space: the fast-forward toggle
+ * @property {() => boolean} isBlocked              an overlay owns the keyboard right now
  * @property {() => void} [wake]                    re-verify the backing store on activity
  */
+
+/**
+ * The letter keys, and the whole of the mapping: each one is the verb whose button wears that
+ * letter in its badge (hud.js VERBS, index.html for the globals). Two-way by construction —
+ * there is one table, the buttons read their badge from it, and a key that is not in it is a
+ * key the UI never claimed to have.
+ * @type {Record<string, ActionKind>}
+ */
+const HOTKEYS = {
+  p: 'place',
+  a: 'analyze',
+  f: 'flag',
+  b: 'beta',
+  g: 'generate',
+  w: 'wait',
+};
+
+/**
+ * One step of the keyboard cursor, in cell coordinates.
+ *
+ * The two rules that are not "add one to x" are the ones that make a keyboard playable on
+ * these boards:
+ *   · VOID is SKIPPED, not stopped at. A level like `delta` is several lobes of ocean with
+ *     nothing between them, and a cursor that halted at the first void cell could not reach
+ *     half its own map. So the scan keeps going in the same direction until it finds real
+ *     terrain — which is exactly what a player means by "over there" when they look at a gap.
+ *   · The scan stops at the PLAYABLE BBOX (SPEC §10.7), never at the array's edges. The array
+ *     is a rectangle the level happens to live in; the bbox is the level.
+ * Returns -1 when there is nothing that way, and the caller does not move — a cursor that
+ * silently wrapped to the far side would be a cursor you had to watch instead of the board.
+ * @param {GameState} s
+ * @param {number} from
+ * @param {number} dx  -1, 0 or 1
+ * @param {number} dy
+ * @returns {number} the cell to select, or -1
+ */
+function stepCell(s, from, dx, dy) {
+  let x = (from % s.w) + dx;
+  let y = Math.floor(from / s.w) + dy;
+  while (x >= s.bbox.x0 && x <= s.bbox.x1 && y >= s.bbox.y0 && y <= s.bbox.y1) {
+    const i = y * s.w + x;
+    if (s.terrain[i] !== 'void') return i;
+    x += dx;
+    y += dy;
+  }
+  return -1;
+}
 
 /**
  * @param {HTMLElement} el        the board container (touch-action: none)
@@ -209,29 +269,54 @@ export function createInput(el, camera, h) {
   el.addEventListener('dblclick', (e) => e.preventDefault());
   el.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // Keyboard is a dev convenience, not the deferred accessibility layer (SPEC §10.9); the
-  // guard is gorillas' — DOM fields keep their own keys.
+  // The keyboard. Three guards stand in front of every key, and each one is a promise:
+  //   · A DOM FIELD KEEPS ITS OWN KEYS. The level select in the drawer is the live case — 'p'
+  //     inside an open dropdown jumps to `plain`, and must not also place a tile. BUTTON is
+  //     deliberately NOT on this list any more: clicking GENERATE leaves the focus on it, and a
+  //     keyboard that went dead the moment you touched a button would not be a way to play.
+  //     `preventDefault` below is what stops a focused button firing on its own Space/Enter.
+  //   · BROWSER SHORTCUTS WIN. Any of ctrl/alt/meta and this module has no opinion at all.
+  //   · AN OPEN PANEL OWNS THE KEYBOARD. While the start card, the rules, an end screen, the
+  //     roster or the drawer is up, nothing here fires — including Escape, which those panels
+  //     take in capture (start.js, roster.js, drawer.js) and never let reach us anyway.
   window.addEventListener('keydown', (e) => {
     const t = /** @type {HTMLElement | null} */ (e.target);
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON')) return;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (h.isBlocked()) return;
     const s = h.getState();
-    const pan = 4 * cam.tilePx(camera);
     const center = { x: camera.cw / 2, y: camera.ch / 2 };
     switch (e.key) {
+      // The cursor. ONE selection concept: this produces the same cell index a tap does and
+      // hands it to the same handler, so the action bar, the ghost, the blast preview and the
+      // selection ring all update without knowing which device moved it. With nothing selected
+      // the first arrow lands on A, because A is the one cell every board has and the one place
+      // every run starts — hunting for the cursor is not a puzzle this game is offering.
+      case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown': {
+        const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        const dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+        const from = h.getSelected();
+        const next = from < 0 ? s.origin : stepCell(s, from, dx, dy);
+        if (next >= 0) h.onCursor(next);
+        break;
+      }
       case 'r': case 'R': h.onRotate(); break;
-      // The one keyboard verb, and only because it is the one that costs nothing: every other
-      // action spends a scarce turn and stays behind the two-step select→act rule (SPEC §10.6).
-      // The handler re-checks legality — this path has no action bar in front of it.
-      case 'f': case 'F': h.onFlag?.(); break;
       case 'Enter': h.onConfirm(); break;
       case 'Escape': h.onEscape(); break;
+      // Space is RUN, and the preventDefault at the bottom is load-bearing twice over: it stops
+      // the page scrolling, and it stops a HUD button that happens to hold focus activating
+      // itself underneath the toggle.
+      case ' ': h.onRun(); break;
       case '+': case '=': if (cam.zoomBy(camera, s, 1, center.x, center.y)) h.onViewChange(); break;
       case '-': case '_': if (cam.zoomBy(camera, s, -1, center.x, center.y)) h.onViewChange(); break;
-      case 'ArrowLeft': cam.panBy(camera, s, pan, 0); h.onViewChange(); break;
-      case 'ArrowRight': cam.panBy(camera, s, -pan, 0); h.onViewChange(); break;
-      case 'ArrowUp': cam.panBy(camera, s, 0, pan); h.onViewChange(); break;
-      case 'ArrowDown': cam.panBy(camera, s, 0, -pan); h.onViewChange(); break;
-      default: return;
+      default: {
+        // A verb. It is handed on by NAME, not dispatched: main.js asks legalActions() the same
+        // question the action bar asks before it draws a button, so a key can never spend a
+        // turn on something the bar would not have offered (SPEC §10.6).
+        const verb = HOTKEYS[e.key.toLowerCase()];
+        if (!verb) return;
+        h.onVerb(verb);
+      }
     }
     e.preventDefault();
   });

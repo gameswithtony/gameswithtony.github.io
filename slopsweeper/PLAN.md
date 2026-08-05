@@ -424,6 +424,53 @@ never visualize which destroyed cells held mines (§5: destroyed silently).
 >   test reads the file and checks, because that is the invariant that keeps a hint from
 >   quietly becoming a rule.
 
+> **Frozen-shape deltas, 2026-08-05, later again (owner decision — the walker cast list, SPEC
+> §6.6).** Five, and **`GameState` is not one of them**: nothing was added to the state, nothing
+> was added to `User`, `schedule` kept its four fields, and **no save changed shape or version.**
+> Everything per-walker is re-derived from `(LevelDef, seed)`, which a save already carries.
+>
+> - **`LevelDef.walkers?: WalkerDef[]`**, where `WalkerDef = { stops: string[]; ordered?: boolean;
+>   patience?: number }` (declared in `core/rules.js` beside `Itinerary`, because both
+>   `LevelParams` and `LevelDef` name it). **Mutually exclusive with `itineraries`** — a
+>   definition carrying both is a validator *error*, not a merge: the two fields answer the same
+>   question, so a level with both is an author mid-edit and the useful response is to say so.
+>   `validate.js` checks a walkers entry with the same `checkStops` implementation an itineraries
+>   entry gets, plus one rule (`patience` a positive integer) and one refusal (an `itineraries`
+>   entry may not carry a `patience`).
+> - **`LevelDef.arrivals` is a union**: `{ count; firstTick; every }` — the cadence, untouched —
+>   or `{ at: number[] }`, explicit turns, strictly increasing, whose length is the count. Fields
+>   from both shapes in one object is an error on the same reasoning. `Arrivals` is a
+>   discriminated union with `at?: undefined` on the cadence arm so reading code can branch on
+>   `a.at` without a cast. **`GameState.schedule` did not move**: `total` is `arrivalCount(a)`,
+>   `nextTick` is read off the list rather than added to, and `every` is `0` on the listed form —
+>   the honest answer, since a listed schedule has no cadence and nothing divides by it. The
+>   HUD's NEXT IN is `nextTick - tick + 1` for both shapes and needed no edit.
+> - **`LevelParams.cast: WalkerDef[]`** — the resolved deal, one entry per scheduled user, entry
+>   *k* belonging to spawn *k*. It is the only member of `LevelParams` that is a function of the
+>   **seed** as well as the level, and it lives there because `LevelParams` is already the thing
+>   that hangs off a game for its whole life without being inside `GameState` (a WeakMap keyed on
+>   the terrain array — `state.js`). `LevelParams` also keeps the authored `itineraries` and gains
+>   the authored `walkers`, unread by the reducer, as the record of what the cast was dealt from.
+> - **`core/casting.js`**, a new core module: `castPool(def, destCount)` (walkers → itineraries →
+>   the implicit every-destination role), `resolveCast(pool, count, seed)` (deck, Fisher–Yates,
+>   prefix — two branches, one implementation), `arrivalCount(a)`, and `castFor(...)` which is
+>   what `init` calls. Its stream is `mulberry32(seed ^ CAST_STREAM_XOR)` with
+>   **`CAST_STREAM_XOR = 0x85ebca6b`, deliberately not `0x9e3779b9`**: that constant is already
+>   the movement split (§7.5), so reusing it would have made the cast a preview of every routing
+>   tie-break in the game. The stream is created, consumed and dropped inside `init`; `s.rng` is
+>   still exactly `initStreams(seed)`, which is a standing test and is why the six corpus levels'
+>   36 sim rows are **byte-identical** across this change rather than merely "checked".
+> - **`patienceLimit(s, u)`** in `core/state.js` — `cast[u.id]?.patience ?? params.patience`, and
+>   every reader of a user's bar now asks it: `reduce`'s patience step, `visit`'s refill
+>   (`round(ownBar × destRefill)`), `renderer.patienceSpent`, both of `roster.js`'s (the LEAVES IN
+>   countdown and the gave-up-versus-killed derivation), and `hud.js`'s worst-case chip. Those six
+>   sites are the entire UI surface of the feature.
+>
+> `reduce.itineraryFor` lost its round-robin — it is handed one cast entry rather than the list
+> and an index — and `spawns` reads `levelParams(d).cast[d.users.length]`. **SPEC §6.5's
+> "authored and cycled" is now "authored and dealt"**, which is the one previously-decided
+> behaviour this overturns and was the owner's explicit request.
+
 ```ts
 // module signatures (frozen; notation shorthand — implemented with JSDoc in the .js files)
 // core/grid.js
@@ -455,6 +502,13 @@ blockingFlags(s): number[]                             // flags individually hol
 // core/state.js
 effectiveMask(u): number[]                             // what a walker is actually asking for:
                                                        //   [todo[0]] when ordered, else todo itself
+patienceLimit(s, u): number                            // THIS walker's bar: the cast's override,
+                                                       //   else the level's (2026-08-05)
+// core/casting.js                                     // the deal (§6.6, 2026-08-05)
+castPool(def, destCount): WalkerDef[]                  // walkers → itineraries → every destination
+resolveCast(pool, count, seed): WalkerDef[]            // subset when pool ≥ count, cycle-then-
+                                                       //   shuffle when pool < count; private stream
+arrivalCount(a): number                                // either arrivals shape → the user count
 // core/reduce.js
 init(level: LevelDef, seed: number): GameState
 reduce(s, a: Action): { s: GameState; ev: Ev[] }       // pure; clones what it changes
@@ -482,13 +536,17 @@ export interface LevelDef {
   map: string             // charmap: '.'/space VOID · '#' OCEAN · '^' VOLCANO · 'A' origin · 'B'…'H' dests
                           // rows right-padded with VOID — trailing whitespace can never break a level
   arrivals?: { count: number; firstTick: number; every: number }   // default 10 / 6 / 4
+            | { at: number[] }                         // …or the turns, spelled out (2026-08-05)
   mineDensity?: number    // Binomial p per block cell (§3.6); default 0.25
   shapePool?: 'compact' | 'awkward' | 'heavy' | string[]           // preset name or ids (§10); default 'compact'
   userMoveEvery?: number  // default 1 (OPEN #1: parameterized)
   blastRadius?: number    // default 1 = tile + orthogonals (§5)
   betaSupply?: number     // default RULES.BETA_SUPPLY = 3; 0 switches the verb off (§4.7)
+  walkers?: { stops: string[]; ordered?: boolean; patience?: number }[]
+                            // THE CAST (§6.6, 2026-08-05): roles dealt against `arrivals` by seed.
+                            // Mutually exclusive with `itineraries`
   itineraries?: (string[] | { stops: string[]; ordered?: boolean })[]
-                            // letters per user, cycled by spawn order; omitted/[] = all dests (§6.5).
+                            // letters per user, dealt by seed; omitted/[] = all dests (§6.5).
                             // `ordered: true` makes the list a sequence: todo[0] and nothing else
   destRefill?: number       // patience back on an intermediate stop; default RULES.DEST_REFILL = 0.5
 }

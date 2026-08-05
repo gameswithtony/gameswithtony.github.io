@@ -84,17 +84,149 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `id` | *(required)* | unique key; `?level=<id>` loads it |
 | `map` | *(required)* | the charmap above |
 | `name` | `id` | display name |
-| `arrivals` | `{ count: 10, firstTick: 6, every: 4 }` | how many users, when the first one shows up, and the gap between them |
+| `arrivals` | `{ count: 10, firstTick: 6, every: 4 }` | how many users, when the first one shows up, and the gap between them — **or** `{ at: [2, 5, 9] }`, the turns spelled out (§3a) |
 | `mineDensity` | `0.16` | per-cell probability inside a generated block; the total is `Binomial(size, p)` **topped up to a minimum of 2** — see §4 |
 | `shapePool` | `'compact'` | which blocks Generate draws from — see §4 |
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 | `patience` | `20` (`RULES.USER_PATIENCE`) | cumulative ticks a user will spend unable to move before it gives up and leaves for good |
 | `betaSupply` | `3` (`RULES.BETA_SUPPLY`) | beta milestones the player may ship (SPEC §4.7); `0` switches the verb off for this level |
-| `itineraries` | `[]` | which destinations each user must visit, as letters, cycled by spawn order; `[]` means **every user visits every destination**. An entry is `['B','D']` (any order) or `{ stops: ['B','D'], ordered: true }` (that order, enforced) |
+| `walkers` | `[]` | **the cast** — the roles this level is written for, dealt against `arrivals` by seed (§3b). An entry is `{ stops: ['B','D'], ordered?, patience? }`. Mutually exclusive with `itineraries` |
+| `itineraries` | `[]` | the same thing without a per-walker `patience`: which destinations each user must visit, as letters, dealt by seed; `[]` means **every user visits every destination**. An entry is `['B','D']` (any order) or `{ stops: ['B','D'], ordered: true }` (that order, enforced) |
 | `destRefill` | `0.5` (`RULES.DEST_REFILL`) | fraction of `patience` handed back when a user reaches a stop that is not its last |
 
 `arrivals` is the difficulty dial. Everything else is texture.
+
+---
+
+## 3a. Two ways to write a schedule
+
+```js
+arrivals: { count: 9, firstTick: 2, every: 4 }   // a cadence: nine users, turns 2, 6, 10, …
+arrivals: { at: [0, 1, 2, 3, 18, 19, 20] }       // a burst, a lull, and another burst
+```
+
+The list's **length is the user count**, the turns must be **strictly increasing**, and a
+definition carrying fields from both shapes is a hard error rather than a guess. Reach for `at`
+when the pressure you want is *shaped* — a rush while the board is empty, a gap that tempts you
+into generating, a second rush that arrives while you are still reading the block. A cadence
+cannot say that, and faking it with a tight `every` changes the whole level instead of one
+stretch of it.
+
+The HUD is unchanged either way: `NEXT IN` counts down to the next listed turn exactly as it
+counts down a cadence.
+
+---
+
+## 3b. The cast
+
+**A level authors a cast, and every run deals it** (added 2026-08-05). This is the field to
+reach for when you want the level to ask a *person*-shaped question rather than a route-shaped
+one:
+
+```js
+walkers: [
+  { stops: ['C'] },                                 // the trunk, and nothing else
+  { stops: ['B', 'D'] },                            // both branches, nearest first
+  { stops: ['B', 'C', 'D'], ordered: true },        // the full tour, in that sequence
+  { stops: ['C'], patience: 12 },                   // same errand, half the goodwill
+],
+```
+
+- **`stops`** is an itinerary's, with the identical rules: letters the map carries, at least one,
+  no repeats. **`ordered`** is §3's opt-in sequence. **`patience`** is the new one: this walker's
+  own bar, replacing the level's for them alone.
+- **`walkers` and `itineraries` are mutually exclusive.** The validator refuses a level carrying
+  both rather than picking one — they say the same kind of thing, so a level with both is an
+  author who changed their mind halfway. An `itineraries` level is read as a cast with no
+  patience overrides, so nothing about the older field stopped working.
+
+**How the deal works, and how to author against it:**
+
+- **Fewer roles than arrivals — the mix is exact, the order is not.** Three roles over nine
+  arrivals is 3/3/3 on every seed; four is 3/2/2/2, the first role taking the extra. Only the
+  running order is rolled. So **write the ratio you want as the pool** — repeat a role to weight
+  it, because the level owns the ratio and the seed owns nothing but the sequence.
+- **More roles than arrivals — a subset, and some roles do not appear.** Six roles over three
+  arrivals casts three of the six, differently on different seeds. That is the strongest version
+  of "replaying this level is a fresh read": the player cannot learn the demand by heart, only
+  the possibilities. Use it when you want a level with a *repertoire*. Opting out is free — write
+  exactly as many roles as arrivals and every one is cast, in a shuffled order.
+- **The same seed always deals the same hand**, so `?seed=` reproduces a game exactly and a
+  refresh mid-play resumes the identical one. Nothing about a walker is saved; it is re-derived.
+- **The demand is still knowable in advance.** The whole cast is resolved before the first turn,
+  which is what keeps the forecast (§6) honest.
+
+**Per-walker `patience` prices a route in people rather than in turns.** An impatient walker is
+a deadline attached to one leg: if the route they owe cannot be finished inside their bar, they
+were never going to be delivered, and the player can read that off the roster from the turn they
+spawn. Two things to hold in mind:
+
+- **Set it against the geometry, not against the level's number.** `delta`'s impatient walker is
+  on 12 with a 26-tile trunk, so hand-building alone cannot save them — only generated ground on
+  the right leg, early. That is the trade the whole level is about, made personal.
+- **The refill scales with the walker.** An intermediate stop hands back
+  `round(ownPatience × destRefill)`, so half a bar is half of *their* bar. A short-bar walker on
+  a multi-stop itinerary is punishing on purpose.
+- **Everything on screen already knows.** The board's impatience shading, the roster's `LEAVES IN`
+  countdown, its `GAVE UP` versus `KILLED` wording and the HUD's worst-case chip all read the
+  walker's own bar, so a 12-tick walker can be the most urgent row on the panel while having
+  waited the least.
+
+**Re-sim after changing a cast.** It moves the demand, not just the flavour: replacing one of
+`delta`'s three itineraries with a four-role cast shifted the mix toward the trunk and took the
+AI policies from 7% to 13% served without a single number on the level changing.
+
+---
+
+## 3c. The whole dashboard — every override at once
+
+Everything above in one definition, for reference rather than for taste. This is not a level
+anybody tuned; it is the template to copy when you want the full set of dials in front of you,
+and every line of it passes the validator as written:
+
+```js
+// @ts-check
+
+/** @type {import('./index.js').LevelDef} */
+export const everything = {
+  id: 'everything',
+  name: 'Kitchen Sink',                        // display name; defaults to the id
+  map: `
+############
+A##########B
+############
+######^#####
+############
+###########C
+############
+`,
+  arrivals: { at: [1, 3, 5, 6, 14, 22] },      // six users, turns spelled out (§3a): a rush,
+                                               // a lull, two stragglers
+  walkers: [                                   // the cast (§3b), dealt against those six
+    { stops: ['B'] },                          //   slots by seed. SEVEN roles for SIX slots:
+    { stops: ['C'] },                          //   someone different sits out every run.
+    { stops: ['B', 'C'] },                     //   both stops, any order
+    { stops: ['C', 'B'], ordered: true },      //   C first, then B — enforced
+    { stops: ['B'], patience: 10 },            //   the impatient one, own bar of 10
+    { stops: ['B', 'C'], ordered: true, patience: 30 },   // patient inspector, every field
+    { stops: ['C'] },
+  ],
+  patience: 22,                                // the bar for everyone the cast does not override
+  destRefill: 0.25,                            // a stop refunds a quarter-bar, not the default half
+  betaSupply: 2,                               // two betas, not three
+  mineDensity: 0.13,
+  shapePool: ['R12', 'P14', 'T14'],            // explicit stencil ids; presets in §4
+  userMoveEvery: 1,                            // users step every turn (the default, stated)
+  blastRadius: 2,                              // craters two flood-fill steps, not one
+};
+```
+
+Reading it back: `walkers` replaces `itineraries` (they are mutually exclusive), the `at`
+schedule replaces the cadence trio (same rule), and the two per-walker `patience` values ride
+*inside* the cast while the level-wide `22` covers everyone else. Delete any line and the
+default from §3's table takes over — the shortest level in §1 and this one are the two ends of
+the same dial panel.
 
 **Itineraries** are the second half of multiple destinations (added 2026-08-05), and they are
 where the axis gets interesting. Write them as arrays of letters:
@@ -103,9 +235,11 @@ where the axis gets interesting. Write them as arrays of letters:
 itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']]
 ```
 
-- **Cycled by spawn order, never rolled.** User 0 takes the first list, user 1 the second, user
-  2 the third, user 3 the first again. The demand is a property of the level, so it reads the
-  same on every seed — which is what makes the HUD forecast honest and the sim comparable.
+- **Dealt by seed, and the mix is the level's** (revised 2026-08-05 — see §3b). Three lists over
+  nine arrivals is 3/3/3 on every seed and always will be; *which* user gets which is the seed's
+  business. The demand is therefore still knowable in advance — the whole hand is dealt before
+  the first turn — but a replay is not the same run twice. This used to be a strict round-robin
+  and is not any more.
 - **Any order within a list, unless you say otherwise.** A user owing `B` and `D` goes to
   whichever is nearer and then to the other. If you want a forced sequence, say so — see
   **ordered itineraries** below.
@@ -289,10 +423,14 @@ registered level.
 - not exactly one `A`; no `B`; a repeated destination letter; a gap in `B`, `C`, `D`…
 - an endpoint with no buildable neighbour — nothing could ever connect to it
 - no ocean connectivity from `A` to **any** destination, each named — unwinnable by construction
-- an itinerary that is empty, names a letter the map does not carry, or visits one twice — in
-  either shape, `['B','C']` or `{ stops: ['B','C'], ordered: true }`, since they are checked by
-  the same code
-- an `ordered` that is not a boolean
+- an itinerary or a walker that is empty, names a letter the map does not carry, or visits one
+  twice — in every shape, `['B','C']`, `{ stops: ['B','C'], ordered: true }` or
+  `{ stops: ['B','C'], patience: 9 }`, since they are all checked by the same code
+- an `ordered` that is not a boolean; a `patience` that is not a positive integer, or that is set
+  on an `itineraries` entry, which has no such field
+- **both `walkers` and `itineraries`**, which say the same kind of thing
+- **both arrivals shapes at once** — `count`/`firstTick`/`every` beside `at` — or an `at` list
+  that is empty, negative, fractional or not strictly increasing
 - a board over 64×64 (a performance ceiling, not a target — the corpus runs 32×20 to 50×30)
 - a nonsense schedule, density, pool, count, or `destRefill` outside [0, 1]
 
@@ -490,7 +628,12 @@ A##########################C
   mineDensity: 0.12,
   patience: 26,
   betaSupply: 4,
-  itineraries: [['C'], ['B', 'D'], { stops: ['B', 'C', 'D'], ordered: true }],
+  walkers: [
+    { stops: ['C'] },
+    { stops: ['B', 'D'] },
+    { stops: ['B', 'C', 'D'], ordered: true },
+    { stops: ['C'], patience: 12 },
+  ],
   shapePool: 'compact+awkward',
 };
 ```
@@ -508,11 +651,16 @@ Reading it back:
   will do to you.
 - **Both necks are three rows tall**, so of `compact+awkward` only `R12` crosses them (§4) —
   the same trick `strait` plays, doubled and pulled apart. The necks are where you build by hand.
-- **The three itineraries span the range deliberately**: a single stop, a two-stop that never
-  touches the trunk's own destination, and the full tour. So users 0, 3, 6 are served by the
-  trunk alone; users 1, 4, 7 need both branches; users 2, 5, 8 need everything and get half a
-  bar of patience back twice on the way round. Closing the C route first therefore *delivers* a
-  third of the level, which is what makes the build order a decision rather than a checklist.
+- **The four roles span the range deliberately**: a single stop, a two-stop that never touches
+  the trunk's own destination, the full tour, and the same single stop on half the goodwill. Four
+  roles over nine arrivals is 3/2/2/2, so five of the nine are served by the trunk alone, two
+  need both branches, and two need everything and get half a bar of patience back twice on the
+  way round. Closing the C route first therefore *delivers over half the level*, which is what
+  makes the build order a decision rather than a checklist.
+- **And the deal is the seed's** (2026-08-05, §3b): the mix above is fixed, the running order is
+  not. Whether the impatient walker is the first person through the door or the seventh is worth
+  a served user, and it is different every game — which is the difference between replaying
+  `delta` and re-executing it.
 - **And the full tour is `ordered`** (2026-08-05): `{ stops: ['B','C','D'], ordered: true }` is
   B, then C, then D, enforced. User 2 owes B and only B until it has stood on it — so it waits
   at the origin for the north neck specifically, and when it finally walks it crosses C without
@@ -520,12 +668,19 @@ Reading it back:
   than only by a fixture, and it is deliberately the *longest* list that carries it, where the
   difference against the loose two-stop beside it is legible. It cost the level about ten points
   of hand-only served on the day it landed, which is the honest measure of what ordering does.
+- **The fourth role is the impatient one**: `{ stops: ['C'], patience: 12 }` against the level's
+  26. Twelve is set against the geometry — the trunk is 26 tiles, so hand-building alone cannot
+  save them, and the only thing that does is generated ground on the C leg, early. It is the
+  level's whole argument compressed into one row of the roster.
 - **`betaSupply: 4`** rather than three, because a three-legged trip has more places worth
   staging from than a one-legged one.
 
 **It is a showcase, not a tuned level, and the sim says so**: at these numbers hand-only clears
 it at ~78% served (200 games, seed 1; it was 89% before the third itinerary was ordered), so it
-currently sits in `plain`'s class — a control, not a level with a floor. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
+currently sits in `plain`'s class — a control, not a level with a floor. What the cast changed is
+the *shape* of that number rather than its size: hand-only used to deliver exactly 7 of 9 in all
+200 games and now spreads 6–9 for the same mean, with the level's first non-zero perfect rate at
+1%; the AI policies went from 7% to 13% served because 3/2/2/2 leans the demand toward the trunk. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
 to 2 moves hand-only about ten points and the AI policies not at all). The dials with something
 to say are `blastRadius`, `mineDensity`, and the geometry: lengthen the trunk, or make the
 branches share more of it. Read §6 — deaths, not delays — before reaching for `arrivals`.

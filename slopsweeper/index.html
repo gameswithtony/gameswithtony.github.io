@@ -9,31 +9,35 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- HUD is DOM, board is canvas (SPEC §10.3). The ids are the contract with src/ui/hud.js. -->
+  <!-- HUD is DOM, board is canvas (SPEC §10.3). The ids are the contract with src/ui/hud.js.
+       The top bar is WALKER-FIRST (owner decision 2026-08-05). The most important thing in this
+       game is the people standing still, so the bar carries them and almost nothing else; the
+       level picker, the seed link, the turn counter and the remaining count are settings and
+       tallies rather than pressure, and they moved one tap away into #drawer. -->
   <header id="topbar">
-    <label class="field"><span class="tiny-hide">LEVEL</span>
-      <select id="f-level"></select>
-    </label>
+    <button id="btn-menu" class="chip" title="Level, seed and turn count"><span class="burger">☰</span><span class="narrow-hide">MENU</span></button>
     <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
-    <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
-    <span class="chip">TURN <b id="tick">0</b></span>
-    <!-- The score. Users served is the whole point total; users lost are the ones no amount
-         of building brings back. -->
-    <span id="score" class="chip" title="Users served · users lost for good">
-      <span class="narrow-hide">SERVED</span> <b id="sc-served">0/0</b>
-      <span class="narrow-hide sep">·</span>
-      <span class="narrow-hide">LOST</span><span class="narrow-only">✕</span><b id="sc-lost">0</b>
-    </span>
-    <!-- The forecast trio is persistent UI (SPEC §6.1); below 560px it keeps the numbers
-         and shortens the words rather than being clipped. -->
-    <div id="forecast" class="forecast">
-      <span title="Users still to be served"><span class="tiny-hide">REMAINING</span><span class="tiny-only">LEFT</span> <b id="fc-remaining">—</b></span>
-      <span title="Turns until the next user arrives"><span class="tiny-hide">NEXT IN</span><span class="tiny-only">NEXT</span> <b id="fc-next">—</b></span>
-      <!-- The waiting count is also the door to the roster (src/ui/roster.js). It carries two
-           numbers: how many are waiting, and how long the least patient of them will keep
-           doing it. The second one is the one you can still act on, so it is the one that
-           goes red. -->
-      <button id="btn-roster" class="chip" title="Turns before the most impatient user gives up — tap for the roster"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span> <b id="fc-waiting">—</b><b id="fc-soonest"></b></button>
+    <!-- The walker strip: the bar's whole point, and the only place the eye is meant to land.
+         WAITING is the tension meter, so it is the biggest type on the page — the count says you
+         are behind, and the number after the dot says how many turns the least patient of them
+         will keep waiting, which is the half you can still do something about. Past two thirds
+         of a patience bar the countdown and the chip around it go red together. It is also still
+         the door to the roster (src/ui/roster.js).
+         NEXT IN and SERVED · LOST ride beside it in the ordinary chip size: those two are the
+         persistent arrival forecast SPEC §6.1 asks for (see the note on #fc-remaining below). -->
+    <div id="walkers">
+      <button id="btn-roster" title="Turns before the most impatient user gives up — tap for the roster">
+        <span class="wl-label"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span></span>
+        <b id="fc-waiting">—</b><b id="fc-soonest"></b>
+      </button>
+      <span class="chip wk-next" title="Turns until the next user arrives"><span class="tiny-hide">NEXT IN</span><span class="tiny-only">NEXT</span> <b id="fc-next">—</b></span>
+      <!-- Users served is the whole point total; users lost are the ones no amount of building
+           brings back. -->
+      <span id="score" class="chip" title="Users served · users lost for good">
+        <span class="tiny-hide">SERVED</span> <b id="sc-served">0/0</b>
+        <span class="tiny-hide sep">·</span>
+        <span class="tiny-hide">LOST</span><span class="tiny-only">✕</span><b id="sc-lost">0</b>
+      </span>
     </div>
   </header>
 
@@ -50,17 +54,24 @@
       <div class="tray-side">
         <span id="tray-hint" class="hint"></span>
         <div class="tray-controls">
-          <button id="btn-rotate" title="Rotate (R)"><span class="narrow-hide">ROTATE</span><span class="narrow-only">ROT</span> <i id="rot-label">1/1</i></button>
-          <button id="btn-confirm" title="Commit the block (Enter)" disabled><span class="narrow-hide">CONFIRM</span><span class="narrow-only">OK</span> <i>1</i></button>
+          <!-- ROTATE keeps a counter rather than its key: which of four rotations you are looking
+               at is the thing you need mid-placement, and the title says R. CONFIRM's badge is
+               the key, like every other button in the game now. -->
+          <button id="btn-rotate" title="Rotate — key R"><span class="narrow-hide">ROTATE</span><span class="narrow-only">ROT</span> <i id="rot-label">1/1</i></button>
+          <button id="btn-confirm" title="Commit the block · 1 turn · key Enter" disabled><span class="narrow-hide">CONFIRM</span><span class="narrow-only">OK</span> <i>↵</i></button>
         </div>
       </div>
     </div>
     <div id="actionbar"></div>
+    <!-- Every button in the game wears its key in the badge (owner decision 2026-08-05). The badge
+         used to carry the turn cost; the cost moved into the title, because the cost is a thing you
+         learn once and the key is a thing you need every turn. -->
     <div id="globals">
-      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>0</i></button>
-      <button id="btn-wait" title="Let a turn pass">WAIT <i>1</i></button>
-      <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at. -->
-      <button id="btn-run" title="Fast-forward: waits every 180 ms until something happens">RUN</button>
+      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it · key G"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>G</i></button>
+      <button id="btn-wait" title="Let a turn pass · 1 turn · key W">WAIT <i>W</i></button>
+      <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at.
+           No letter badge: it is a toggle rather than a verb, and its key is the space bar. -->
+      <button id="btn-run" title="Fast-forward: waits every 180 ms until something happens · key Space">RUN</button>
     </div>
     <!-- Zoom is a gesture first (pinch/wheel); these are the same camera call with a button
          on it, for anyone whose hands or screen make a two-finger pinch awkward. -->
@@ -87,6 +98,30 @@
         <button id="roster-close" title="Close (Esc)" aria-label="Close">✕</button>
       </div>
       <div id="roster-list"></div>
+    </div>
+  </div>
+
+  <!-- The menu drawer (src/ui/drawer.js), opened from ☰ and holding everything the walker-first
+       top bar handed off. Same scrim-tap, Esc and toggle discipline as the roster above, hung on
+       the other side of the screen and mutually exclusive with it (main.js closes one to open the
+       other), so a tap on a scrim is never ambiguous about which panel it belongs to. -->
+  <div id="drawer" class="hidden">
+    <div id="drawer-card" role="dialog" aria-label="Game menu">
+      <div class="drawer-head">
+        <h2>GAME</h2>
+        <button id="drawer-close" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+      <div class="drawer-body">
+        <label class="drawer-row" for="f-level"><span>LEVEL</span><select id="f-level"></select></label>
+        <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
+        <div class="drawer-row"><span>TURN</span><b id="tick">0</b></div>
+        <!-- REMAINING moved in here, and SPEC §6.1's persistently-visible demand forecast is
+             still satisfied on the bar: SERVED x/y states the same fact from both ends (the
+             remainder is the gap between its two numbers, both of them on screen) and NEXT IN
+             carries the cadence. What came in here is a third reading of numbers already up
+             there, not the forecast itself. -->
+        <div class="drawer-row"><span>REMAINING</span><b id="fc-remaining">—</b></div>
+      </div>
     </div>
   </div>
 

@@ -13,7 +13,7 @@
 // because nothing here is stored and nothing here is rolled: no Math.random, no Date, no
 // reach into core's PRNG stream. The panel is a view of the state, exactly like the board is.
 
-import { levelParams } from '../core/state.js';
+import { patienceLimit } from '../core/state.js';
 import { IMPATIENT_AT, patienceSpent, stopLetter } from './renderer.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -128,9 +128,13 @@ function namesFor(s) {
 function statusOf(s, u) {
   if (u.state === 'arrived') return { word: 'SERVED ✓', cls: 'done good', done: true };
   // The two ways a user is gone for good, told apart by the same threshold the reducer used:
-  // at or past patience they walked away, otherwise a blast took them (SPEC §5).
+  // at or past patience they walked away, otherwise a blast took them (SPEC §5). "The same
+  // threshold" is now a per-walker question (SPEC §6.6), and this row is the reason the helper
+  // exists rather than the arithmetic being inlined: an impatient walker who gave up at twelve
+  // on a twenty-six-tick level would otherwise be filed under KILLED — a blast that never
+  // happened, reported to the player as the board's fault instead of the clock's.
   if (u.state === 'gone') {
-    return u.waited >= levelParams(s).patience
+    return u.waited >= patienceLimit(s, u)
       ? { word: 'GAVE UP', cls: 'done bad', done: true }
       : { word: 'KILLED', cls: 'done bad', done: true };
   }
@@ -239,13 +243,17 @@ export function createRoster(h) {
   });
 
   /**
+   * The bar is read per row rather than once per render (SPEC §6.6, 2026-08-05): a cast may give
+   * a walker its own patience, so "LEAVES IN n" is only true if `n` counts down that walker's
+   * own clock. It is a WeakMap lookup per row on a list of a dozen, which is nothing, and the
+   * alternative is a panel whose whole job is telling two people apart quoting one of them the
+   * other's deadline.
    * @param {GameState} s
    * @param {User} u
    * @param {string} name
-   * @param {number} patience
    * @returns {HTMLElement}
    */
-  function rowFor(s, u, name, patience) {
+  function rowFor(s, u, name) {
     const st = statusOf(s, u);
     // Live rows are buttons because they do something; resolved rows are not, because they
     // do not — a control that looks tappable and is not is worse than no control.
@@ -265,7 +273,7 @@ export function createRoster(h) {
       // and theirs is settled one way or the other.
       const stops = todoLetters(u);
       if (stops) node.append(make('span', 'ru-todo', stops));
-      const left = Math.max(0, patience - (u.waited ?? 0));
+      const left = Math.max(0, patienceLimit(s, u) - (u.waited ?? 0));
       const cd = make('span', 'ru-left', `LEAVES IN ${left}`);
       // The same two-thirds the board's dot uses, imported rather than restated: one warning
       // threshold in the game, or the panel and the board disagree about who is in trouble.
@@ -282,28 +290,30 @@ export function createRoster(h) {
   /** @param {GameState} s */
   function render(s) {
     const names = namesFor(s);
-    const patience = levelParams(s).patience;
     /** @type {User[]} */
     const live = [];
     /** @type {User[]} */
     const done = [];
     for (const u of s.users) (statusOf(s, u).done ? done : live).push(u);
 
-    // Most urgent first: the row you have to answer is the row at the top. Ties break on id
-    // so the order is stable turn to turn — a list that reshuffles under the finger is a list
-    // nobody taps.
-    live.sort((a, b) => (a.waited === b.waited ? a.id - b.id : b.waited - a.waited));
+    // Most urgent first: the row you have to answer is the row at the top. "Urgent" is turns
+    // REMAINING, not turns spent — the two diverged when walkers got their own patience
+    // (SPEC §6.6): an impatient walker three turns from quitting must outrank a patient one
+    // who has waited longer but has half a bar left. Ties break on id so the order is stable
+    // turn to turn — a list that reshuffles under the finger is a list nobody taps.
+    const leftOf = (/** @type {User} */ u) => patienceLimit(s, u) - (u.waited ?? 0);
+    live.sort((a, b) => (leftOf(a) === leftOf(b) ? a.id - b.id : leftOf(a) - leftOf(b)));
 
     list.innerHTML = '';
     if (live.length === 0 && done.length === 0) {
       list.append(make('div', 'ru-empty', 'NOBODY HAS ARRIVED YET'));
     }
-    for (const u of live) list.append(rowFor(s, u, names.get(u.id) ?? '—', patience));
+    for (const u of live) list.append(rowFor(s, u, names.get(u.id) ?? '—'));
     if (done.length) {
       list.append(make('div', 'ru-sep', 'RESOLVED'));
       // Served first, then the losses, newest id last: the top of this section is the score.
       done.sort((a, b) => a.id - b.id);
-      for (const u of done) list.append(rowFor(s, u, names.get(u.id) ?? '—', patience));
+      for (const u of done) list.append(rowFor(s, u, names.get(u.id) ?? '—'));
     }
   }
 
@@ -333,5 +343,11 @@ export function createRoster(h) {
     update(s) { if (open) render(s); },
 
     close,
+
+    /**
+     * Asked by main.js on every keystroke: while a panel is up it owns the keyboard, so a hotkey
+     * cannot spend a turn on a board the player is not currently looking at (input.js).
+     */
+    isOpen: () => open,
   };
 }

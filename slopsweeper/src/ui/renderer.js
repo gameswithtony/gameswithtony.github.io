@@ -13,7 +13,7 @@
 
 import { RULES } from '../core/rules.js';
 import { blockMines, clue } from '../core/reduce.js';
-import { isFlagged, levelParams } from '../core/state.js';
+import { isFlagged, patienceLimit } from '../core/state.js';
 import { blockingFlags } from '../core/routing.js';
 import { PALETTE } from './palette.js';
 import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
@@ -137,15 +137,20 @@ export function blockingFlagSet(s) {
 }
 
 /**
- * How far through its patience a user is, 0…1. Reads `waited` and the level's own threshold
- * and nothing else — no core query the HUD does not already make. Defensive about both,
- * because a level with no patience configured must not make every user look doomed.
+ * How far through its patience a user is, 0…1. Reads `waited` and **that user's own** threshold
+ * and nothing else — no core query the HUD does not already make. Defensive about both, because
+ * a level with no patience configured must not make every user look doomed.
+ *
+ * The threshold is `patienceLimit(s, u)` rather than the level's number since casting (owner
+ * decision 2026-08-05, SPEC §6.6): a walker may be cast with its own bar, and a board that shaded
+ * an impatient walker against everybody else's number would show a calm dot over somebody the
+ * reducer is two turns from writing off. One helper, in core, asked by every reader.
  * @param {GameState} s
  * @param {import('../core/state.js').User} u
  * @returns {number}
  */
 export function patienceSpent(s, u) {
-  const limit = levelParams(s).patience;
+  const limit = patienceLimit(s, u);
   if (!limit || limit <= 0) return 0;
   return Math.min(1, (u.waited ?? 0) / limit);
 }
