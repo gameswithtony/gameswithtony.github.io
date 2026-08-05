@@ -132,6 +132,26 @@ b { color: var(--paper); font-weight: 700; }
 #btn-menu { width: 74px; justify-content: center; }
 #btn-menu .burger { font-size: 13px; line-height: 1; }
 
+/* The level picker, back on the bar (owner decision 2026-08-05 — it left with the walker-first
+   pass and returned the same day: switching maps is play, not bookkeeping, and a dial you tune
+   levels with belongs where you can reach it). Dressed to the chip spec — same 25px height,
+   same border, same 11px mono — and given a fixed width so the walker strip never shifts when
+   a longer level name is chosen. Native select chrome is kept: the arrow is the affordance,
+   and repainting it would buy nothing but risk. The LEVEL word drops below 900 with MENU's. */
+#level-pick select {
+  width: 88px;              /* 'caldera', the longest registered id, measures 84 with chrome */
+  height: 25px;
+  padding: 2px 4px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  color: var(--paper);
+  font: inherit;
+  font-size: 11px;
+  flex: none;
+}
+#level-pick select:hover { border-color: var(--select); }
+
 /* --- the walker strip (owner decision 2026-08-05) -----------------------------------
    The three items that say how the run is going, in the order you need them: how many people
    are standing still and for how much longer, when the next one lands, and what the score is
@@ -145,7 +165,20 @@ b { color: var(--paper); font-weight: 700; }
   flex: none;
 }
 
-#walkers .chip { flex: none; }
+/* The strip's two readouts (owner decision 2026-08-05: only clickable things may look like
+   buttons). Same box discipline as a chip — fixed height, fixed widths below — but no border,
+   no background, no cursor: NEXT IN and SERVED·LOST are facts, and dressing a fact as a
+   button invites a tap that does nothing. The one control on the strip is #btn-roster, which
+   keeps the full chip dress and gains a chevron to say it opens. */
+.wk-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 25px;
+  font-size: 11px;
+  color: var(--dim);
+  flex: none;
+}
 
 /* THE TENSION METER. Everything else in the chrome is 11px and this is 19px, deliberately:
    it is the one number in the game that decides whether you are winning, and the owner's call
@@ -155,14 +188,16 @@ b { color: var(--paper); font-weight: 700; }
    Fixed width, like every variable-length item this bar has ever carried, and LEFT-ALIGNED
    inside it rather than centred: the countdown comes and goes (an empty queue has none to
    show), and centred content would slide the word WAITING sideways every time somebody
-   started or stopped waiting. 136 against a worst case of 132.2 measured in Chrome — WAITING
-   12 ·20, the widest thing it can say — which is the same three-and-a-bit px of slack the
-   footer's tightest row has always run on. The narrow band's own number is below. */
+   started or stopped waiting. 150 = the old 136 (worst case 132.2 measured in Chrome —
+   WAITING 12 ·20, the widest thing it can say) plus 14 for the chevron, which sits against
+   the right edge (margin-left: auto) where a disclosure mark belongs — it says "this opens",
+   which became load-bearing the day the other two strip items stopped dressing as buttons.
+   The narrow band's own number is below. */
 #btn-roster {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  width: 136px;
+  width: 150px;
   padding: 3px 9px;
   border: 1px solid var(--edge);
   border-radius: 3px;
@@ -176,6 +211,7 @@ b { color: var(--paper); font-weight: 700; }
 }
 
 #btn-roster .wl-label { font-size: 11px; letter-spacing: 0.1em; color: var(--coast); }
+#btn-roster .wl-caret { font-size: 10px; color: var(--coast); margin-left: auto; }
 #btn-roster b { font-size: 19px; line-height: 1; color: var(--paper); }
 /* The countdown is a hair smaller and a shade quieter than the count, and sits right against
    it: they are one reading — four people, five turns — not two chips that happen to be
@@ -192,17 +228,16 @@ b { color: var(--paper); font-weight: 700; }
    about who is in trouble. Declared after :hover so an alarmed chip stays red under the
    cursor; the two selectors weigh the same and source order is the whole rule. */
 #btn-roster.urgent { border-color: var(--red); background: rgba(212, 64, 92, 0.14); }
-#btn-roster.urgent .wl-label, #btn-roster.urgent #fc-soonest { color: var(--red); }
+#btn-roster.urgent .wl-label, #btn-roster.urgent #fc-soonest,
+#btn-roster.urgent .wl-caret { color: var(--red); }
 
 /* NEXT IN and SERVED · LOST: the arrival forecast SPEC §6.1 requires, kept on the bar when
-   REMAINING went into the drawer. Ordinary chip size, because they are context for the big
-   number rather than competition for it. */
-.wk-next { width: 86px; justify-content: center; }
-/* 156, not the 148 this chip carried while it was competing for room with four other items:
-   SERVED 12/12 · LOST 12 measures 151.6 in Chrome, so 148 was clipping the worst case it can
-   actually reach on a twelve-user level. The walker strip is the only thing on the bar now,
-   and the first thing that room bought was the score not lying at the end of a bad run. */
-#score { width: 156px; justify-content: center; gap: 4px; }
+   REMAINING went into the drawer. Flat readouts (.wk-stat above), fixed widths so the strip
+   never moves: the widths are the old chip numbers minus the 18px of chip chrome (2×8 padding
+   + 2 border) each shed, plus a little — worst cases 62.8 and 133.6 of text against 70 and
+   140. They are context for the big number, not competition for it. */
+.wk-next { width: 70px; justify-content: center; }
+#score { width: 140px; justify-content: center; gap: 4px; }
 #score b { color: var(--paper); }
 #score .sep { color: var(--edge); }
 #score .tiny-only { color: var(--dim); margin-left: 2px; }
@@ -815,7 +850,6 @@ button.ru-row:hover { border-color: var(--select); }
 /* Inside the drawer the panel is a fixed 280px, so a ten-digit seed or a four-digit tick can
    no longer reach the top bar at all. That is the quiet win of the move: these two used to be
    load-bearing on the bar's row packing, and now they are load-bearing on nothing. */
-.drawer-row select { width: 130px; flex: none; }
 .drawer-row b { min-width: 30px; text-align: right; }
 #seed { justify-content: center; overflow: hidden; white-space: nowrap; }
 
@@ -826,14 +860,16 @@ button.ru-row:hover { border-color: var(--select); }
    block tray) get a full row to themselves, Generate/Wait and the minimap get the other.
    Row heights are fixed, so the board still never moves at runtime.
        footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
-   The TOPBAR keeps its single row all the way down to 560px now, which it never managed while
-   it was carrying five items. It pays for that by dropping the word off the menu button (the
-   ☰ is the control; MENU was the label on it) and by nothing else. Measured in Chrome at 560:
-       ☰ 34 + RESTART 65.8 + strip 390 + 6 lead-in + 2×6 gaps + 16 padding = 515.8 ≤ 544
-       strip = WAITING 136 + 6 + NEXT IN 86 + 6 + SERVED·LOST 156
-   — 36px still to spare at the bottom of the band, which is the first slack this row has had in
-   three revisions. Height is unchanged at 46: the walker chip is the tallest thing up here at
-   every band, and it does not shrink until 560 (below).
+   The TOPBAR keeps its single row down to 640px (it held 560 before the level picker came
+   back — the select's 88px moved the wrap point up a band, see the ≤639 block below). It pays
+   for the single row by dropping the words off MENU and LEVEL (the ☰ and the select are the
+   controls; the words were labels on them) and by nothing else. Fixed widths, summed at 640:
+       ☰ 34 + LEVEL 88 + RESTART 65.8 + strip 372 + 6 lead-in + 3×6 gaps + 16 padding = 599.8 ≤ 624
+       strip = WAITING 150 + 6 + NEXT IN 70 + 6 + SERVED·LOST 140
+   — twenty-four px to spare: the readouts shedding their chip chrome (2026-08-05, only
+   clickable things look like buttons) bought back more than the roster chip's chevron spent.
+   Height is unchanged at 46: the walker chip is the tallest thing up here at every band, and
+   it does not shrink until 560 (below).
    Footer widths at the worst case (280px wide, 268px usable), measured in Chrome:
        row 1 in play    PLACE 76 + 6 + ANALYZE 91                      = 173
        row 1 placing    tray 2+12+32+6+134                             = 186
@@ -922,37 +958,48 @@ button.ru-row:hover { border-color: var(--select); }
   #roster-card { width: 100%; }
 }
 
-/* --- ≤559px: the walker strip takes a row of its own -------------------------------
-   Below 560 the single row runs out (515 of fixed-width content against 268 usable at the
-   280px worst case), so the bar wraps into two — and WHICH two is the whole design of this
-   band. The strip is never the thing that breaks: it is given `width: 100%`, so it always
-   lands whole on row two and the countdown can never be the item that falls off the end.
-   Row one is then the two controls, which are short words that can share any width.
-       280px (268 usable) row 1: ☰ 34 + RESTART 65.8 + 6 gap                   = 105.8
-                           row 2: WAITING 104 + NEXT 64 + SERVED·LOST 82
-                                  + 2×6 gaps                                   = 262 ≤ 268
-   Every one of those three is its own worst case measured in Chrome plus a little — 98.9,
-   62.8 and 78.8 for WAIT 12 ·20, NEXT 12 and 12/12 ✕12 — so six px are left over at the
+/* --- ≤639px: the walker strip takes a row of its own -------------------------------
+   Below 640 the single row runs out (617.8 of fixed-width content, above), so the bar wraps
+   into two — and WHICH two is the whole design of this band. The strip is never the thing
+   that breaks: it is given `width: 100%`, so it always lands whole on row two and the
+   countdown can never be the item that falls off the end. Row one is then the three controls.
+   (This block sat at ≤559 until the level picker came back to the bar, 2026-08-05; the
+   select's 88px is what moved the wrap point. Between 560 and 639 the strip rides row two at
+   full size — 390 against 544-plus of usable width — and only the ≤559 band below shortens
+   anything.)
+       280px (268 usable) row 1: ☰ 34 + LEVEL 88 + RESTART 65.8 + 2×6 gaps     = 199.8
+                           row 2: WAITING 118 + NEXT 50 + SERVED·LOST 70
+                                  + 2×6 gaps                                   = 250 ≤ 268
+   Row two's widths hold their worst cases with room: the roster chip's content peaks at
+   ~112 with the chevron (WAIT 12 ·20 text 82.9 + caret + padding), and the two flat readouts
+   peak at 44.8 and 60.8 of bare text against 50 and 70. Eighteen px are left over at the
    narrowest phone anyone still ships. The strip spreads across whatever more it gets
    (space-between) rather than huddling at the left.
-   The labels shorten here the way the tray's ROTATE becomes ROT — WAITING to WAIT, NEXT IN to
-   NEXT, LOST to ✕ — and the big number gives up two of its nineteen points. It is still six
-   points larger than anything else on the bar, which is the only property that matters.
    Heights, measured in Chrome: row 1 is a 25px chip, row 2 the 25.4px walker chip (a 17px
    number, 6 of padding, 2 of border).
        25 + 6 gap + 25.4 + 12 padding + 1 border = 69.4 ≤ 72 = --top-h
    Two rows here cost 4px LESS than the three rows this band used to need, so the phone board
    is taller than it was before the bar was rethought.                                      */
-@media (max-width: 559px) {
+@media (max-width: 639px) {
   :root { --top-h: 72px; }
-  #topbar, #hud { padding-left: 6px; padding-right: 6px; }
 
   #walkers { width: 100%; margin-left: 0; justify-content: space-between; }
-  #btn-roster { width: 104px; padding: 3px 7px; gap: 4px; }
+}
+
+/* --- ≤559px: the words shorten -----------------------------------------------------
+   The row structure is the ≤639 block's; what happens here is vocabulary. The labels shorten
+   the way the tray's ROTATE becomes ROT — WAITING to WAIT, NEXT IN to NEXT, LOST to ✕ — and
+   the big number gives up two of its nineteen points. It is still six points larger than
+   anything else on the bar, which is the only property that matters. The strip's three chips
+   take their fixed tiny-band widths (the row-two arithmetic above is this band's).          */
+@media (max-width: 559px) {
+  #topbar, #hud { padding-left: 6px; padding-right: 6px; }
+
+  #btn-roster { width: 118px; padding: 3px 7px; gap: 4px; }
   #btn-roster b { font-size: 17px; }
   #btn-roster #fc-soonest { font-size: 14px; }   /* see the specificity note on the base rule */
-  .wk-next { width: 64px; }
-  #score { width: 82px; gap: 2px; }
+  .wk-next { width: 50px; }
+  #score { width: 70px; gap: 2px; }
 
   .tiny-hide { display: none; }
   .tiny-only { display: inline; }

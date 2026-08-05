@@ -160,11 +160,12 @@ function el(id) {
 export function createHud(h) {
   const dom = {
     hud: el('hud'),
-    // The level picker, the seed link, the turn counter and the remaining count live in the
-    // drawer (drawer.js) since the top bar went walker-first. They are written here on every
-    // update exactly as they were when they were on the bar — a node behind a scrim is still a
-    // node, and giving the drawer its own render pass would be a second answer to a question
-    // this function already answers.
+    // The seed link, the turn counter and the remaining count live in the drawer (drawer.js)
+    // since the top bar went walker-first; the level picker went with them and came back to
+    // the bar the same day (owner decision — switching maps is play). Wherever a node sits,
+    // it is written here on every update exactly as it always was — a node behind a scrim is
+    // still a node, and giving the drawer its own render pass would be a second answer to a
+    // question this function already answers.
     level: /** @type {HTMLSelectElement} */ (el('f-level')),
     menu: el('btn-menu'),
     restart: el('btn-restart'),

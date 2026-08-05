@@ -1,6 +1,7 @@
 // @ts-check
-// The menu drawer (owner decision 2026-08-05): the level picker, the seed link, the turn
-// counter and the remaining count, one tap off the top bar.
+// The menu drawer (owner decision 2026-08-05): the seed link, the turn counter and the
+// remaining count, one tap off the top bar. (The level picker shipped in here and was pulled
+// back onto the bar the same day, second owner decision: switching maps is play.)
 //
 // It exists because the top bar became walker-first. The most important thing in this game is
 // the people standing still, and a bar carrying five chips of equal weight cannot say that —

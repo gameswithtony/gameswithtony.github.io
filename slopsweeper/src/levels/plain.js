@@ -38,7 +38,9 @@ A##############################B
 ################################
 ################################
 `,
-  arrivals: { count: 9, firstTick: 6, every: 4 },
+  arrivals: { count: 9, firstTick: 4, every: 3 },
+  patience: 5,
   mineDensity: 0.12,
-  shapePool: 'compact',
+  betaSupply: 1,
+  shapePool: 'awkward',
 };
