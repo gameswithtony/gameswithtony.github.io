@@ -86,7 +86,7 @@ body {
   flex-wrap: nowrap;        /* wrapping here used to move the board (see #actionbar) */
 }
 
-.field, .chip, .forecast > span, .hint {
+.field, .chip, .forecast > span, .forecast > button, .hint {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -110,7 +110,32 @@ body {
    tick must wrap the top bar exactly the way a one-digit one does. */
 #seed { width: 128px; justify-content: center; overflow: hidden; white-space: nowrap; }
 #tick { display: inline-block; min-width: 30px; text-align: right; }
-.forecast b { display: inline-block; min-width: 22px; text-align: right; }
+/* 18px holds the two digits every one of these values can reach (arrivals top out in the
+   teens, the next-arrival countdown at the level's cadence). Trimmed from 22 when the waiting
+   item grew its second number — the row-packing arithmetic in the media queries below is
+   what pays for that, and it had to come from somewhere. */
+.forecast b { display: inline-block; min-width: 18px; text-align: right; }
+
+/* The waiting item is a BUTTON: it opens the roster (src/ui/roster.js). It keeps the chip's
+   border so it reads as tappable among the forecast's plain spans, and a FIXED width so a
+   two-digit count or a two-digit countdown cannot rewrap the top bar — the same rule every
+   other variable-length item up here follows. 102px holds the worst case measured in Chrome —
+   WAITING 12 ·20 comes to 99 with its padding and gaps, and the three left over are the
+   difference between a fixed width and a lucky one. */
+#btn-roster {
+  width: 102px;
+  gap: 4px;
+  padding: 4px 6px;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Inside the chip the numbers pack tight against their labels; the fixed width above is what
+   holds the layout still, so a min-width here would only push the pair off-centre. */
+#btn-roster b { min-width: 0; }
+#fc-soonest { color: var(--dim); }
+#fc-soonest.urgent { color: var(--red); }
 
 /* Label variants, swapped by the breakpoints below: `narrow` at ≤899, `tiny` at ≤559. */
 .narrow-only, .tiny-only { display: none; }
@@ -119,9 +144,13 @@ body {
 
 b { color: var(--paper); font-weight: 700; }
 
+/* 8px rather than the 12 it carried before the waiting item became a two-number chip: the
+   trio is the last thing on the top bar's single row at ≥900, and the row's own worst case
+   (131 + 66 + 128 + 80 + 148 + trio, five 8px gaps, 20 of padding) is what pays for the chip.
+   Measured in Chrome at the widest labels every item can show. */
 .forecast {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   margin-left: auto;
   flex-wrap: wrap;
 }
@@ -231,6 +260,13 @@ button.verb i { background: var(--select); }
    legible before you read the number. */
 button.verb.free { border-color: var(--hidden); color: var(--revealed); }
 button.verb.free i { background: var(--revealed); }
+
+/* BETA is a verb that spends a turn AND a supply, and the supply is the part the eye has to
+   catch: it wears the green of the tile it ships, so the button and the thing it puts on the
+   board are visibly the same object. Filled rather than outlined, because there are only ever
+   three of these in a run and a verb you can run out of should not look like PLACE. */
+button.verb.beta { border-color: var(--ok); background: var(--ok); color: var(--ink); }
+button.verb.beta i { background: var(--ink); color: var(--ok); }
 
 /* The selected cell's one-line explanation. It takes what is left after the verbs — which
    keep their intrinsic width above — and truncates rather than scrolling out of reach. */
@@ -539,6 +575,115 @@ body.starting #board > * { visibility: hidden; }
 
 #lose-retry { border-color: var(--ok); color: var(--ok); }
 
+/* --- the user roster (src/ui/roster.js) ---------------------------------------------
+   A scrim you can tap through to dismiss, with the panel hung under the top bar on the right
+   — directly under the chip that opens it, so the number and the list explaining it sit in
+   the same corner of the eye. The scrim is thinner than the overlays' 0.94: the roster is
+   read AGAINST the board ("who is that dot"), not instead of it.
+   z-index 35 puts it over the Lab's launcher and under the start/end cards, which are
+   decisions and must never be argued with by a list. */
+#roster {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 8px;
+  padding-top: calc(var(--top-h) + 6px);
+  background: rgba(13, 16, 22, 0.55);
+}
+
+#roster-card {
+  display: flex;
+  flex-direction: column;
+  width: min(320px, 100%);
+  max-height: 100%;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+}
+
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.roster-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--coast);
+}
+
+.roster-head .hint { margin-left: auto; font-size: 10px; }
+#roster-close { padding: 4px 8px; flex: none; }
+
+/* The list scrolls INSIDE the card, like every other overlay here: the page behind it is a
+   fixed-height grid and must not learn that a long roster exists. */
+#roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ru-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  text-align: left;
+}
+
+button.ru-row { cursor: pointer; }
+button.ru-row:hover { border-color: var(--select); }
+
+.ru-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ru-state { flex: none; font-size: 10px; letter-spacing: 0.1em; }
+/* Fixed and right-aligned: the countdowns are a column you read down, not a ragged edge. */
+.ru-left { flex: none; min-width: 78px; text-align: right; font-size: 10px; color: var(--dim); }
+
+/* Each status wears the colour of the thing it describes on the board: the user dot's yellow
+   for a walker, the beta tile's green for somebody camped on one. */
+.ru-row.s-queued .ru-state { color: var(--dim); }
+.ru-row.s-walking .ru-state { color: var(--user); }
+.ru-row.s-waiting .ru-state { color: var(--coast); }
+.ru-row.s-beta .ru-state { color: var(--ok); }
+
+/* Resolved rows are history: greyed as a whole, with the one word that says which kind of
+   history keeping its colour. */
+.ru-row.done { opacity: 0.5; }
+.ru-row.done.good .ru-state { color: var(--ok); }
+.ru-row.done.bad .ru-state { color: var(--red); }
+
+.ru-left.urgent { color: var(--red); }
+.ru-left.paused { opacity: 0.55; }
+
+.ru-sep {
+  padding: 8px 7px 2px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+.ru-empty { padding: 10px 7px; font-size: 11px; color: var(--dim); }
+
 /* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
    One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
    squeezing the action bar to nothing — and a clipped verb button whose centre lands on
@@ -623,22 +768,43 @@ body.starting #board > * { visibility: hidden; }
   .narrow-hide { display: none; }
   .narrow-only { display: inline; }
   #btn-run { min-width: 48px; }     /* STOP measures 47.7 at this padding */
+
+  /* The roster stops being a corner panel and becomes a sheet: the chip that opens it is on
+     the topbar's own row down here, nowhere near the right edge, and a 320px card floated
+     against that edge on a 360px phone is a card with a useless 40px gutter. It is inset from
+     both bars so the board stays visible behind it — the point of the panel is matching a
+     name to a dot. */
+  #roster {
+    justify-content: center;
+    padding-top: calc(var(--top-h) + 4px);
+    padding-bottom: calc(var(--hud-h) + env(safe-area-inset-bottom, 0px) + 4px);
+  }
+  #roster-card { width: 100%; }
 }
 
 /* --- ≤559px: the top bar genuinely needs three rows --------------------------------
    Row 1 stops fitting level+restart+seed+tick+score (523px of fixed-width content) below
    ~539px, so the forecast trio — persistent, spec-mandated UI (SPEC §6.1) — was being cut
    mid-glyph. Three rows of 26 + two 6px gaps + 12 padding + 1 border = 93 ≤ 96 = --top-h.
-   The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT, 166px total) and is
-   allowed to share a row, so the worst packing in this band is:
-       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [score 76 + fc 166]
-       320px (308 usable): [field + restart + seed 299] [tick + score 165] [fc 166]
-   — three rows at every width in the band, and the trio is never clipped. */
+   The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT) and is allowed to share
+   a row, so the worst packing in this band is:
+       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [score 76 + fc 183]
+       320px (308 usable): [field + restart + seed 299] [tick + score 165] [fc 183]
+   — three rows at every width in the band, and the trio is never clipped.
+
+   The trio measured 166 before the waiting item became the roster chip and grew a second
+   number. It is 183 now (48 + 48 + 74 and two 6px gaps, measured in Chrome), and most of the
+   difference came from inside the trio rather than from the row: LEFT and NEXT give up 6px of
+   value gutter each — min-width 16 here, and two digits measure 13. Row three lands at
+   76 + 6 + 183 = 265 of 268 at the 280px worst case, which is the same 3px of slack the
+   footer's own tightest row has always run on.                                             */
 @media (max-width: 559px) {
   :root { --top-h: 96px; }
   #topbar, #hud { padding-left: 6px; padding-right: 6px; }
   #score { width: 76px; }
   .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
+  .forecast b { min-width: 16px; }
+  #btn-roster { width: 74px; padding: 3px 4px; }
   .tiny-hide { display: none; }
   .tiny-only { display: inline; }
 }

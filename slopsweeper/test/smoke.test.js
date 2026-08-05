@@ -70,9 +70,12 @@ test('the terrain table has a complete row per SPEC §2.1 feature', () => {
 });
 
 test('the construction table carries the full SPEC §2.2 union', () => {
+  // `beta` joined the union on 2026-08-05 (SPEC §2.2/§4.7) — a shipped milestone, safe
+  // ground you built, whose whole difference from `hand` lives in routing rather than in a
+  // capability. The list is the only thing here that moved.
   assert.deepEqual(
     Object.keys(CON).sort(),
-    ['aiHidden', 'aiRevealed', 'hand', 'mineConfirmed', 'none'],
+    ['aiHidden', 'aiRevealed', 'beta', 'hand', 'mineConfirmed', 'none'],
   );
   assert.equal(CON.aiHidden.passable, true);
   // Revised 2026-08-04 (user decision, overriding SPEC §4.1): hand placement branches from

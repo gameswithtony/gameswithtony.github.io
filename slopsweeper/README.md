@@ -12,6 +12,13 @@ game: a procedural pixel-art canvas board with semantic zoom and pan, a DOM HUD,
 particle detonations, fast-forward, an end screen, and the paste-to-play Level Lab (§9.2).
 What is left is M5's device pass (PLAN §14).
 
+**Beta blocks** land on 2026-08-05 (SPEC §4.7): three shipped milestones a level, placed on
+open water exactly like a hand tile, that users treat as intermediate destinations — they
+depart for one the moment it is reachable and closer to B, walk to it, and camp there until
+something better opens up. Camping drains patience like any other waiting, so what a beta
+buys is the walk, not the clock. With no beta on the board the game is bit-for-bit the game
+it was, which the sim table and `test/beta.test.js` both check rather than assume.
+
 ## There is no build step, ever
 
 Plain JavaScript ES modules. No bundler, no compiler, no `dist/`, no dependencies — nothing
@@ -56,8 +63,11 @@ npm run sim -- --all --games 200             # same runner
 ```
 
 Policies: `handOnly`, `genRush`, `balanced:p`, `careful:p`, each optionally suffixed
-`-greedy` (default) or `-edge` to pick the ghost-placement strategy. `--no-solver` skips the
-`guessForced` instrumentation.
+`-greedy` (default) or `-edge` to pick the ghost-placement strategy, and `-beta` to ship beta
+milestones under pressure (SPEC §4.7). Suffixes compose in any order —
+`balanced-edge-beta:0.4`. `-beta` is deliberately out of the default sweep, so `--all` keeps
+measuring the game the corpus was tuned against. `--no-solver` skips the `guessForced`
+instrumentation.
 
 ## Layout
 

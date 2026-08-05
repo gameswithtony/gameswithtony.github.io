@@ -47,7 +47,7 @@ export const POSTS = [
     headline: 'Head of Platform Velocity',
     body: `Thrilled to announce that we have officially sunset the {map} initiative. 🌊
 
-Did we serve {served} of {total} users? Technically, yes. Did we ship {ticks} ticks of AI-generated infrastructure straight out over open ocean? Absolutely we did.
+Did we serve {served} of {total} users? Technically, yes. Did we ship {ticks} turns of AI-generated infrastructure straight out over open ocean? Absolutely we did.
 
 The {lost} users who walked away were never churn. They were unpaid researchers, and their patience was the most honest feedback this org has ever received.
 
@@ -60,7 +60,7 @@ Failing fast is still fast. 🚀
     headline: 'Director of Lessons Learned (newly created role!)',
     body: `Some personal news. 🎉
 
-After {ticks} ticks leading delivery on {map}, I am stepping into a brand-new position created specifically for me: Director of Lessons Learned.
+After {ticks} turns leading delivery on {map}, I am stepping into a brand-new position created specifically for me: Director of Lessons Learned.
 
 Were there {detonations} detonations? There were. Did our own causeway revert to open water underneath the people standing on it? It did.
 
@@ -99,7 +99,7 @@ Grateful. Humbled. Already hiring. 🌱
 
 We deprecated them. ✅
 
-In {ticks} ticks we validated that the market is not yet ready for a bridge that intermittently becomes ocean. That is called de-risking, and we did it for a fraction of what it would have cost to do properly.
+In {ticks} turns we validated that the market is not yet ready for a bridge that intermittently becomes ocean. That is called de-risking, and we did it for a fraction of what it would have cost to do properly.
 
 Raising a small round to do it again, larger. DMs open. 🚀`,
   },
@@ -110,7 +110,7 @@ Raising a small round to do it again, larger. DMs open. 🚀`,
 
 1/ {detonations} defects detonated in production. Blast radius: exactly as documented. Documentation: written afterwards.
 
-2/ We shipped {ticks} ticks. Velocity was never the problem.
+2/ We shipped {ticks} turns. Velocity was never the problem.
 
 3/ The real users were the learnings we made along the way.
 

@@ -90,7 +90,7 @@ export function createLab(h) {
         <label for="lab-id">ID</label><input id="lab-id" type="text" autocomplete="off">
         <label for="lab-name">NAME</label><input id="lab-name" type="text" autocomplete="off">
         <label for="lab-count">ARRIVALS</label><input id="lab-count" type="number" min="1" step="1">
-        <label for="lab-first">FIRST TICK</label><input id="lab-first" type="number" min="0" step="1">
+        <label for="lab-first">FIRST TURN</label><input id="lab-first" type="number" min="0" step="1">
         <label for="lab-every">EVERY</label><input id="lab-every" type="number" min="1" step="1">
         <label for="lab-density">DENSITY</label><input id="lab-density" type="number" min="0" max="1" step="0.01">
         <label for="lab-pool">POOL</label><select id="lab-pool"></select>

@@ -16,7 +16,7 @@
     </label>
     <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
     <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
-    <span class="chip">TICK <b id="tick">0</b></span>
+    <span class="chip">TURN <b id="tick">0</b></span>
     <!-- The score. Users served is the whole point total; users lost are the ones no amount
          of building brings back. -->
     <span id="score" class="chip" title="Users served · users lost for good">
@@ -29,7 +29,11 @@
     <div id="forecast" class="forecast">
       <span title="Users still to be served"><span class="tiny-hide">REMAINING</span><span class="tiny-only">LEFT</span> <b id="fc-remaining">—</b></span>
       <span title="Turns until the next user arrives"><span class="tiny-hide">NEXT IN</span><span class="tiny-only">NEXT</span> <b id="fc-next">—</b></span>
-      <span title="Users waiting right now"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span> <b id="fc-waiting">—</b></span>
+      <!-- The waiting count is also the door to the roster (src/ui/roster.js). It carries two
+           numbers: how many are waiting, and how long the least patient of them will keep
+           doing it. The second one is the one you can still act on, so it is the one that
+           goes red. -->
+      <button id="btn-roster" class="chip" title="Turns before the most impatient user gives up — tap for the roster"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span> <b id="fc-waiting">—</b><b id="fc-soonest"></b></button>
     </div>
   </header>
 
@@ -54,7 +58,7 @@
     <div id="actionbar"></div>
     <div id="globals">
       <button id="btn-generate" title="Draw a block — the turn is charged when you commit it"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>0</i></button>
-      <button id="btn-wait" title="Let a tick pass">WAIT <i>1</i></button>
+      <button id="btn-wait" title="Let a turn pass">WAIT <i>1</i></button>
       <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at. -->
       <button id="btn-run" title="Fast-forward: waits every 180 ms until something happens">RUN</button>
     </div>
@@ -71,6 +75,20 @@
       <canvas id="minimap" title="Tap to jump"></canvas>
     </div>
   </footer>
+
+  <!-- The user roster (src/ui/roster.js), opened from the WAITING chip above. Empty markup:
+       the ids are the contract, every row inside is derived from the state. It is fixed-
+       position, so it is not a fourth row of the body grid and cannot move the board. -->
+  <div id="roster" class="hidden">
+    <div id="roster-card" role="dialog" aria-label="Users">
+      <div class="roster-head">
+        <h2>USERS</h2>
+        <span class="hint">TAP A ROW TO JUMP</span>
+        <button id="roster-close" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+      <div id="roster-list"></div>
+    </div>
+  </div>
 
   <script type="module" src="./src/ui/main.js"></script>
 </body>

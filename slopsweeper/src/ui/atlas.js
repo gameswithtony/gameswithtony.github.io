@@ -94,7 +94,7 @@ function tileNames() {
     for (let v = 0; v < VARIANTS; v++) names.push(`${kind}${v}`);
   }
   names.push('revealed', 'mine', 'origin', 'dest', 'tintOk', 'tintRed', 'tintSelect', 'tintUser');
-  names.push('flag', 'flagFar');
+  names.push('flag', 'flagFar', 'beta', 'betaFar');
   for (let m = 0; m < 16; m++) names.push(`coastS${m}`);
   for (let m = 0; m < 16; m++) names.push(`coastC${m}`);
   return names;
@@ -180,6 +180,8 @@ function paint(ctx, name, ox, oy, px) {
     case 'dest': return paintEndpoint(p, false);
     case 'flag': return paintFlag(p);
     case 'flagFar': return paintFlagFar(p);
+    case 'beta': return paintBeta(p);
+    case 'betaFar': return paintBetaFar(p);
     case 'tintOk': return paintTint(p, PALETTE.OK);
     case 'tintRed': return paintTint(p, PALETTE.RED);
     case 'tintSelect': return paintTint(p, PALETTE.SELECT);
@@ -341,6 +343,51 @@ function paintFlag(p) {
 function paintFlagFar(p) {
   p(4, 4, PALETTE.INK, 8, 8);
   p(5, 5, PALETTE.RED, 6, 6);
+}
+
+/**
+ * A shipped beta block (2026-08-05). Unlike the flag it is a whole TILE, not an overlay: a
+ * beta is construction — one cell of it, hand-placed, permanent — so it wears the inset border
+ * every built cell wears and a fill of its own.
+ *
+ * The fill is OK green, the game's existing "go" colour, and no new palette entry: SPEC §10.8
+ * caps the palette at sixteen and it is at sixteen. Green is also the only entry no tile was
+ * using — it lived on the placement tints and the valid ghost, which are 50% checkerboards
+ * over a tile rather than tiles, so a solid green cell with a hard INK border cannot be
+ * confused with one at any zoom.
+ *
+ * The mark is a pennant, deliberately the flag tile's own vocabulary in different colours: you
+ * planted something on open water and called it a milestone. A beta reads its neighbours like
+ * any other tile you built (renderer.js), so the mark has to share the cell with a clue digit
+ * — and the digit's box is known exactly, not guessed at: `drawTextCentered` puts a 5×7 glyph
+ * at art rows 5–11, columns 6–10. That leaves the whole top strip (rows 0–4) and the left
+ * columns free, which is where the pennant lives: a full-height mast down the left and the
+ * flag flying across the top, above the number rather than under it.
+ * @param {Pen} p
+ */
+function paintBeta(p) {
+  p(0, 0, PALETTE.OK, ART, ART);
+  border(p, PALETTE.INK);
+  p(2, 2, PALETTE.INK, 2, 12);          // mast, near enough the full height of the cell
+  p(1, 13, PALETTE.INK, 4, 2);          // foot: without it the mast reads as a stray line
+  // The flag, tapering away from the mast in three stepped runs — no diagonals anywhere.
+  p(4, 2, PALETTE.PAPER, 7, 1);
+  p(4, 3, PALETTE.PAPER, 5, 1);
+  p(4, 4, PALETTE.PAPER, 3, 1);
+}
+
+/**
+ * Far tier: the pennant is four art pixels of nothing at one device pixel each, so the tile
+ * keeps its colour and swaps the mark for a bold chip — the same trade `flagFar` makes, for
+ * the same reason. At this tier there are no clue digits to stay out of the way of, so the
+ * chip sits in the middle where the eye looks.
+ * @param {Pen} p
+ */
+function paintBetaFar(p) {
+  p(0, 0, PALETTE.OK, ART, ART);
+  border(p, PALETTE.INK);
+  p(4, 4, PALETTE.INK, 8, 8);
+  p(5, 5, PALETTE.PAPER, 6, 6);
 }
 
 /**

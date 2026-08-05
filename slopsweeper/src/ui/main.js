@@ -17,6 +17,7 @@ import * as cam from './camera.js';
 import { createRenderer, ghostCells } from './renderer.js';
 import { createInput } from './input.js';
 import { createHud } from './hud.js';
+import { createRoster } from './roster.js';
 import { createEffects } from './particles.js';
 import { PALETTE } from './palette.js';
 
@@ -36,7 +37,7 @@ const SAVE_KEY = 'slop-sweeper.save';
  * against a core that is still moving. Costing a player one in-progress game at a version
  * bump is the right trade against reviving a state the reducer no longer understands.
  */
-const SAVE_V = 1;
+const SAVE_V = 2;   // 2: beta blocks — `Con` gained a variant and `stats` gained `betas`
 
 /** localStorage must never be load-bearing: the game runs with storage unavailable (PLAN §4). */
 const store = {
@@ -221,9 +222,22 @@ function boot() {
       analyzed: s.stats.analyzed,
       waited: s.stats.waited,
     };
+    // The roster is a live view of a game in progress; this one is over, and an end screen is
+    // a decision that must not have a list arguing with it from underneath.
+    roster.close();
     if (endScreen) endScreen.end(facts);
     else pendingEnd = facts;
   }
+
+  // The roster (PLAN §11.9's neighbour): a DOM list of everyone in the run, opened from the
+  // WAITING chip. Statically imported rather than lazy like the start screen — it is one of
+  // the two things the chip does, and a control that is dead for the first second of the page
+  // is worse than one that costs a few hundred bytes up front.
+  const roster = createRoster({
+    // The same centring the minimap taps use, and deliberately the same one: two ways to say
+    // "show me that cell" that framed it differently would be two features.
+    onJump: (cell) => jumpTo(cell),
+  });
 
   const hud = createHud({
     onAction: (kind) => {
@@ -231,6 +245,7 @@ function boot() {
         case 'generate': return dispatch({ t: 'generate' });
         case 'wait': return dispatch({ t: 'wait' });
         case 'place': return view.selected >= 0 && dispatch({ t: 'place', cell: view.selected });
+        case 'beta': return view.selected >= 0 && dispatch({ t: 'beta', cell: view.selected });
         case 'analyze': return view.selected >= 0 && dispatch({ t: 'analyze', cell: view.selected });
         case 'flag': return toggleFlag();
         case 'placeBlock': return confirmBlock();
@@ -241,10 +256,11 @@ function boot() {
     onConfirm: confirmBlock,
     onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); else restart(); },
     onRestart: restart,
-    onMinimapJump: (cell) => { cam.centerOnCell(camera, s, cell); renderer.invalidate(); refresh(); },
+    onMinimapJump: jumpTo,
     onCopySeed: copySeed,
     onRun: toggleRun,
     onZoom: zoomStep,
+    onRoster: () => roster.toggle(s),
   });
   // Same union `startWith` builds: a restored Lab game boots straight past `startWith`, and
   // without this its own level would be missing from the dropdown, which would then display
@@ -308,6 +324,7 @@ function boot() {
     prev = next;
     view.selected = -1;
     view.rot = 0;
+    roster.close();          // a new game's roster is a new set of people; open it yourself
     endScreen?.close();
     hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
     const url = new URL(location.href);
@@ -348,6 +365,17 @@ function boot() {
     refresh();
     saveGame();
     startLoop();
+  }
+
+  /**
+   * Put a cell in the middle of the viewport. The minimap's tap and the roster's rows are the
+   * two callers, and they share this rather than each centring their own way.
+   * @param {number} cell
+   */
+  function jumpTo(cell) {
+    cam.centerOnCell(camera, s, cell);
+    renderer.invalidate();
+    refresh();
   }
 
   /** @param {number} cell  -1 deselects */
@@ -434,6 +462,9 @@ function boot() {
   function refresh() {
     syncView();
     hud.update(s, view, camera);
+    // Patience moves every turn, so an open roster has to be redrawn on every update or it is
+    // showing countdowns that expired. It costs one boolean test while it is closed.
+    roster.update(s);
     requestDraw();
   }
 
@@ -490,6 +521,9 @@ function boot() {
   bus.on('blockPlaced', (/** @type {{ mines: number }} */ ev) => {
     hud.toast(`INTRODUCED ${ev.mines} DEFECTS`);
   });
+  // Shipping a beta changes where users are walking, which is a bigger deal than the one tile
+  // that appeared says. The toast names the consequence rather than the tile.
+  bus.on('betaPlaced', () => hud.toast('BETA SHIPPED — USERS WILL WALK TO IT'));
   bus.on('generateRefunded', () => hud.notice('NOWHERE LEGAL TO PUT IT — TURN REFUNDED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
     hud.toast(`REVIEWED ${ev.revealed.length} CELL${ev.revealed.length === 1 ? '' : 'S'}`);

@@ -5,10 +5,11 @@
 
 import { LEVEL_DEFAULTS } from './rules.js';
 import {
-  CON_HAND, CON_NONE, conCaps, isFlagged, isHandBuildable, levelParams, setLevelParams, stopsBlast,
+  CON_BETA, CON_HAND, CON_NONE, conCaps, isFlagged, isHandBuildable, levelParams, setLevelParams,
+  stopsBlast,
 } from './state.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
-import { distField, gateOpen, stepCandidates } from './routing.js';
+import { canProgress, gateOpen, stepCandidates, waypointField } from './routing.js';
 import { drawShape, legalPlacements, placementCells, rollMines } from './generate.js';
 import { fromState, initStreams } from './rng.js';
 import { assertValidLevel } from './validate.js';
@@ -35,6 +36,7 @@ export function init(def, seed) {
     arrivals: def.arrivals ?? LEVEL_DEFAULTS.arrivals,
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
+    betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
     shapePool: def.shapePool ?? LEVEL_DEFAULTS.shapePool,
     userMoveEvery: def.userMoveEvery ?? LEVEL_DEFAULTS.userMoveEvery,
     blastRadius: def.blastRadius ?? LEVEL_DEFAULTS.blastRadius,
@@ -62,7 +64,9 @@ export function init(def, seed) {
     },
     phase: { k: 'play' },
     rng: initStreams(seed),
-    stats: { placed: 0, generated: 0, analyzed: 0, waited: 0, detonations: 0, served: 0, lost: 0 },
+    stats: {
+      placed: 0, generated: 0, analyzed: 0, waited: 0, detonations: 0, served: 0, lost: 0, betas: 0,
+    },
   };
   setLevelParams(s, params);
   return s;
@@ -85,6 +89,21 @@ export function reduce(s, a) {
       d.stats.placed++;
       /** @type {Ev[]} */
       const ev = [{ t: 'placed', cells: [a.cell] }];
+      return { s: runTick(d, ev), ev };
+    }
+    case 'beta': {
+      // Ship a beta milestone (SPEC §4.7, user decision 2026-08-05). Mechanically this is a
+      // hand tile with a different job: the same target rules, the same one turn, and then
+      // the same tick pipeline — the difference is entirely in `routing.js`, where the cell
+      // becomes somewhere users are willing to walk to and stop. Supply is the only new
+      // rule, and it lives in `betaRejection` beside the rules it extends.
+      const reason = betaRejection(s, a.cell);
+      if (reason) return rejected(s, reason);
+      const d = draft(s);
+      d.con[a.cell] = CON_BETA;
+      d.stats.betas++;
+      /** @type {Ev[]} */
+      const ev = [{ t: 'betaPlaced', cell: a.cell }];
       return { s: runTick(d, ev), ev };
     }
     case 'generate': {
@@ -211,6 +230,10 @@ export function legalActions(s, cell) {
     return out;
   }
   if (!placeRejection(s, cell)) out.push('place');
+  // Wherever Place is legal, so is a beta while any supply is left — same target rules, same
+  // cost, different job (SPEC §4.7). It is offered after Place because Place is the verb the
+  // player reaches for on that cell nine times in ten.
+  if (!betaRejection(s, cell)) out.push('beta');
   if (!analyzeRejection(s, cell)) out.push('analyze');
   if (!flagRejection(s, cell)) out.push('flag');
   return out;
@@ -228,6 +251,20 @@ export function legalActions(s, cell) {
  */
 export function placeRejection(s, cell) {
   if (s.phase.k !== 'play') return `cannot place during phase '${s.phase.k}'`;
+  return handTargetRejection(s, cell);
+}
+
+/**
+ * The target rules every hand-placed construction shares: ocean terrain, nothing built there,
+ * not an endpoint, 4-adjacent to the network. Factored out on 2026-08-05 so `beta` (SPEC
+ * §4.7) is placed by the *same code* as a hand tile rather than by a copy of it — "exactly
+ * like a hand tile" is a rule that only stays true if there is one implementation of it.
+ * Phase and per-verb costs stay with the verbs; this is the board's part of the question.
+ * @param {GameState} s
+ * @param {number} cell
+ * @returns {string} empty when the cell can be built on
+ */
+function handTargetRejection(s, cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= s.w * s.h) return `cell ${cell} is off the board`;
   if (cell === s.origin || cell === s.dest) return 'endpoints are not buildable';
   if (!isHandBuildable(s.terrain[cell], s.con[cell])) {
@@ -238,6 +275,23 @@ export function placeRejection(s, cell) {
     if (conCaps(s.con[j]).handFrom) return '';
   }
   return 'must touch an endpoint or a tile that is already built';
+}
+
+/**
+ * Ship a beta milestone (SPEC §4.7, user decision 2026-08-05). Identical target rules to
+ * `placeRejection` — a beta lands on empty ocean touching the network, and occupancy is what
+ * stops it landing on anything at all, another beta included. The one rule it adds is the
+ * supply: `stats.betas` counts what has been shipped and never comes back down, so a beta a
+ * blast takes out is spent, not returned. A level with `betaSupply: 0` simply never offers
+ * the verb.
+ * @param {GameState} s
+ * @param {number} cell
+ * @returns {string} empty when a beta can be shipped here
+ */
+export function betaRejection(s, cell) {
+  if (s.phase.k !== 'play') return `cannot ship a beta during phase '${s.phase.k}'`;
+  if (s.stats.betas >= levelParams(s).betaSupply) return 'no beta supply remaining';
+  return handTargetRejection(s, cell);
 }
 
 /**
@@ -353,9 +407,13 @@ function runTick(d, ev) {
   // waiting, which is what it would look like anyway (OPEN #1; default 1 = every tick).
   const { userMoveEvery } = levelParams(d);
   if (d.tick % userMoveEvery === 0) {
-    const dist = distField(d);
-    departures(d, ev, dist);
-    movement(d, ev, dist);
+    // One field per movement phase, exactly where the plain distance field used to be
+    // computed (PLAN §7.1.3). Since 2026-08-05 it is the *waypoint* field: users walk to the
+    // nearest waypoint their component owns rather than to B unconditionally. With no beta
+    // on the board it is the distance field, cell for cell.
+    const wf = waypointField(d);
+    departures(d, ev, wf);
+    movement(d, ev, wf);
     traversal(d, ev);
   }
   // Step 5 — stranding: users with no remaining path simply stall each tick and are
@@ -369,12 +427,15 @@ function runTick(d, ev) {
 /**
  * All queued users with an open path depart at once — the flush when a path completes is
  * the feedback (PLAN §3.9). Users spawned this tick gate next tick.
+ *
+ * "An open path" now means "somewhere worth walking to" (SPEC §6.2, rev. 2026-08-05): B, or
+ * a beta staged between here and B. Which is the same sentence when there is no beta.
  * @param {GameState} d
  * @param {Ev[]} ev
- * @param {Int32Array} dist
+ * @param {import('./routing.js').WaypointField} wf
  */
-function departures(d, ev, dist) {
-  if (!gateOpen(d, dist)) return;
+function departures(d, ev, wf) {
+  if (!gateOpen(d, wf)) return;
   for (const u of d.users) {
     if (u.state !== 'queued') continue;
     u.state = 'moving';
@@ -388,14 +449,46 @@ function departures(d, ev, dist) {
 /**
  * @param {GameState} d
  * @param {Ev[]} ev
- * @param {Int32Array} dist
+ * @param {import('./routing.js').WaypointField} wf
  */
-function movement(d, ev, dist) {
+function movement(d, ev, wf) {
   const move = fromState(d.rng.move);
   for (const u of d.users) {
     if (u.state !== 'moving') continue;
     u.stalled = false;
-    const options = stepCandidates(d, dist, u.at, u.visited);
+    // The progress guard is asked BEFORE the move stream is touched, and the ordering is
+    // load-bearing rather than tidy: a user held in place by it must draw no random number,
+    // or a board with a beta on it would consume the movement stream at a different rate
+    // from one without and every no-beta replay would diverge (PLAN §7.5). A user standing
+    // on its own target beta fails here, which is what "camping" is made of.
+    if (!canProgress(d, wf, u.at)) {
+      u.stalled = true;
+      continue;
+    }
+    let options = stepCandidates(d, wf.dist, u.at, u.visited);
+    if (options.length === 0 && wf.hasBeta) {
+      // RETRY ON A FRESH TRIP. The no-revisit trail (SPEC §6.3.3) exists to stop a user
+      // looping inside one trip. When the guard says progress is available and the trail is
+      // the only thing in the way, the trip the trail belongs to is over: the waypoint set
+      // moved under the walker — a beta was shipped, one was destroyed, a road reached a
+      // better one — and it is starting a new walk to a new place. So it forgets where it
+      // has been and goes.
+      //
+      // It cannot oscillate. Every step still strictly decreases the current field, and only
+      // a player turn can change that field, so a user can never be handed back a target it
+      // just left by its own movement.
+      //
+      // SCOPED TO BOARDS THAT CARRY A BETA, deliberately, and this is the one place the beta
+      // work touches a rule that predates it. A trail can go stale without any beta in sight
+      // — finish a road behind a walker and the gradient reverses under it, and today that
+      // user stalls where it stands until its patience runs out. Letting the retry loose on
+      // those boards measurably changes games with no beta in them (it costs `plain`/genRush
+      // its remaining `gaveUp` and buys `killed` instead), and a no-beta game must play
+      // exactly as it played before this feature existed. Relaxing §6.3.3 in general is a
+      // real and probably good change; it is a different one, and it is the spec owner's.
+      options = stepCandidates(d, wf.dist, u.at, [u.at]);
+      if (options.length > 0) u.visited = [u.at];
+    }
     if (options.length === 0) {
       u.stalled = true;
       continue;
@@ -444,12 +537,20 @@ function traversal(d, ev) {
   }
 
   if (!blew) return;
-  // PLAN §7.1.3: the distance field is stale the moment ground disappears. Recompute it and
-  // re-mark anyone whose route was severed after they had already stepped, so SPEC §6.4's
-  // waiting count is right on the tick of the blast rather than the tick after.
-  const fresh = distField(d);
+  // PLAN §7.1.3: the field is stale the moment ground disappears. Recompute it and re-mark
+  // anyone the crater stranded after they had already stepped, so SPEC §6.4's waiting count
+  // is right on the tick of the blast rather than the tick after.
+  //
+  // The stall test is the general one (rev. 2026-08-05): a user is stranded when it cannot
+  // progress, which is now three things at once — nothing to walk to (`dist` -1), standing on
+  // the thing it was walking to (`dist` 0, i.e. a beta whose blast-mates are gone), or a
+  // target that is no longer ahead of it. Only standing on B is arrival, and a user there is
+  // not `moving` anyway. With no beta the first case is the only reachable one, which is the
+  // `fresh[u.at] < 0` test this replaces.
+  const fresh = waypointField(d);
   for (const u of d.users) {
-    if (u.state === 'moving' && fresh[u.at] < 0) u.stalled = true;
+    if (u.state !== 'moving' || u.at === d.dest) continue;
+    if (fresh.dist[u.at] <= 0 || !canProgress(d, fresh, u.at)) u.stalled = true;
   }
 }
 

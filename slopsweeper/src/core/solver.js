@@ -42,6 +42,10 @@ export const NODE_BUDGET = 2_000_000;
  * refuses them (PLAN §3.8) — but stating it here means the exclusion survives a future
  * change of mind about that.
  *
+ * *(Revised 2026-08-05, with beta blocks: `beta` joins the list, on the hand-tile argument
+ * verbatim — a beta is player-built structure, the renderer draws its count, and the solver
+ * has to read every number the player can.)*
+ *
  * @param {GameState} s
  * @param {number} i
  * @returns {boolean}
@@ -49,7 +53,7 @@ export const NODE_BUDGET = 2_000_000;
 function showsClue(s, i) {
   if (i === s.origin || i === s.dest) return false;
   const k = s.con[i].k;
-  return k === 'aiRevealed' || k === 'hand';
+  return k === 'aiRevealed' || k === 'hand' || k === 'beta';
 }
 
 /**

@@ -109,10 +109,13 @@ function checkNumbers(def, errors, warnings) {
     errors.push(String(/** @type {Error} */ (err).message));
   }
 
-  for (const k of /** @type {const} */ (['userMoveEvery', 'blastRadius', 'patience'])) {
+  // `blastRadius: 0` is a level that only kills the triggerer; `betaSupply: 0` is a level
+  // with the beta verb switched off. Both are meaningful settings, so both floor at zero.
+  const ZERO_IS_MEANINGFUL = ['blastRadius', 'betaSupply'];
+  for (const k of /** @type {const} */ (['userMoveEvery', 'blastRadius', 'patience', 'betaSupply'])) {
     const v = def[k];
     if (v === undefined) continue;
-    const floor = k === 'blastRadius' ? 0 : 1;
+    const floor = ZERO_IS_MEANINGFUL.includes(k) ? 0 : 1;
     if (!Number.isInteger(v) || v < floor) errors.push(`${k} must be an integer ≥ ${floor} (got ${v})`);
   }
 }

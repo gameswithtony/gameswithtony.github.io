@@ -76,7 +76,7 @@ test('a block may branch from unreviewed slop — and since 2026-08-04, so may a
   // hand placement was overridden by user decision, so the two verbs now branch from the
   // same set and the difference between them is risk, not legality.
   const target = cellAt(s, 7, 9);            // the only structure it could branch from is slop
-  assert.deepEqual(legalActions(s, target), ['place'], 'hand placement may branch from it too');
+  assert.deepEqual(legalActions(s, target), ['place', 'beta'], 'hand placement may branch from it too');
   assert.deepEqual(legalActions(s, hidden), ['analyze', 'flag'], 'and the slop can be reviewed or flagged');
 });
 

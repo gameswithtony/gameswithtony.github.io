@@ -81,8 +81,23 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `userMoveEvery` | `1` | users step every N ticks |
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 | `patience` | `20` (`RULES.USER_PATIENCE`) | cumulative ticks a user will spend unable to move before it gives up and leaves for good |
+| `betaSupply` | `3` (`RULES.BETA_SUPPLY`) | beta milestones the player may ship (SPEC §4.7); `0` switches the verb off for this level |
 
 `arrivals` is the difficulty dial. Everything else is texture.
+
+**Beta** is the third build verb (added 2026-08-05). It costs one turn and lands by exactly
+Place's target rules, and what it buys is that users treat it as an intermediate destination:
+they leave the origin for it as soon as it is reachable and closer to B, walk to it, and camp
+there until B or a better beta opens up. **Camping drains patience like any other waiting**,
+so a beta never buys time — it buys the walk, which is free, and a starting line further
+along. Only B counts as an arrival. Two things to hold in mind when authoring:
+
+- **A beta is only worth shipping where there is a long walk to be had.** On a level whose
+  frontier advances one tile a turn, a camper's walk is a handful of ticks and the beta cost a
+  whole turn. Levels with a partly built board, a long unbuilt gap behind the frontier, or a
+  route that doubles back are where the verb has something to work with.
+- **`betaSupply: 0` is a real setting**, and the honest one for a level you want read as pure
+  build-and-route.
 
 There is no `analyzeReveals` any more (removed 2026-08-04). **Analyze is one minesweeper
 click**: it opens the tile you point at, and if that tile's clue is zero the classic cascade

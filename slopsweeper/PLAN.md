@@ -303,6 +303,7 @@ export const TERRAIN: Record<Terrain, TerrainCaps>    // adding a feature = addi
 export type Con =                                     // §2.2, complete
   | { k: 'none' }
   | { k: 'hand' }
+  | { k: 'beta' }                                       // shipped milestone (added 2026-08-05)
   | { k: 'aiHidden'; mine: boolean; block: number; flagged: boolean }   // rev. 2026-08-04
   | { k: 'aiRevealed'; block: number }
   | { k: 'mineConfirmed'; block: number }               // no action produces it (rev. 2026-08-04)
@@ -330,11 +331,13 @@ export interface GameState {
     | { k: 'won' } | { k: 'lost' }
   rng: { gen: number; move: number }                  // mulberry32 states (§7.5)
   stats: { placed: number; generated: number; analyzed: number; waited: number
-           detonations: number; served: number }
+           detonations: number; served: number
+           betas: number }                             // shipped, never refunded (2026-08-05)
 }
 
 export type Action =
   | { t: 'place'; cell: number }
+  | { t: 'beta'; cell: number }                        // 1 turn, from supply (§4.7, 2026-08-05)
   | { t: 'generate' }
   | { t: 'placeBlock'; cell: number; rot: 0 | 1 | 2 | 3 }
   | { t: 'analyze'; cell: number }
@@ -346,6 +349,7 @@ export type Ev =
   | { t: 'blockDrawn'; shape: number; rots: RotAnchors[] }
   | { t: 'generateRefunded' }                         // §4.2: empty legal set, turn not consumed
   | { t: 'placed'; cells: number[] }                  // hand tile or committed block cells
+  | { t: 'betaPlaced'; cell: number }                 // then the tick's usual events (2026-08-05)
   | { t: 'blockPlaced'; block: number; cells: number[]; mines: number }  // count → toast
   | { t: 'analyzed'; revealed: number[]; minesFound: number[] }  // minesFound always [] now
   | { t: 'flagged'; cell: number; on: boolean }
@@ -375,12 +379,18 @@ rotationsOf(shapeIdx): [dx, dy][][]                    // normalized, deduped (s
 legalPlacements(s, shapeIdx): RotAnchors[]             // computed BEFORE the turn commits (§4.2)
 // core/routing.js
 passable(s, i): boolean
-distField(s): Int32Array                               // BFS from dest over passable
-gateOpen(s): boolean                                   // dist[origin] finite (§6.2)
+distField(s, seeds?): Int32Array                       // BFS from dest (default) over passable
+potentialField(s): Int32Array                          // to dest over EVER-passable; terrain-only,
+                                                       //   cached per level (added 2026-08-05)
+waypointField(s): { dist; targetPot; hasBeta }         // to each component's best waypoint (§6.2)
+canProgress(s, wf, at): boolean                        // targetPot[at] < potential[at] — the guard
+gateOpen(s, wf?): boolean                              // a waypoint ahead is reachable (§6.2)
 // core/reduce.js
 init(level: LevelDef, seed: number): GameState
 reduce(s, a: Action): { s: GameState; ev: Ev[] }       // pure; clones what it changes
 legalActions(s, cell?: number): ActionKind[]           // single source for the action bar (§10.6)
+placeRejection(s, cell): string                        // '' when legal; betaRejection is the
+betaRejection(s, cell): string                         //   same target rules plus the supply
 clue(s, i): { lo: number; hi: number }                 // exact tier ⇒ lo === hi; derived live
 blastArea(s, i): number[]                              // flood fill; also drives selection preview
 // core/solver.js
@@ -406,6 +416,7 @@ export interface LevelDef {
   shapePool?: 'compact' | 'awkward' | 'heavy' | string[]           // preset name or ids (§10); default 'compact'
   userMoveEvery?: number  // default 1 (OPEN #1: parameterized)
   blastRadius?: number    // default 1 = tile + orthogonals (§5)
+  betaSupply?: number     // default RULES.BETA_SUPPLY = 3; 0 switches the verb off (§4.7)
 }
 ```
 
@@ -415,7 +426,7 @@ export interface LevelDef {
 
 ### 7.1 Tick pipeline (inside `reduce`, deterministic order)
 
-A turn-consuming action (`place`, `placeBlock`, `analyze`, `wait`) runs this pipeline;
+A turn-consuming action (`place`, `beta`, `placeBlock`, `analyze`, `wait`) runs this pipeline;
 `generate` alone does not (the turn charges at `placeBlock`; an empty legal set refunds — no
 tick, `generateRefunded` event, phase unchanged):
 
@@ -447,6 +458,32 @@ design.** It used to be a paragraph explaining that stranded users stay `moving`
 tick, and count as waiting. All three are still true and none is now a special case: a
 stranded user is a blocked user, blocked is waiting, and step 7 resolves it exactly as it
 resolves someone who never got to leave the origin.
+
+> **Revised 2026-08-05 (user decision — beta blocks, SPEC §4.7/§6.2).** Steps 2–4 read the
+> **waypoint field** where they used to read `distField`, computed once per movement phase in
+> exactly the same place. Three amendments, and nothing else in the pipeline moved:
+>
+> - **Step 2, departures.** `gateOpen` asks whether a waypoint — B or a beta — is reachable
+>   *and* ahead of the origin, rather than whether B is reachable. With no beta standing the
+>   two questions are the same question.
+> - **Step 3, movement.** Each user is asked the progress guard **before** the move stream is
+>   touched, so a user the guard holds in place draws no random number. That ordering is the
+>   determinism contract (§7.5) doing its job: a board with a beta on it must not consume the
+>   movement stream at a different rate from one without, or every no-beta replay diverges.
+>   Movement also gains the trail reset described in SPEC §6.3.3's revision — scoped to boards
+>   that carry a beta, so a beta-free game keeps stalling exactly where it used to.
+> - **Step 4, traversal.** The post-blast stranding recompute uses the general stall test:
+>   nothing to walk to, standing on the thing it was walking to, or a target no longer ahead.
+>   With no beta only the first is reachable, which is the `dist < 0` test it replaces.
+>
+> The `beta` verb itself is step 1 like every other board mutation: set the cell, book
+> `stats.betas`, emit `betaPlaced`, then run the pipeline.
+>
+> **The regression guarantee is measured, not asserted.** `node src/sim/run.js --all --games
+> 50 --seed 1` prints a table byte-identical to the one it printed before this change — 1,800
+> games across six levels and six policies — and `test/beta.test.js` compares the waypoint
+> field against `distField` cell by cell, and both gates against each other, on every tick of
+> a real bot game.
 
 ### 7.2 Placement legality (§4.2)
 
@@ -557,6 +594,7 @@ structural ones marked SPEC.
 | ~~`WAIT_DRAIN_PER_USER`~~ | — | **deleted 2026-08-04**: patience is per-user and scales the same way |
 | ~~`DETONATE_HIT`~~ | — | **deleted 2026-08-04**: a blast kills users instead (§3 ruling 4) |
 | `USER_PATIENCE` | 20 | cumulative waiting ticks before a user leaves; per-level override |
+| `BETA_SUPPLY` | 3 | beta milestones a level lets you ship (SPEC §4.7); per-level override, 0 = off |
 | ~~`SERVED_BONUS`~~ | — | **deleted 2026-08-04** |
 | `BLAST_RADIUS` | 1 | tile + orthogonals (SPEC §5 baseline); per-level override |
 | ~~`ANALYZE_REVEALS`~~ | — | **deleted 2026-08-04**: Analyze is one click (§3 ruling 2) |

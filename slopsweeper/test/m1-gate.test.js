@@ -20,7 +20,7 @@ test('a hand-only playthrough of plain reaches phase won', () => {
   // One tile per tick, straight from A to B.
   for (let x = a.x + 1; x < b.x; x++) {
     const cell = cellAt(s, x, a.y);
-    assert.deepEqual(legalActions(s, cell), ['place'], `cell (${x},${a.y}) should be placeable`);
+    assert.deepEqual(legalActions(s, cell), ['place', 'beta'], `cell (${x},${a.y}) should be placeable`);
     const r = reduce(s, { t: 'place', cell });
     assert.deepEqual(r.ev[0], { t: 'placed', cells: [cell] });
     s = r.s;

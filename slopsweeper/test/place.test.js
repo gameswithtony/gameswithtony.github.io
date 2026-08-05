@@ -5,6 +5,11 @@ import assert from 'node:assert/strict';
 import { cellAt } from '../src/core/grid.js';
 import { init, legalActions, reduce } from '../src/core/reduce.js';
 
+// The expected verb lists below read `['place', 'beta']` since 2026-08-05: a beta milestone
+// (SPEC §4.7) is placed by exactly the target rules a hand tile is, so wherever Place is on
+// offer and supply is left, so is BETA. Nothing about *placement* changed — every assertion
+// in this file is the one it always was, with the new verb added to the menu.
+
 //  x: 0 1 2 3 4 5
 //  0  . # # # # #
 //  1  A # ^ # # B
@@ -22,7 +27,7 @@ const at = (s, x, y) => cellAt(s, x, y);
 test('a hand tile may branch from an endpoint', () => {
   const s = fresh();
   const cell = at(s, 1, 1);
-  assert.deepEqual(legalActions(s, cell), ['place']);
+  assert.deepEqual(legalActions(s, cell), ['place', 'beta']);
   const { s: s2, ev } = reduce(s, { t: 'place', cell });
   assert.equal(s2.con[cell].k, 'hand');
   assert.deepEqual(ev[0], { t: 'placed', cells: [cell] });
@@ -34,7 +39,7 @@ test('a hand tile may branch from another hand tile', () => {
   let s = fresh();
   s = reduce(s, { t: 'place', cell: at(s, 1, 1) }).s;
   const next = at(s, 1, 0);
-  assert.deepEqual(legalActions(s, next), ['place']);
+  assert.deepEqual(legalActions(s, next), ['place', 'beta']);
   s = reduce(s, { t: 'place', cell: next }).s;
   assert.equal(s.con[next].k, 'hand');
 });
@@ -44,7 +49,7 @@ test('a hand tile may branch from an aiRevealed tile', () => {
   const revealed = at(s, 3, 1);
   s.con[revealed] = { k: 'aiRevealed', block: 0 };
   const target = at(s, 3, 0);
-  assert.deepEqual(legalActions(s, target), ['place']);
+  assert.deepEqual(legalActions(s, target), ['place', 'beta']);
 });
 
 test('a hand tile MAY branch from unreviewed slop, flagged or not (rev. 2026-08-04)', () => {
@@ -57,7 +62,7 @@ test('a hand tile MAY branch from unreviewed slop, flagged or not (rev. 2026-08-
 
   for (const flagged of [false, true]) {
     s.con[hidden] = { k: 'aiHidden', mine: true, block: 0, flagged };
-    assert.deepEqual(legalActions(s, target), ['place'], `flagged: ${flagged}`);
+    assert.deepEqual(legalActions(s, target), ['place', 'beta'], `flagged: ${flagged}`);
     const { s: built, ev } = reduce(s, { t: 'place', cell: target });
     assert.deepEqual(ev[0], { t: 'placed', cells: [target] });
     assert.equal(built.con[target].k, 'hand');
@@ -67,7 +72,7 @@ test('a hand tile MAY branch from unreviewed slop, flagged or not (rev. 2026-08-
 
   // Reviewing the neighbour changes nothing — it was already legal.
   s.con[hidden] = { k: 'aiRevealed', block: 0 };
-  assert.deepEqual(legalActions(s, target), ['place']);
+  assert.deepEqual(legalActions(s, target), ['place', 'beta']);
 });
 
 test('the branch test is "any structure", but the TARGET rules are untouched', () => {
@@ -84,7 +89,7 @@ test('the branch test is "any structure", but the TARGET rules are untouched', (
   // produces it any more (state.js keeps the row coherent).
   const confirmed = { ...s, con: s.con.slice() };
   confirmed.con[at(s, 3, 1)] = { k: 'mineConfirmed', block: 0 };
-  assert.deepEqual(legalActions(confirmed, at(s, 3, 0)), ['place']);
+  assert.deepEqual(legalActions(confirmed, at(s, 3, 0)), ['place', 'beta']);
 
   // Terrain and occupancy still decide the target.
   assert.match(why(at(s, 2, 1)), /cannot build on volcano/);

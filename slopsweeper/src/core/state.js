@@ -65,6 +65,7 @@ export function caps(t) {
 /**
  * @typedef {{ k: 'none' }
  *   | { k: 'hand' }
+ *   | { k: 'beta' }
  *   | { k: 'aiHidden', mine: boolean, block: number, flagged: boolean }
  *   | { k: 'aiRevealed', block: number }
  *   | { k: 'mineConfirmed', block: number }} Con
@@ -97,11 +98,21 @@ export function caps(t) {
  * unflagged tile did (flagging is a claim, not knowledge). Making it a separate row would
  * have duplicated that payload and quietly changed clue arithmetic. It lives as
  * `aiHidden.flagged` and masks exactly one capability, below.
+ *
+ * Revised 2026-08-05 (user decision): `beta` joins the union — a shipped beta milestone, one
+ * cell, hand-placed on open water exactly like a `hand` tile. Its row is `hand`'s row: safe
+ * ground you built, walkable, buildable-from, holding no defect. The whole of what makes it
+ * different lives in `routing.js`, where it is a **waypoint** — an intermediate destination
+ * users will depart for and camp on — and none of that is a capability, so none of it is
+ * here. It is a construction state of its own rather than a flag on `hand` because a beta
+ * occupies the cell for good: you cannot ship one on top of anything, including another one,
+ * and `occupies` is what says so.
  * @type {Record<Con['k'], ConCaps>}
  */
 export const CON = {
   none:          { passable: false, handFrom: false, genFrom: false, occupies: false, holdsMine: false },
   hand:          { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
+  beta:          { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
   aiHidden:      { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: true },
   aiRevealed:    { passable: true,  handFrom: true,  genFrom: true,  occupies: true,  holdsMine: false },
   mineConfirmed: { passable: false, handFrom: true,  genFrom: false, occupies: true,  holdsMine: true },   // unreachable today; see above
@@ -135,6 +146,7 @@ const FLAGGED_CAPS = Object.freeze(
 /** Shared immutable singletons: Con values are replaced, never mutated. */
 export const CON_NONE = /** @type {Con} */ (Object.freeze({ k: 'none' }));
 export const CON_HAND = /** @type {Con} */ (Object.freeze({ k: 'hand' }));
+export const CON_BETA = /** @type {Con} */ (Object.freeze({ k: 'beta' }));
 
 /**
  * @param {Con} con
@@ -259,13 +271,21 @@ export function stopsBlast(terrain) {
  * @property {Phase} phase
  * @property {{ gen: number, move: number }} rng   mulberry32 states (PLAN §7.5)
  * @property {{ placed: number, generated: number, analyzed: number, waited: number,
- *              detonations: number, served: number, lost: number }} stats
+ *              detonations: number, served: number, lost: number, betas: number }} stats
  */
+// `stats.betas` counts betas *shipped*, which is also what meters the supply: remaining is
+// `levelParams(s).betaSupply - stats.betas`. It never comes back down, so a beta a blast
+// takes out is not refunded — you shipped it, and it is gone (2026-08-05). Live beta sites
+// need no field of their own: they are the cells whose `con` is `{ k: 'beta' }`, derived from
+// the board like every other question about what is standing.
 
 /**
  * `flag` is the one action that costs nothing: it toggles an annotation and no tick runs
- * (SPEC §4.5, revised 2026-08-04). Everything else here consumes the turn.
+ * (SPEC §4.5, revised 2026-08-04). Everything else here consumes the turn — `beta` included
+ * (SPEC §4.7, added 2026-08-05): shipping a beta milestone is a turn spent building, priced
+ * exactly like the hand tile it is placed like.
  * @typedef {{ t: 'place', cell: number }
+ *   | { t: 'beta', cell: number }
  *   | { t: 'generate' }
  *   | { t: 'placeBlock', cell: number, rot: 0 | 1 | 2 | 3 }
  *   | { t: 'analyze', cell: number }
@@ -280,6 +300,7 @@ export function stopsBlast(terrain) {
  *   | { t: 'blockDrawn', shape: number, rots: RotAnchors[] }
  *   | { t: 'generateRefunded' }
  *   | { t: 'placed', cells: number[] }
+ *   | { t: 'betaPlaced', cell: number }                             // rev. 2026-08-05
  *   | { t: 'blockPlaced', block: number, cells: number[], mines: number }
  *   | { t: 'analyzed', revealed: number[], minesFound: number[] }   // minesFound is always
  *                                                                   // empty since 2026-08-04:

@@ -73,6 +73,7 @@ Terrain features are defined by a **capability table**, not by hardcoded per-fea
 - `AI_HIDDEN` — AI-generated, unrevealed. Passable. Not buildable-from. May contain a mine.
 - `AI_REVEALED` — AI tile whose clue is visible. Passable, safe, buildable-from. *(Revised 2026-08-04: no longer the only state that shows a clue — `HAND` does too, see §7.4. What is still unique to `AI_REVEALED` is that it was *turned over*: it used to be slop and is now known to be clean.)*
 - `FLAGGED` — player-marked. Impassable to users. Not buildable-from. *(Revised 2026-08-04: represented as a `flagged` flag on `AI_HIDDEN` rather than as a separate state — see §4.5. The behaviour described here is unchanged; only the encoding is.)*
+- `BETA` — a shipped beta milestone. Player-placed, always safe, always buildable-from, holds no defect: mechanically a `HAND` tile in every column of the capability table. *(Added 2026-08-05 by owner decision — see §4.7. It is a state of its own and not a flag on `HAND` because what makes it different is not a capability at all: it is a **waypoint**, somewhere users are willing to walk to and stop, which lives entirely in §6.2's routing. Keeping it in the union is also what makes "you cannot ship one on top of anything, another beta included" free — occupancy already says so.)*
 - `MINE_CONFIRMED` — revealed to contain a mine. Impassable. *(Revised 2026-08-04: **no action produces this state any more** — analyzing a mine detonates it (§4.3), and a flag is what marks a suspected defect. The state, its clue arithmetic and its rendering are kept implemented and tested, per `PLAN.md` §2: a defuse verb — spend turns to turn a known defect into a permanent wall instead of a crater — is the obvious next move and would produce it on day one. §4.4's overwrite pricing below is written against that future.)*
 
 ### 2.3 Future features — NOT YET BUILT
@@ -202,6 +203,22 @@ Free with no supply cap. It self-balances: flag your only route and users pile u
 
 Advance the tick without acting.
 
+### 4.7 Ship a beta — 1 turn, from a fixed supply — DECIDED
+
+*(Added 2026-08-05 by owner decision.)*
+
+Place one `BETA` tile. **Target rules are Place's, exactly** (§4.1): ocean terrain, nothing built there, not an endpoint, orthogonally adjacent to the network. It cannot be placed on top of anything, another beta included — occupancy already forbids it and no extra rule is written.
+
+**Supply.** `RULES.BETA_SUPPLY` betas per level, three by default, overridable per level (`betaSupply`, `0` switching the verb off). The counter is **betas shipped**, not betas standing: a beta a blast takes out is spent and does not come back. You shipped it.
+
+What it buys is in §6.2: a beta is an **intermediate destination**. Users leave the origin for one as soon as it is reachable and genuinely closer to B than where they stand, walk to it, and camp there until something better is reachable. Only B is arrival.
+
+**What it does not buy is time, and that is the point.** Camping at a beta drains patience exactly as waiting anywhere else does (§8) — moving is not waiting and standing still is, wherever the standing happens. The whole benefit of a beta is the **walk**: the ticks a user spends travelling to it are ticks it is not spending waiting, and the ground it covers is ground it does not have to cover later. A beta is staging, not slack.
+
+Read the satirical mapping (§1) and it says itself: shipping a beta gets something in front of users before the thing is finished. They will come and look at it. They will not wait forever for the rest, and if the road past it is mined they will walk into that too (§6.2 is topological, not safe). Nothing about a beta makes a route safe; it only makes users start sooner.
+
+Counts as hand placement for skill purposes when §7 exists.
+
 ---
 
 ## 5. Mines and detonation
@@ -262,6 +279,22 @@ Consequences, all intended:
 - Users never walk into stubs, so dead-end stalling largely disappears as a case.
 - **Waiting is the primary visible failure state.** A pile-up at the origin is the player's "you have not shipped anything usable yet" signal, and it reads instantly.
 - Flagging a chokepoint immediately halts departures. This is the self-balancing property that lets flags stay free and uncapped (§4.5).
+
+*(Revised 2026-08-05 by owner decision — **users walk to waypoints, and B is one of them.** With beta blocks (§4.7) the destination is no longer the only place a user is willing to go. Restated:*
+
+*A user departs when a **waypoint** is reachable that is genuinely closer to B than where it stands. A waypoint is the destination or a beta. Reachability is the same topological question it always was — `AI_HIDDEN` passable, `FLAGGED` and `MINE_CONFIRMED` not — so nothing about the check became safe.*
+
+*Three pieces make it work and each is doing a specific job:*
+
+*— **Which waypoint.** Passable ground splits into connected components; a component's target is its waypoint nearest the finish. Users cannot walk to a waypoint they cannot reach, and there is no point offering them a choice they would never take.*
+*— **"Closer to B" is measured over ground that could **ever** be built on, not over ground that is built now.* Otherwise the comparison is circular: an unfinished route reads as infinitely far and every waypoint looks equally good. Terrain is fixed at load, so this measure never moves during a game.*
+*— **The progress guard.** A user may walk only when its target is strictly closer to B than its own cell. Without it, a beta shipped behind the origin — on a backwards spur, or across a bay — would drag the whole board away from the destination, because a routing field has no opinion about direction. It also earns its keep twice: a user standing on its own target fails the test, which is what makes arriving at a beta into **camping** with no separate rule for it.*
+
+***The no-beta case is the old rule, unchanged.** With no beta on the board the only waypoint is B, every reachable component's target is B, the guard is true wherever a route exists, and "a waypoint is reachable and closer" is word for word "a complete traversable path exists from origin to destination". That equivalence is a tested invariant, not an argument.*
+
+*One consequence worth stating because it looks like a bug and is not: a user that walks to a beta and camps there is **waiting**, and its patience runs down at the origin's rate (§4.7, §8). A pile at a beta is the same failure signal as a pile at A, one leg further along.*
+
+*And one rule had to bend: SPEC §6.3.3's no-revisit trail. It exists to stop a user looping inside one trip, but a user that walks to a beta and is later retargeted may have to leave by the way it came in. When the waypoint set moves under a walker and its own trail is the only thing in its way, the trip that trail belongs to is over: it forgets where it has been and starts a new one from where it stands. It cannot oscillate, because every step still strictly decreases the current field and only a player turn can change that field. This applies **only while a beta is standing** — a board with none plays exactly as it played before, trail included.)*
 
 ### 6.3 Movement — DECIDED
 

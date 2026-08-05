@@ -10,12 +10,25 @@
 //
 // Randomness comes from the policy's own seeded stream, never from the core streams, so
 // changing a bot can never perturb block draws or movement tie-breaks.
+//
+// SPEC NAMES: a spec is `base[-modifier…][:p]`. The base is one of POLICY_NAMES. The
+// modifiers are order-free and compose:
+//
+//   -greedy  ghost placement maximises route progress (the default)
+//   -edge    ghost placement gives up EDGE_SLACK turns of progress for legibility
+//   -beta    ship beta milestones under pressure (2026-08-05) — see `betaMove`
+//
+// So `careful:0.4`, `balanced-edge:0.4`, `careful-beta:0.4` and `balanced-edge-beta:0.4` are
+// all well-formed. `-beta` exists to answer one question and only that one: at what patience
+// do betas stop being a nicety and start being necessary (SPEC §4.7)? The baseline sweep
+// (DEFAULT_SWEEP) deliberately does not include it, so `--all` keeps measuring the game the
+// corpus was tuned against.
 
 import { mulberry32 } from '../core/rng.js';
-import { isHandBuildable, isKnownEmpty } from '../core/state.js';
+import { isHandBuildable, isKnownEmpty, levelParams } from '../core/state.js';
 import { n4, n8 } from '../core/grid.js';
-import { distField, gateOpen, passable } from '../core/routing.js';
-import { clue, legalActions, placeRejection } from '../core/reduce.js';
+import { distField, gateOpen, passable, potentialField } from '../core/routing.js';
+import { betaRejection, clue, legalActions, placeRejection } from '../core/reduce.js';
 import { placementCells } from '../core/generate.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -291,7 +304,7 @@ function remember(mem, evs) {
       case 'blockPlaced': mem.announced.set(e.block, e.mines); mem.refunded = false; break;
       case 'generateRefunded': mem.refunded = true; break;
       // Any change to the board changes the legal set, so a past refusal stops applying.
-      case 'placed': case 'detonate': case 'analyzed': mem.refunded = false; break;
+      case 'placed': case 'detonate': case 'analyzed': case 'betaPlaced': mem.refunded = false; break;
       default: break;
     }
   }
@@ -380,6 +393,44 @@ function analyzeTarget(s, block, plan) {
 // --- the policies ---------------------------------------------------------------------
 
 /**
+ * The `-beta` modifier's whole decision (SPEC §4.7, added 2026-08-05).
+ *
+ * **When.** Somebody is suffering: a user that is queued or stalled has burnt half its
+ * patience. Before that a beta is a wasted turn — the route is young and everyone is fresh —
+ * and after the users are dead the supply is worth nothing. Half is the crudest reading of
+ * "this is going badly and I still have time to act on it", which is what the modifier is
+ * for; a human would read the board instead.
+ *
+ * **Where.** The legal beta cell closest to B by `potentialField` — the field that measures
+ * route progress over ground that could ever be walked, which is exactly "how far along is
+ * this". Ties by ascending index, so the choice is a pure function of the board.
+ *
+ * All legal information: the supply and the patience limit are printed rules, the field is
+ * terrain, and the waiting is on screen in the forecast (SPEC §6.1).
+ *
+ * @param {GameState} s
+ * @returns {Action | null}
+ */
+function betaMove(s) {
+  const { patience } = levelParams(s);
+  const pressed = s.users.some(
+    (u) => (u.state === 'queued' || (u.state === 'moving' && u.stalled)) && u.waited * 2 >= patience,
+  );
+  if (!pressed) return null;
+
+  const pot = potentialField(s);
+  let best = -1;
+  let bestPot = INF;
+  for (let i = 0; i < s.con.length; i++) {
+    if (pot[i] < 0 || pot[i] >= bestPot) continue;
+    if (betaRejection(s, i)) continue;
+    bestPot = pot[i];
+    best = i;
+  }
+  return best < 0 ? null : { t: 'beta', cell: best };
+}
+
+/**
  * @param {{ handCell: number }} v
  * @returns {Action | null} a hand tile toward B, or null when there is nowhere legal
  */
@@ -410,9 +461,16 @@ export function makePolicy(spec, seed) {
   const text = String(spec);
   const [head, param] = text.split(':');
   let style = /** @type {'coverage' | 'edge'} */ ('coverage');
+  let betas = false;
   let base = head;
-  if (head.endsWith('-edge')) { style = 'edge'; base = head.slice(0, -'-edge'.length); }
-  else if (head.endsWith('-greedy')) { style = 'coverage'; base = head.slice(0, -'-greedy'.length); }
+  // Strip modifiers off the tail until none is left, so they compose in any order and a
+  // future one is a case rather than a rewrite.
+  for (let more = true; more;) {
+    more = false;
+    if (base.endsWith('-edge')) { style = 'edge'; base = base.slice(0, -'-edge'.length); more = true; }
+    else if (base.endsWith('-greedy')) { style = 'coverage'; base = base.slice(0, -'-greedy'.length); more = true; }
+    else if (base.endsWith('-beta')) { betas = true; base = base.slice(0, -'-beta'.length); more = true; }
+  }
   const p = param === undefined ? 0.5 : Number(param);
   if (!Number.isFinite(p) || p < 0 || p > 1) throw new Error(`policy '${text}': parameter must be in [0, 1]`);
 
@@ -482,7 +540,11 @@ export function makePolicy(spec, seed) {
         const g = chooseGhost(s, style);
         return { t: 'placeBlock', cell: g.cell, rot: g.rot };
       }
-      const action = decide(s);
+      // The beta call sits ahead of every base's own decision rather than inside them: it is
+      // a response to the *users*, not to the build, so it should preempt whatever the base
+      // was going to spend the turn on. Off unless the spec asked for it, which is what keeps
+      // every baseline row identical to the one it printed before betas existed.
+      const action = (betas ? betaMove(s) : null) ?? decide(s);
       // A bot that asks for something illegal has a bug; waiting keeps the batch honest
       // rather than deadlocking on it, and batch.js counts the rejection.
       const cell = /** @type {{ cell?: number }} */ (action).cell;

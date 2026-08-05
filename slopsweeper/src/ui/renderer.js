@@ -61,8 +61,12 @@ const STROKE_ART = 2;
  * The fraction of a user's patience that has to be gone before the board says so. Two thirds
  * is late enough that it means something and early enough to still be actionable — a warning
  * that fires at nine tenths is an obituary.
+ *
+ * Exported since 2026-08-05: the HUD's waiting countdown and the roster's per-user one turn
+ * red at exactly this point. Three places, one number — a second threshold tuned separately
+ * would mean the board and the list disagreeing about who is in trouble.
  */
-const IMPATIENT_AT = 2 / 3;
+export const IMPATIENT_AT = 2 / 3;
 
 /**
  * How far through its patience a user is, 0…1. Reads `waited` and the level's own threshold
@@ -72,7 +76,7 @@ const IMPATIENT_AT = 2 / 3;
  * @param {import('../core/state.js').User} u
  * @returns {number}
  */
-function patienceSpent(s, u) {
+export function patienceSpent(s, u) {
   const limit = levelParams(s).patience;
   if (!limit || limit <= 0) return 0;
   return Math.min(1, (u.waited ?? 0) / limit);
@@ -112,14 +116,20 @@ function blockOf(con) {
  * @param {number} i
  * @param {number} x
  * @param {number} y
+ * @param {Tier} tier
  * @returns {string} atlas tile name
  */
-function tileName(s, i, x, y) {
+function tileName(s, i, x, y, tier) {
   if (i === s.origin) return 'origin';
   if (i === s.dest) return 'dest';
   const v = variantOf(x, y, s.seed);
   switch (s.con[i].k) {
     case 'hand': return `hand${v}`;
+    // A beta is the only tile whose ART changes with the tier rather than just gaining detail
+    // on top of it: the pennant that says "shipped" is unreadable at one device pixel per art
+    // pixel, and what has to survive zoomed out is *where the betas are*. Same call the flag
+    // overlay makes, and the same two names.
+    case 'beta': return tier === 'far' ? 'betaFar' : 'beta';
     case 'aiHidden': return `hidden${v}`;
     case 'aiRevealed': return 'revealed';
     case 'mineConfirmed': return 'mine';
@@ -202,7 +212,7 @@ export function createRenderer(canvas) {
         if (s.terrain[i] === 'void') continue;
         const dx = cam.ox + x * t;
         const dy = cam.oy + y * t;
-        at.blit(cctx, tileName(s, i, x, y), dx, dy);
+        at.blit(cctx, tileName(s, i, x, y, tier), dx, dy);
 
         let side = 0;
         if (isVoid(s, x, y - 1)) side |= 1;
@@ -254,17 +264,23 @@ export function createRenderer(canvas) {
     // Hand tiles carry clues too (2026-08-04 user decision): code you wrote yourself can see
     // the interface errors, so building a causeway alongside a generated block is a real way
     // to solve it. They differ from revealed AI cells in one deliberate way — see below.
+    //
+    // Beta blocks are hand tiles for this purpose (2026-08-05): you shipped that cell, so it
+    // reads its neighbours exactly as anything else you shipped does. Anything else would be a
+    // hole in the deduction surface at precisely the tile you were counting on standing next
+    // to, and the player would have to remember which of their own tiles can see.
     for (let y = win.y0; y <= win.y1; y++) {
       for (let x = win.x0; x <= win.x1; x++) {
         const i = y * s.w + x;
         const kind = s.con[i].k;
-        if (kind !== 'aiRevealed' && kind !== 'hand') continue;
+        if (kind !== 'aiRevealed' && kind !== 'hand' && kind !== 'beta') continue;
         const { lo, hi } = clue(s, i);
         // A hand tile with nothing next to it stays blank. Inside a block, "0" is information
         // — it is the difference between a cell that was opened and one that was not — but a
         // hand tile is visibly a hand tile whether it is drawn on or not, so a causeway of
         // zeros would be a row of noise the eye has to filter past to find the real numbers.
-        if (kind === 'hand' && hi < 1) continue;
+        // Same rule, same reasoning, for a beta.
+        if (kind !== 'aiRevealed' && hi < 1) continue;
         const text = lo === hi ? String(lo) : `${lo}-${hi}`;
         // A range is three glyphs — 17 art px at the default gap, one wider than the tile.
         // Tighten to gap 0 (15) rather than let a clue bleed onto the cell next door; the

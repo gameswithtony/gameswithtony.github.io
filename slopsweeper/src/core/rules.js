@@ -19,6 +19,13 @@ export const RULES = Object.freeze({
   // central tension from that turn entirely. Placement-time floor only — a blast may take a
   // block below it and nothing puts it back. See `generate.rollMines`.
   MIN_BLOCK_DEFECTS: 2,
+  // How many beta milestones a level lets the player ship (user decision 2026-08-05, SPEC
+  // §4.7). A beta is an intermediate destination: users leave the origin for one as soon as
+  // it is reachable and closer to B, walk to it, and camp there — which buys staging, never
+  // patience, because camping is waiting like any other. Scarce on purpose: three is enough
+  // to stage a long route in stages and nowhere near enough to breadcrumb it. Per-level
+  // override with `LevelDef.betaSupply`; 0 turns the verb off for that level.
+  BETA_SUPPLY: 3,
   USER_MOVE_EVERY: 1,         // OPEN #1
   ART_PX_PER_TILE: 16,        // SPEC §10.8 (revised 2026-08-04: finer art grid, calmer tiles)
   FONT_MIN_DEVICE_PX: 10,     // zoom tiers derive from this, never tuned apart (SPEC §10.8)
@@ -36,6 +43,7 @@ export const RULES = Object.freeze({
  * @property {{ count: number, firstTick: number, every: number }} arrivals
  * @property {number} mineDensity
  * @property {number} patience
+ * @property {number} betaSupply
  * @property {'compact' | 'awkward' | 'heavy' | string[]} shapePool
  * @property {number} userMoveEvery
  * @property {number} blastRadius
@@ -51,6 +59,7 @@ export const LEVEL_DEFAULTS = Object.freeze({
   mineDensity: 0.16,
   shapePool: 'compact',
   patience: RULES.USER_PATIENCE,
+  betaSupply: RULES.BETA_SUPPLY,
   userMoveEvery: RULES.USER_MOVE_EVERY,
   blastRadius: RULES.BLAST_RADIUS,
 });

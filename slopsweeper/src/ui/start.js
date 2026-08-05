@@ -44,6 +44,7 @@ const HELP = [
     'PLACE — one tile, one turn. It has to touch something already built.',
     'GENERATE — a whole block, one turn. Rotate it, drop it on a highlighted anchor.',
     'You cannot decline a block once it is drawn, and it always ships hidden defects — at least two of them.',
+    'BETA — one tile, one turn, and only a few per run. Users walk out to a beta and wait there instead of at A — closer to B, but only B counts as served.',
   ]],
   ['READ', [
     'Every number counts the defects in the eight cells around it.',
@@ -124,7 +125,9 @@ export function shareText(f) {
     'SLOP SWEEPER',
     f.mapName.toUpperCase(),
     `SERVED ${f.served}/${f.total}`,
-    `${f.ticks} TICKS`,
+    // `ticks` is what the reducer counts and what EndFacts carries; TURNS is what a person
+    // reading a shared score understands. The rename is display-only, everywhere (2026-08-05).
+    `${f.ticks} TURNS`,
     replayUrl(f),
   ].join(' · ');
 }
@@ -276,7 +279,7 @@ export function createStart(h) {
     kicker.classList.toggle('perfect', perfect);
     /** @type {HTMLElement} */ (win.querySelector('.end-score')).textContent = `SERVED ${f.served}/${f.total}`;
     /** @type {HTMLElement} */ (win.querySelector('.end-sub')).textContent =
-      `${f.mapName.toUpperCase()} · ${f.ticks} TICKS · SEED ${f.seed}`;
+      `${f.mapName.toUpperCase()} · ${f.ticks} TURNS · SEED ${f.seed}`;
 
     const stats = /** @type {HTMLElement} */ (win.querySelector('.end-stats'));
     stats.innerHTML = '';

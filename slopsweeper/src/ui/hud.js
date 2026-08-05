@@ -6,13 +6,14 @@
 // else, so the UI can never offer a verb the reducer would reject — and the absence of
 // Place next to unreviewed slop is how SPEC §4.1 teaches itself.
 
+import { RULES } from '../core/rules.js';
 import { legalActions } from '../core/reduce.js';
-import { isFlagged } from '../core/state.js';
+import { isFlagged, levelParams } from '../core/state.js';
 import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
 import { crisp } from './atlas.js';
-import { drawTray, stencilDims } from './renderer.js';
+import { drawTray, stencilDims, IMPATIENT_AT, patienceSpent } from './renderer.js';
 import * as cam from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -31,20 +32,41 @@ import * as cam from './camera.js';
  * @property {() => void} onCopySeed
  * @property {() => void} onRun        fast-forward toggle (PLAN §12.6)
  * @property {(steps: number) => void} onZoom   ±1 artPx, anchored at the viewport centre
+ * @property {() => void} onRoster     the WAITING chip: open the user roster (roster.js)
  */
 
-/** @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>} */
+/**
+ * `{left}` in a label or a title is the beta supply still on the shelf, substituted at build
+ * time. A token rather than a second table because BETA is the one verb whose button has to
+ * say how much of it is left — everything else in this game is metered in turns, and turns are
+ * already in the cost badge.
+ * @type {Partial<Record<ActionKind, { label: string, cost: string, title: string }>>}
+ */
 const VERBS = {
   place: { label: 'PLACE', cost: '1', title: 'Build one tile by hand (SPEC §4.1)' },
+  beta: { label: 'BETA ×{left}', cost: '1', title: 'Ship a beta here — users walk out to it and wait there — {left} left' },
   analyze: { label: 'ANALYZE', cost: '1', title: 'Review this cell — a zero opens its neighbours too' },
   placeBlock: { label: 'COMMIT BLOCK', cost: '1', title: 'Commit the generated block here' },
   generate: { label: 'GENERATE', cost: '0', title: 'Draw a block — the turn is charged when you commit it' },
   flag: { label: 'FLAG', cost: '0', title: 'Mark a suspected defect — costs no turn, and users refuse to walk through it' },
-  wait: { label: 'WAIT', cost: '1', title: 'Let a tick pass' },
+  wait: { label: 'WAIT', cost: '1', title: 'Let a turn pass' },
 };
 
 /** Verbs that spend no turn. They get GENERATE's colouring, which is what "free" looks like here. */
 const FREE_VERBS = new Set(['generate', 'flag']);
+
+/**
+ * Betas still on the shelf. The supply is the level's and the spend is the reducer's, so this
+ * is arithmetic and not a second copy of the rule (`stats.betas` only ever goes up — a beta a
+ * blast takes out is not refunded). Both reads are defended: a save written before the field
+ * existed restores without one, and the HUD may not be the thing that crashes on it.
+ * @param {GameState} s
+ * @returns {number}
+ */
+function betaLeft(s) {
+  const supply = levelParams(s).betaSupply ?? RULES.BETA_SUPPLY ?? 0;
+  return Math.max(0, supply - (s.stats.betas ?? 0));
+}
 
 /**
  * @param {GameState} s
@@ -126,6 +148,8 @@ export function createHud(h) {
     remaining: el('fc-remaining'),
     next: el('fc-next'),
     waiting: el('fc-waiting'),
+    soonest: el('fc-soonest'),
+    roster: /** @type {HTMLButtonElement} */ (el('btn-roster')),
     actionbar: el('actionbar'),
     generate: /** @type {HTMLButtonElement} */ (el('btn-generate')),
     wait: /** @type {HTMLButtonElement} */ (el('btn-wait')),
@@ -161,6 +185,7 @@ export function createHud(h) {
   dom.run.addEventListener('click', () => h.onRun());
   dom.zoomIn.addEventListener('click', () => h.onZoom(1));
   dom.zoomOut.addEventListener('click', () => h.onZoom(-1));
+  dom.roster.addEventListener('click', () => h.onRoster());
   // How to Play is a lazily-imported overlay, so the button is dead until that module lands
   // and registers itself. Disabled rather than silently inert: a control that does nothing
   // when tapped is worse than one that says it is not ready.
@@ -225,16 +250,37 @@ export function createHud(h) {
     dom.next.textContent = s.schedule.spawned >= s.schedule.total
       ? '—'
       : String(Math.max(1, s.schedule.nextTick - s.tick + 1));
+    // WAITING is two numbers now: how many are waiting, and how many turns the least patient
+    // of them has left. The count says you are behind; the countdown says how long you have
+    // to stop being behind, which is the half a player can still answer. Campers on a beta
+    // are in both numbers — a beta stages the walk, it does not stop the clock.
     let waiting = 0;
-    for (const u of s.users) if (u.state === 'queued' || (u.state === 'moving' && u.stalled)) waiting++;
+    let soonest = 0;
+    /** @type {import('../core/state.js').User | null} */
+    let worst = null;
+    const patience = levelParams(s).patience;
+    for (const u of s.users) {
+      if (u.state !== 'queued' && !(u.state === 'moving' && u.stalled)) continue;
+      waiting++;
+      const left = Math.max(0, patience - (u.waited ?? 0));
+      if (!worst || left < soonest) { worst = u; soonest = left; }
+    }
     dom.waiting.textContent = String(waiting);
+    // Nobody waiting means there is no countdown to show — not a zero, which would read as
+    // "somebody leaves this turn", the exact opposite of what an empty queue means.
+    dom.soonest.textContent = worst ? `·${soonest}` : '';
+    dom.soonest.classList.toggle('urgent', !!worst && patienceSpent(s, worst) >= IMPATIENT_AT);
 
     // Action bar — rebuilt only when what it offers changes, so buttons stay clickable.
     // The flag state is part of the key: FLAG and UNFLAG are the same verb wearing different
     // words, and a toggle that leaves the old word on the button is a toggle nobody trusts.
     const flagged = flaggedAt(s, view.selected);
     const hintText = cellHint(s, view.selected);
-    const key = `${offered.join(',')}|${view.selected >= 0}|${flagged}|${hintText}`;
+    // The beta count is part of the key for the same reason the flag state is: BETA ×3 and
+    // BETA ×2 are the same verb wearing different words, and a button that keeps yesterday's
+    // number is a button that lies about a resource you cannot get back.
+    const betas = betaLeft(s);
+    const key = `${offered.join(',')}|${view.selected >= 0}|${flagged}|${betas}|${hintText}`;
     if (key !== barKey) {
       barKey = key;
       dom.actionbar.innerHTML = '';
@@ -242,9 +288,10 @@ export function createHud(h) {
         const v = VERBS[kind];
         if (!v) continue;
         const b = document.createElement('button');
-        b.className = FREE_VERBS.has(kind) ? 'verb free' : 'verb';
-        b.title = v.title;
-        b.innerHTML = `${kind === 'flag' && flagged ? 'UNFLAG' : v.label} <i>${v.cost}</i>`;
+        b.className = FREE_VERBS.has(kind) ? 'verb free' : `verb${kind === 'beta' ? ' beta' : ''}`;
+        b.title = v.title.replaceAll('{left}', String(betas));
+        const label = kind === 'flag' && flagged ? 'UNFLAG' : v.label.replaceAll('{left}', String(betas));
+        b.innerHTML = `${label} <i>${v.cost}</i>`;
         b.addEventListener('click', () => h.onAction(kind));
         dom.actionbar.append(b);
       }
@@ -407,6 +454,7 @@ function minimapColor(s, i) {
   if (i === s.origin || i === s.dest) return PALETTE.RED;
   switch (s.con[i].k) {
     case 'hand': return PALETTE.HAND;
+    case 'beta': return PALETTE.OK;      // the tile's own green: betas are findable zoomed out
     case 'aiHidden': return PALETTE.AI_HIDDEN;
     case 'aiRevealed': return PALETTE.AI_REVEALED;
     case 'mineConfirmed': return PALETTE.RED;

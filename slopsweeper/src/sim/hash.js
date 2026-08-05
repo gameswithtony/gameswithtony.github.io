@@ -15,6 +15,8 @@ function conToken(c) {
   switch (c.k) {
     case 'none': return '.';
     case 'hand': return 'H';
+    // A beta carries no payload — the cell being one is the whole fact (rev. 2026-08-05).
+    case 'beta': return 'B';
     // The flag rides in the token: toggling one is a free action, so it changes nothing
     // else about the state, and a hash that ignored it could not tell two boards apart.
     case 'aiHidden': return `${c.mine ? 'X' : 'h'}${c.flagged ? 'F' : ''}${c.block}`;
@@ -59,7 +61,10 @@ export function serializeState(s) {
     `${s.schedule.total}/${s.schedule.spawned}/${s.schedule.nextTick}/${s.schedule.every}`,
     phaseToken(s.phase),
     `${s.rng.gen}/${s.rng.move}`,
-    [s.stats.placed, s.stats.generated, s.stats.analyzed, s.stats.waited, s.stats.detonations, s.stats.served, s.stats.lost].join('/'),
+    // `betas` is in here for the same reason `waited` is: it is not decoration, it is the
+    // supply, so two boards that differ only in how many betas are left are different boards
+    // even when the tiles they built with them are identical (rev. 2026-08-05).
+    [s.stats.placed, s.stats.generated, s.stats.analyzed, s.stats.waited, s.stats.detonations, s.stats.served, s.stats.lost, s.stats.betas].join('/'),
   ].join('');
 }
 
