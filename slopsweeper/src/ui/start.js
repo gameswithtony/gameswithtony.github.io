@@ -154,7 +154,7 @@ export function createStart(h) {
   start.id = 'start';
   start.innerHTML = `
     <div class="overlay-card">
-      <h1>SLOP SWEEPER</h1>
+      <h1>SLOPSWEEPER</h1>
       <p class="premise"></p>
       <label class="field" for="start-level">LEVEL</label>
       <select id="start-level"></select>
