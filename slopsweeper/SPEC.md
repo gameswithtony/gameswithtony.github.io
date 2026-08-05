@@ -203,6 +203,10 @@ Free with no supply cap. It self-balances: flag your only route and users pile u
 
 *(Revised 2026-08-04 by owner decision: **Flag ships in the prototype**, reversing §11's omission table. With Analyze reduced to a single click (§4.3) the player needed a way to *act* on a deduction — without it, working out that a tile is a defect changed nothing you could do. It is implemented exactly as this section describes: a free toggle, no cap, self-balancing because a flag wall closes your own route and the pile-up drains you.*
 
+*(Amended 2026-08-05 by owner decision, after a playtest in which the owner's own flag was the single cut vertex between his users and both remaining destinations and the board read as a pathfinding bug. **The mechanics are unchanged** — a flag is still impassable, still free, still uncapped, and still self-balancing exactly as described above. What changed is that the game now says so: the UI surfaces any flag whose removal, on its own, would let a currently-stuck user move again. "Stuck" is queued at the origin or stalled mid-route — the two states patience is draining in.*
+
+*It is display only. Nothing in the tick pipeline reads it, no event carries it, and it is not saved: it is derived from the board every time it is asked, like a clue. And it is deliberately literal — a wall made of **two** flags in series names neither of them, because lifting either one alone frees nobody. The player is told what is individually decisive, never what a search thinks they ought to do.)*
+
 *One representation change: `FLAGGED` is **not** a construction state of its own (§2.2). A flag is an annotation on an `AI_HIDDEN` tile — `{ k: 'aiHidden', mine, block, flagged }` — because it has to remember the mine and the block underneath, and because a flagged tile must keep counting for clues exactly as it did unflagged: flagging is a claim, not knowledge, and the board never confirms your guess by moving a number. The flag masks exactly one capability, `passable`. Everything else — clue arithmetic, generate-adjacency, destruction by blast — is unchanged, and a blast takes the flag with the cell.)*
 
 ### 4.6 Pass — 1 turn
@@ -344,6 +348,30 @@ With several destinations on the board (§2.4), "where is this user going" stops
 - **Half** makes arriving somewhere worth something and keeps the whole trip finite. It is a first number, not a measured one (§10.2: the sim tunes it, not play).
 
 Note what the refill is not: it is not a reward for distance and it does not stack. Camping on a **beta** still buys nothing but the walk (§4.7) — a milestone is not a destination, and the difference between them is exactly this line.
+
+#### Ordered itineraries — opt-in, DECIDED 2026-08-05 (owner decision)
+
+*(Added the same day, and it does not overturn a word above: everything already written stays the default. This is a second shape a level may reach for when it wants one.)*
+
+**An itinerary entry may be a sequence instead of a set.** Two shapes, and a level may mix them freely:
+
+```js
+itineraries: [['C'], ['B', 'D'], { stops: ['B', 'C', 'D'], ordered: true }]
+```
+
+- `['B', 'D']` — the original, unchanged. Obligations in any order, nearest first, visited on contact.
+- `{ stops: ['B','C','D'], ordered: true }` — **B, then C, then D**, enforced.
+- `{ stops: [...] }` with no `ordered` is the loose form spelled the long way. Turning a list into a sequence should cost the author the word.
+
+**The exact semantics, which are one sentence with one consequence.** An ordered user's next obligation is `stops[0]` **and nothing else**:
+
+- **Routing.** It walks toward `stops[0]` — the departure gate, the waypoint election and the progress guard all see a one-element list. A later stop that is nearer, reachable, or both, is not a place it is going. Standing at the origin with its next stop walled off and a later stop wide open, it **stays at the origin** and burns patience. That is not a side effect of the implementation; it is what the level asked for.
+- **Contact with a later stop does nothing.** Stepping onto a destination that is on its list but is not `stops[0]` is exactly as eventless as stepping onto a destination it never owed: no tick-off, no `visited` event, no patience refill, no fresh trail. It will walk back for it when its turn comes. Ordering that did not enforce itself on contact would be a suggestion, and §6.5's contact rule already covers the set case.
+- **Everything else is untouched.** Reaching `stops[0]` ticks it off, refunds `round(patience × destRefill)` if more stops remain, starts a fresh no-revisit trail, and is arrival when the list empties — the same lines, the same event, the same one point per user however far it walked.
+
+**Absent means loose, everywhere.** A user carries the bit; a level that never writes `ordered` produces users that never carry it, and a saved game written before this existed reads back as the loose game it was. A level with one destination cannot tell the difference in either direction — a one-stop sequence and a one-stop set are the same walk — which is the same regression argument the rest of §6.5 rests on.
+
+**What it is for.** A set of stops is a routing problem; a sequence is a *schedule*, and it prices the legs against each other. With `['B','C','D']` loose, closing any one leg serves somebody. Ordered, closing the last leg first serves nobody until the first one opens, so the build order stops being a matter of taste. `delta`'s third itinerary carries it for exactly that reason (§9.2.2).
 
 ---
 

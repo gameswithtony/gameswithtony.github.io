@@ -43,8 +43,20 @@
 // otherwise untouched, and `test/itinerary.test.js` asserts the equivalence against the
 // pre-itinerary field directly.
 
+// Revised once more 2026-08-05 (owner decision — opt-in ordered visitation, SPEC §6.5). An
+// itinerary may now be a *sequence* rather than a set, and this file learned exactly one thing
+// about it: a walker's mask is `effectiveMask(u)`, which is its whole `todo` when the list is
+// loose and `[todo[0]]` when it is ordered. Every question below is asked of a mask and none of
+// them asks who supplied it, so ordered users route, gate, camp and stall through the identical
+// code — a one-element mask is a shape this file has answered since the day it was written.
+//
+// And one thing that is not routing at all lives here anyway: `blockingFlags`. It is derived
+// display data (SPEC §4.5) and the tick pipeline never calls it, but it is a question about the
+// fields and the gate, and answering it anywhere else would mean a second, drifting opinion
+// about what "stuck" means.
+
 import { n4 } from './grid.js';
-import { caps, everyDest, isEndpoint, isPassable } from './state.js';
+import { caps, effectiveMask, everyDest, isEndpoint, isFlagged, isPassable } from './state.js';
 
 /** @typedef {import('./state.js').GameState} GameState */
 /** @typedef {import('./state.js').Terrain} Terrain */
@@ -335,6 +347,13 @@ function isWaypoint(s, wanted, i) {
  * demand: `movement` can retire a destination from under a user, and the post-blast recompute
  * then has to ask about the list it is left with.
  *
+ * The masks collected are **effective** masks (rev. 2026-08-05): an ordered user contributes
+ * `[todo[0]]` and not its whole tour, so two ordered users on different legs of the same
+ * authored list build two fields, and an ordered user whose next stop is B shares a field with
+ * a loose user owing only B. That is the right sharing — a field belongs to a question, not to
+ * a user — and for a loose user `effectiveMask` hands back `todo` itself, so nothing here can
+ * tell it was called at all.
+ *
  * @param {GameState} s
  * @returns {FieldSet}
  */
@@ -343,8 +362,9 @@ export function waypointFields(s) {
   const live = new Map();
   for (const u of s.users) {
     if (u.state !== 'queued' && u.state !== 'moving') continue;
-    const key = maskKey(u.todo);
-    if (!live.has(key)) live.set(key, u.todo);
+    const mask = effectiveMask(u);
+    const key = maskKey(mask);
+    if (!live.has(key)) live.set(key, mask);
   }
 
   /** @type {Map<string, WaypointField>} */
@@ -431,6 +451,12 @@ export function canProgress(s, wf, at) {
  *   on. On a board with nobody on it there is nobody to ask and it falls back to the queue's
  *   question with the full itinerary, which is what it always answered at tick 0.
  *
+ * The per-user question is asked against `effectiveMask(u)` since ordered itineraries
+ * (2026-08-05), so an ordered user with an open route to a *later* stop and a shut one to its
+ * next stop reads as shut — correctly, because that is exactly what it will do when the tick
+ * runs. A gate that answered about the whole tour would light the Run button for a user that
+ * is not going anywhere.
+ *
  * @param {GameState} s
  * @param {WaypointField} [wf]  reuse the field the tick already computed
  * @returns {boolean}
@@ -445,10 +471,121 @@ export function gateOpen(s, wf) {
     const queued = u.state === 'queued';
     if (!queued && !(u.state === 'moving' && u.stalled)) continue;
     asked = true;
-    const f = fields.for(u.todo);
+    const f = fields.for(effectiveMask(u));
     if (queued ? gateOpen(s, f) : canProgress(s, f, u.at)) open = true;
   }
   return asked ? open : gateOpen(s, waypointField(s, everyDest(s)));
+}
+
+/**
+ * Answers are per state object and a state object is immutable once `reduce` has returned it,
+ * so the cache is a WeakMap on the state itself — the same trick the potential fields play on
+ * the terrain array, one layer in. It exists because the UI asks this question every frame and
+ * the answer costs a handful of BFS passes; without it, a board with twenty flags on it would
+ * rebuild twenty field sets sixty times a second for a result that cannot have changed.
+ * @type {WeakMap<GameState, number[]>}
+ */
+const BLOCKERS = new WeakMap();
+
+/**
+ * **Which of the player's own flags are the thing holding somebody up** (owner decision
+ * 2026-08-05, SPEC §4.5).
+ *
+ * Born from a playtest: a flag sat on the single cut vertex between the queue and both
+ * remaining destinations, every user stood still, and the board looked like a pathfinding bug.
+ * It was not — flags are impassable and that is the whole mechanic — but "your own flag is the
+ * wall" is information the board was not showing. So it is computed, and the UI shows it.
+ *
+ * **Definitions, both narrow on purpose.** *Stuck* is queued at the origin, or moving and
+ * stalled — the two states patience is draining in. *Would let progress* is: with this one flag
+ * lifted and nothing else changed, a queued user's gate opens on its own effective mask, or a
+ * stalled user can progress from the cell it is standing on and is not already standing on its
+ * target (distance 0 is camping, which is not being blocked by anything).
+ *
+ * **Single-removal semantics, and the limitation is real.** Each flag is tested alone, so a cut
+ * made of *two* flags marks **neither** of them: lifting either one still leaves a wall, so
+ * neither one individually unblocks anybody. That is a deliberate refusal to guess — the honest
+ * generalization is "a minimal set of flags whose removal frees somebody", which is a set-cover
+ * problem, and a hint that sometimes highlights two flags and sometimes four would teach the
+ * player nothing. What this reports is exactly what it says: flags that are *individually*
+ * decisive. A player who unflags one and sees nothing move has learned something true.
+ *
+ * A user that could already progress without lifting anything is not counted, so a board where
+ * the player has just built the missing tile does not light up every flag on it; the flag has
+ * to be what makes the difference.
+ *
+ * **It is view-layer information.** Nothing in `reduce()` may call it: it consumes no RNG and
+ * changes no state, and the moment the tick pipeline read it, a display decision would become
+ * a game rule. No event, no state field, no save impact.
+ *
+ * @param {GameState} s
+ * @returns {number[]} ascending cell indices of flagged cells; `[]` when nobody is stuck,
+ *   nothing is flagged, or no single flag is decisive
+ */
+export function blockingFlags(s) {
+  const cached = BLOCKERS.get(s);
+  if (cached) return cached;
+  const out = findBlockingFlags(s);
+  BLOCKERS.set(s, out);
+  return out;
+}
+
+/**
+ * @param {GameState} s
+ * @returns {number[]}
+ */
+function findBlockingFlags(s) {
+  const stuck = s.users.filter((u) => u.state === 'queued' || (u.state === 'moving' && u.stalled));
+  if (stuck.length === 0) return [];
+
+  /** @type {number[]} ascending, because the scan is */
+  const flags = [];
+  for (let i = 0; i < s.con.length; i++) if (isFlagged(s.con[i])) flags.push(i);
+  if (flags.length === 0) return [];
+
+  // Anyone who can already move is not being blocked by anything, flag or otherwise.
+  const now = waypointFields(s);
+  const held = stuck.filter((u) => !canGo(s, now, u));
+  if (held.length === 0) return [];
+
+  /** @type {number[]} */
+  const out = [];
+  for (const flag of flags) {
+    const lifted = unflagged(s, flag);
+    const fields = waypointFields(lifted);
+    if (held.some((u) => canGo(lifted, fields, u))) out.push(flag);
+  }
+  return out;
+}
+
+/**
+ * One flag lifted, on a throwaway board. `con` is the only layer that moves, and the clone is a
+ * shallow `{ ...s, con }` — which matters more than it looks: `terrain` keeps its identity, so
+ * the overlay resolves the same level parameters, the same neighbour tables and the same cached
+ * potential fields as the real board. A deep copy would silently become a different level.
+ * @param {GameState} s
+ * @param {number} i  a flagged cell
+ * @returns {GameState}
+ */
+function unflagged(s, i) {
+  const tile = /** @type {{ k: 'aiHidden', mine: boolean, block: number }} */ (s.con[i]);
+  const con = s.con.slice();
+  con[i] = { k: 'aiHidden', mine: tile.mine, block: tile.block, flagged: false };
+  return { ...s, con };
+}
+
+/**
+ * Can this stuck user make progress on this board — the queue's question for a queued user, the
+ * walker's question for a stalled one, each against that user's own effective mask.
+ * @param {GameState} s
+ * @param {FieldSet} fields
+ * @param {import('./state.js').User} u
+ * @returns {boolean}
+ */
+function canGo(s, fields, u) {
+  const wf = fields.for(effectiveMask(u));
+  if (u.state === 'queued') return gateOpen(s, wf);
+  return wf.dist[u.at] > 0 && canProgress(s, wf, u.at);
 }
 
 /**

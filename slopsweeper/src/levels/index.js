@@ -20,8 +20,12 @@ import { delta } from './delta.js';
  * @property {number} [mineDensity]
  * @property {number} [patience]
  * @property {number} [betaSupply]
- * @property {string[][]} [itineraries]  destination letters per user, cycled by spawn order;
- *                                       omitted or empty = every user visits every destination
+ * @property {import('../core/rules.js').Itinerary[]} [itineraries]
+ *                                       destination letters per user, cycled by spawn order;
+ *                                       omitted or empty = every user visits every destination.
+ *                                       An entry is `['B','D']` (any order) or
+ *                                       `{ stops: ['B','D'], ordered: true }` (that order,
+ *                                       enforced — rev. 2026-08-05)
  * @property {number} [destRefill]       patience returned on an intermediate stop; default 0.5
  * @property {'compact' | 'awkward' | 'heavy' | string[]} [shapePool]
  * @property {number} [userMoveEvery]

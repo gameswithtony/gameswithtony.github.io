@@ -146,20 +146,35 @@ function statusOf(s, u) {
  * is indexes into the level's destination list, so the letters come out of the same arithmetic
  * the tiles do — one place decides that stop 0 is 'B' and both readers ask it.
  *
- * Ascending, always, whatever order the itinerary was authored in: the column is scanned down
- * a list of rows, and a "D·B" three rows above a "B·D" would read as two different errands
- * rather than as the same two stops in a different mood. The order a user actually walks them
- * in is theirs to decide anyway (SPEC §6.3 — they take whatever is reachable).
+ * TWO KINDS OF ITINERARY, TWO PUNCTUATIONS, and the punctuation is the only explanation the
+ * row gets:
  *
- * The read is guarded: `todo` is core's newest field, and a roster that throws on a state
- * without one would take the whole panel down over a decoration.
+ * · An ordinary user owes a **set**. They walk whichever stop is reachable (SPEC §6.3), so the
+ *   letters sort ascending and join with '·'. The order the level happened to author them in
+ *   is not a fact about the walk, and a "D·B" three rows above a "B·D" would read as two
+ *   different errands rather than as the same two stops in a different mood.
+ * · An `ordered` user owes a **sequence**, and there the authored order is the whole fact.
+ *   Sorting it would print a route they are not allowed to walk, which is the worst thing a
+ *   status panel can do. Those keep the array's order and join with '→': B→C→D says "C is not
+ *   available until B is done" without spending a word on it.
+ *
+ * The ascending argument therefore applies to the unordered case only. It was never a claim
+ * about tidiness — it was a claim that the order carried no information, and for one of these
+ * two shapes that claim is now false.
+ *
+ * `ordered` is read bare, no `?? false` anywhere: core made it an OPTIONAL field precisely so
+ * that absent is falsy is unordered, which is what every user on every board before today was
+ * and what every user restored from a v3 save still is. `todo` keeps its guard for the older
+ * reason — it is the field the whole walk is decided from, and a roster that throws on a state
+ * without one would take the panel down over a decoration.
  * @param {User} u
  * @returns {string} '' when there is nothing to say
  */
 function todoLetters(u) {
   const todo = /** @type {{ todo?: number[] }} */ (/** @type {unknown} */ (u)).todo;
   if (!Array.isArray(todo) || todo.length === 0) return '';
-  return todo.map(stopLetter).sort().join('·');
+  const letters = todo.map(stopLetter);
+  return u.ordered ? letters.join('→') : letters.sort().join('·');
 }
 
 /**

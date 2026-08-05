@@ -5,8 +5,8 @@
 
 import { LEVEL_DEFAULTS } from './rules.js';
 import {
-  CON_BETA, CON_HAND, CON_NONE, conCaps, destIndex, everyDest, isEndpoint, isFlagged,
-  isHandBuildable, levelParams, setLevelParams, stopsBlast,
+  CON_BETA, CON_HAND, CON_NONE, conCaps, destIndex, effectiveMask, everyDest, isEndpoint,
+  isFlagged, isHandBuildable, levelParams, setLevelParams, stopsBlast,
 } from './state.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
 import { canProgress, gateOpen, stepCandidates, waypointFields } from './routing.js';
@@ -441,6 +441,12 @@ function runTick(d, ev) {
  * different destinations and the route to one of them can be open while the other is not. On
  * a level where everyone carries the same list this is one question, asked N times, with one
  * answer — the flush, unchanged.
+ *
+ * "That user's own field" is `effectiveMask(u)`'s field since ordered itineraries (rev.
+ * 2026-08-05), which is where enforcement starts: an ordered user whose next stop is walled off
+ * stays at the origin **even when a later stop on its list is wide open**, because the later
+ * stop is not on the mask and the gate never hears about it. It burns patience standing there,
+ * exactly like anybody else the board is not ready for.
  * @param {GameState} d
  * @param {Ev[]} ev
  * @param {import('./routing.js').FieldSet} fields
@@ -448,7 +454,7 @@ function runTick(d, ev) {
 function departures(d, ev, fields) {
   for (const u of d.users) {
     if (u.state !== 'queued') continue;
-    if (!gateOpen(d, fields.for(u.todo))) continue;
+    if (!gateOpen(d, fields.for(effectiveMask(u)))) continue;
     u.state = 'moving';
     u.at = d.origin;
     u.visited = [d.origin];
@@ -467,7 +473,7 @@ function movement(d, ev, fields) {
   const { patience: limit, destRefill } = levelParams(d);
   for (const u of d.users) {
     if (u.state !== 'moving') continue;
-    const wf = fields.for(u.todo);
+    const wf = fields.for(effectiveMask(u));
     u.stalled = false;
     // The progress guard is asked BEFORE the move stream is touched, and the ordering is
     // load-bearing rather than tidy: a user held in place by it must draw no random number,
@@ -541,6 +547,13 @@ function movement(d, ev, fields) {
  * end of a trip. Without it a user that walks A→B would be forbidden from retracing any of it
  * on the way to C, which on most geometries means it stands on B until its patience runs out.
  *
+ * **ORDERED ITINERARIES ARE ENFORCED HERE** (owner decision 2026-08-05, SPEC §6.5), and this is
+ * the one line of the feature that is not just a mask. For an ordered user only `todo[0]` is a
+ * stop; a later one on its own list is a cell it walks over and nothing more — no tick-off, no
+ * refill, no trail reset, no event. That is what ordering *means*: a user told to see B, then C,
+ * then D does not get credit for wandering past D on the way to B, and it will have to come
+ * back. Contact with a destination it never owed is unchanged and was already nothing.
+ *
  * @param {GameState} d
  * @param {Ev[]} ev
  * @param {User} u
@@ -553,6 +566,7 @@ function visit(d, ev, u, cell, limit, refill) {
   if (di < 0) return;
   const k = u.todo.indexOf(di);
   if (k < 0) return;
+  if (u.ordered && k !== 0) return;
 
   u.todo.splice(k, 1);
   if (u.todo.length === 0) {
@@ -616,7 +630,7 @@ function traversal(d, ev) {
   const fresh = waypointFields(d);
   for (const u of d.users) {
     if (u.state !== 'moving') continue;
-    const wf = fresh.for(u.todo);
+    const wf = fresh.for(effectiveMask(u));
     if (wf.dist[u.at] <= 0 || !canProgress(d, wf, u.at)) u.stalled = true;
   }
 }
@@ -672,15 +686,21 @@ function spawns(d, ev) {
   const sc = d.schedule;
   const { itineraries } = levelParams(d);
   while (sc.spawned < sc.total && d.tick >= sc.nextTick) {
+    const { todo, ordered } = itineraryFor(d, itineraries, d.users.length);
     /** @type {User} */
     const u = {
       id: d.users.length,
       at: d.origin,
       state: 'queued',
-      todo: itineraryFor(d, itineraries, d.users.length),
+      todo,
       visited: [],
       stalled: false,
       waited: 0,
+      // Written explicitly, `false` included, so a state this build produced always states its
+      // answer rather than implying it. Reads never rely on that — `ordered` is optional and
+      // absent means false, which is what lets a save from before the feature revive as itself
+      // (state.js, PLAN §11.10).
+      ordered,
     };
     d.users.push(u);
     sc.spawned++;
@@ -703,15 +723,28 @@ function spawns(d, ev) {
  * behave exactly as it did before any of this: one destination, every user owing it, arrival
  * on contact. Levels state itineraries only when they want users to differ.
  *
+ * **Two shapes, one cycle** (owner decision 2026-08-05, SPEC §6.5). An entry is either the
+ * original `string[]` — a set of obligations, taken in whatever order the walk finds them,
+ * stored ascending because the order carries no meaning — or `{ stops, ordered }`, and with
+ * `ordered: true` the list is a **sequence**: stored in the order the author wrote it, because
+ * now the order is the whole content, and `todo[0]` is the only stop that is live. The cycling
+ * is untouched and blind to which shape it just handed out; a level may mix the two freely,
+ * which `delta` does.
+ *
  * @param {GameState} d
- * @param {string[][]} itineraries  letters, as authored
+ * @param {import('./rules.js').Itinerary[]} itineraries  letters, as authored
  * @param {number} n                spawn order, which is also the user id
- * @returns {number[]} ascending indexes into `d.dests`
+ * @returns {{ todo: number[], ordered: boolean }} indexes into `d.dests`: ascending when the
+ *   list is loose, authored order when it is ordered
  */
 function itineraryFor(d, itineraries, n) {
-  if (itineraries.length === 0) return everyDest(d);
-  const letters = itineraries[n % itineraries.length];
-  return letters.map((ch) => ch.charCodeAt(0) - 'B'.charCodeAt(0)).sort((a, b) => a - b);
+  if (itineraries.length === 0) return { todo: everyDest(d), ordered: false };
+  const entry = itineraries[n % itineraries.length];
+  const loose = Array.isArray(entry);
+  const letters = loose ? entry : entry.stops;
+  const todo = letters.map((ch) => ch.charCodeAt(0) - 'B'.charCodeAt(0));
+  if (loose || entry.ordered !== true) return { todo: todo.sort((a, b) => a - b), ordered: false };
+  return { todo, ordered: true };
 }
 
 /**

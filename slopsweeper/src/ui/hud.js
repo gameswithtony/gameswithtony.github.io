@@ -13,7 +13,7 @@ import { gateOpen } from '../core/routing.js';
 import { SHAPES } from '../core/shapes.js';
 import { PALETTE } from './palette.js';
 import { crisp } from './atlas.js';
-import { drawTray, endpointLetters, stencilDims, IMPATIENT_AT, patienceSpent } from './renderer.js';
+import { blockingFlagSet, drawTray, endpointLetters, stencilDims, IMPATIENT_AT, patienceSpent } from './renderer.js';
 import * as cam from './camera.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -81,6 +81,14 @@ function flaggedAt(s, cell) {
  * What the selected cell is offering, in one line. Unreviewed slop is the only cell that needs
  * saying out loud: the two verbs it carries do very different things and one of them is free,
  * and the cascade is the rule a new player will not guess from a button label.
+ *
+ * A flagged cell has a third line as of 2026-08-05, and it is the only one here that reports a
+ * fact about the *board* rather than about the verbs. When core names this flag as the single
+ * thing keeping somebody stuck, the tile is already wearing the alarm (renderer.js) — but the
+ * tile can only say "something is wrong here", and the line has to say what and what to do
+ * about it, because the answer is counter-intuitive: the fix for a flag that is costing you
+ * users is to take your own guardrail away. The blocking set is asked for only on the branch
+ * that can use it, so an ordinary selection never pays for the question.
  * @param {GameState} s
  * @param {number} cell
  * @returns {string} '' when the buttons already say everything
@@ -88,9 +96,12 @@ function flaggedAt(s, cell) {
 function cellHint(s, cell) {
   if (cell < 0 || s.phase.k !== 'play') return '';
   if (s.con[cell].k !== 'aiHidden') return '';
-  return flaggedAt(s, cell)
-    ? 'FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO ANALYZE'
-    : 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · A MINE DETONATES · FLAG IS FREE';
+  if (!flaggedAt(s, cell)) {
+    return 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · A MINE DETONATES · FLAG IS FREE';
+  }
+  return blockingFlagSet(s).has(cell)
+    ? 'THIS FLAG IS THE ROADBLOCK: USERS ARE STUCK BEHIND IT · UNFLAG OR BUILD AROUND'
+    : 'FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO ANALYZE';
 }
 
 /**

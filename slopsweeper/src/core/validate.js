@@ -106,6 +106,14 @@ function letter(i) {
  * Itineraries are letters, so they are checked against the letters the map actually carries
  * (PLAN §9.1). Structural only, like everything else here: whether a level *should* send a
  * user to C and D but never B is a design question, and this file does not have those.
+ *
+ * Revised 2026-08-05 (owner decision — opt-in ordered visitation, SPEC §6.5): an entry may be
+ * the original `string[]` or `{ stops: string[], ordered?: boolean }`. The two shapes are
+ * unwrapped to the same `stops` array and then checked by the same loop, so there is exactly
+ * one implementation of "these are the rules for a list of stops" and the object form cannot
+ * quietly drift into accepting a duplicate the array form refuses. `ordered` is the only new
+ * rule: a boolean if it is there at all. Whether ordering a list makes the level *harder* is,
+ * again, a design question.
  * @param {LevelDef} def
  * @param {import('./grid.js').ParsedMap} m
  * @param {string[]} errors
@@ -119,13 +127,19 @@ function checkItineraries(def, m, errors) {
   }
   const known = new Set(m.dests.map((_, i) => letter(i)));
   list.forEach((entry, n) => {
-    if (!Array.isArray(entry) || entry.length === 0) {
-      errors.push(`itineraries[${n}] must be a non-empty array of destination letters`);
+    const object = !Array.isArray(entry) && !!entry && typeof entry === 'object';
+    const stops = object ? /** @type {{ stops: string[] }} */ (entry).stops : entry;
+    if (object && /** @type {{ ordered?: unknown }} */ (entry).ordered !== undefined
+      && typeof /** @type {{ ordered?: unknown }} */ (entry).ordered !== 'boolean') {
+      errors.push(`itineraries[${n}].ordered must be a boolean`);
+    }
+    if (!Array.isArray(stops) || stops.length === 0) {
+      errors.push(`itineraries[${n}] must be a non-empty array of destination letters, or { stops: [...], ordered }`);
       return;
     }
     /** @type {Set<string>} */
     const seen = new Set();
-    for (const ch of entry) {
+    for (const ch of stops) {
       if (typeof ch !== 'string' || !known.has(ch)) {
         errors.push(`itineraries[${n}] names '${ch}', which is not a destination on this map`);
       } else if (seen.has(ch)) {

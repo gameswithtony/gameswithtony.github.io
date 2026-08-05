@@ -314,7 +314,8 @@ export interface User {
   todo: number[]                                      // indexes into dests still to visit (2026-08-05)
   visited: number[]                                   // current-trip no-revisit set (§6.3)
   stalled: boolean                                    // no legal move this tick → counts waiting
-}
+  ordered?: boolean                                   // OPTIONAL; absent = false. todo in authored
+}                                                     //   order, only todo[0] live (2026-08-05)
 
 export interface GameState {
   level: string; seed: number; tick: number
@@ -396,6 +397,33 @@ never visualize which destroyed cells held mines (§5: destroyed silently).
 > `pathComplete(s)` — every destination reachable from the origin — because the sim bots' "the
 > job is done" is a stronger question than the gate's and used to be the same one.
 
+> **Frozen-shape deltas, 2026-08-05, later the same day (owner decision — opt-in ordered
+> visitation, SPEC §6.5, and blocking-flag detection, SPEC §4.5).** Three, and every one of them
+> is optional or derived: nothing became required, and **no save changed shape.**
+>
+> - **An `itineraries` entry is a union.** `type Itinerary = string[] | { stops: string[];
+>   ordered?: boolean }`, declared in `core/rules.js` because both `LevelParams` and `LevelDef`
+>   name it. The array form is untouched and means what it always meant. `validate.js` unwraps
+>   both shapes to the same `stops` array and runs the same checks over it, plus exactly one
+>   more: `ordered` must be a boolean if it is present at all.
+> - **`User.ordered?: boolean`**, and the `?` is the point. **Absent means false everywhere**,
+>   with no `?? false` at any read site — which is what lets a v3 save, written before the field
+>   existed, revive and play as itself (§11.10). `spawns` writes it explicitly anyway, `false`
+>   included. When it is true, `todo` is in the level's authored order rather than ascending and
+>   only `todo[0]` is live. One new export carries all of that into routing: **`effectiveMask(u)`**
+>   in `state.js` — `u.ordered ? [u.todo[0]] : u.todo`, the identical array when it is loose —
+>   called at every site that used to hand `u.todo` to the field machinery: departures, movement,
+>   the post-blast recompute, and the one-argument `gateOpen`. `visit()` is the only place that
+>   branches on the bit itself, because contact with a stop that is not `todo[0]` must do
+>   nothing. `hash.js` fingerprints the bit as a suffix that is **empty when it is false or
+>   absent**, so a v3 state hashes exactly as it did.
+> - **`blockingFlags(s): number[]`** in `core/routing.js` — ascending flagged cell indices whose
+>   *individual* removal would let a currently-stuck user move, cached in a WeakMap on the state
+>   object so the HUD may ask every frame for free. Derived display data in the strongest sense:
+>   no event, no state field, no save impact, no RNG, and `reduce.js` never calls it — a standing
+>   test reads the file and checks, because that is the invariant that keeps a hint from
+>   quietly becoming a rule.
+
 ```ts
 // module signatures (frozen; notation shorthand — implemented with JSDoc in the .js files)
 // core/grid.js
@@ -422,6 +450,11 @@ gateOpen(s, wf?): boolean                              // with a field: can THIS
                                                        //   without: can anybody stuck get unstuck (HUD)
 pathComplete(s): boolean                               // every dest reachable from A — the sim's
                                                        //   "nothing left to build" (added 2026-08-05)
+blockingFlags(s): number[]                             // flags individually holding somebody up —
+                                                       //   VIEW ONLY, cached per state (2026-08-05)
+// core/state.js
+effectiveMask(u): number[]                             // what a walker is actually asking for:
+                                                       //   [todo[0]] when ordered, else todo itself
 // core/reduce.js
 init(level: LevelDef, seed: number): GameState
 reduce(s, a: Action): { s: GameState; ev: Ev[] }       // pure; clones what it changes
@@ -454,7 +487,9 @@ export interface LevelDef {
   userMoveEvery?: number  // default 1 (OPEN #1: parameterized)
   blastRadius?: number    // default 1 = tile + orthogonals (§5)
   betaSupply?: number     // default RULES.BETA_SUPPLY = 3; 0 switches the verb off (§4.7)
-  itineraries?: string[][]  // letters per user, cycled by spawn order; omitted/[] = all dests (§6.5)
+  itineraries?: (string[] | { stops: string[]; ordered?: boolean })[]
+                            // letters per user, cycled by spawn order; omitted/[] = all dests (§6.5).
+                            // `ordered: true` makes the list a sequence: todo[0] and nothing else
   destRefill?: number       // patience back on an intermediate stop; default RULES.DEST_REFILL = 0.5
 }
 ```

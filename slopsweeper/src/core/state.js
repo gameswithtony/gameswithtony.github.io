@@ -224,12 +224,25 @@ export function stopsBlast(terrain) {
  * @property {number[]} visited  current-trip no-revisit set (SPEC §6.3)
  * @property {boolean} stalled   no legal move this tick → counts as waiting (SPEC §6.4)
  * @property {number} waited     CUMULATIVE ticks spent unable to move; at `patience`, gone
+ * @property {boolean} [ordered] visit `todo` in list order, so the only live stop is `todo[0]`
  */
 // `todo` is the user's ITINERARY, assigned once at spawn and never re-ordered: the order
 // within it carries no meaning (destinations may be visited in any order) and it is kept
 // ascending purely so every iteration over it is in a defined order. It is indexes rather
 // than cell indices because that is what the routing masks are keyed on, and because it makes
 // `todo` meaningless on any board but its own — which is honest, since it is.
+//
+// Revised 2026-08-05 (owner decision — opt-in ordered visitation, SPEC §6.5). `ordered` is the
+// exception to the paragraph above, and it is **optional on purpose**: absent means false,
+// everywhere, without a single `?? false` at a read site — `u.ordered` is falsy when it is not
+// there. That is not laziness about a default, it is the save contract (PLAN §11.10). A v3 save
+// written before this feature existed carries users with no `ordered` key, and it has to revive
+// as the game it was; making the field required would have meant a save version and a migration
+// for a bit that is false in every game those saves came from. `spawns` writes it explicitly
+// anyway, so a state this build produced always states its answer.
+//
+// When it IS true, `todo` is in the order the level authored and only `todo[0]` is live — see
+// `effectiveMask`.
 
 /**
  * @typedef {object} BBox
@@ -339,6 +352,31 @@ export function isEndpoint(e, i) {
  */
 export function everyDest(e) {
   return e.dests.map((_, i) => i);
+}
+
+/**
+ * **What a user is actually asking the board for**, which since ordered itineraries is not
+ * always its whole `todo` (owner decision 2026-08-05, SPEC §6.5).
+ *
+ * An unordered user owes every stop on its list and is routed to whichever is nearest, so its
+ * mask is `todo` — the identical array, by reference, so nothing downstream can tell this
+ * function was called. An **ordered** user owes exactly one thing, `todo[0]`, and the rest of
+ * its list is not a routing question yet; its mask is that one element. Enforcement is then not
+ * a rule anybody has to remember at a routing site: a later stop is simply not on the mask, so
+ * it is not a waypoint, so nothing walks toward it.
+ *
+ * Every site that used to hand `u.todo` to the field machinery hands it this instead —
+ * departures, movement, the post-blast recompute, and the HUD's `gateOpen(s)`. That is the
+ * whole of the change on the routing side, and it is one call each, which is the point of
+ * having a helper rather than a branch four times.
+ *
+ * An empty `todo` returns the empty array unchanged (an arrived user has no mask); the field
+ * machinery's own fallback to every destination still covers callers that ask anyway.
+ * @param {{ todo: number[], ordered?: boolean }} u
+ * @returns {number[]} indexes into `dests` — the destinations this user is currently walking to
+ */
+export function effectiveMask(u) {
+  return u.ordered && u.todo.length > 0 ? [u.todo[0]] : u.todo;
 }
 
 /**

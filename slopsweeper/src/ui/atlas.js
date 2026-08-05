@@ -95,7 +95,7 @@ function tileNames() {
   }
   names.push('revealed', 'mine', 'origin', 'dest', 'originFar', 'destFar');
   names.push('tintOk', 'tintRed', 'tintSelect', 'tintUser');
-  names.push('flag', 'flagFar', 'beta', 'betaFar');
+  names.push('flag', 'flagFar', 'flagBlocking', 'flagBlockingFar', 'beta', 'betaFar');
   for (let m = 0; m < 16; m++) names.push(`coastS${m}`);
   for (let m = 0; m < 16; m++) names.push(`coastC${m}`);
   return names;
@@ -183,6 +183,8 @@ function paint(ctx, name, ox, oy, px) {
     case 'destFar': return paintEndpointFar(p, false);
     case 'flag': return paintFlag(p);
     case 'flagFar': return paintFlagFar(p);
+    case 'flagBlocking': return paintFlagBlocking(p);
+    case 'flagBlockingFar': return paintFlagBlockingFar(p);
     case 'beta': return paintBeta(p);
     case 'betaFar': return paintBetaFar(p);
     case 'tintOk': return paintTint(p, PALETTE.OK);
@@ -355,19 +357,35 @@ function paintEndpointFar(p, isOrigin) {
 }
 
 /**
- * The flag a player plants on a cell they believe holds a defect (SPEC §4.3). Both flag tiles
- * are OVERLAYS — they paint only their own pixels and leave the rest of the tile transparent,
- * so a flagged cell keeps the hidden tile's own variant and its inset border underneath and
- * still reads as the same discrete minesweeper cell it was before it was marked.
+ * The pennant the player plants on a cell they believe holds a defect (SPEC §4.3): a
+ * two-art-pixel pole with a foot, and a stepped triangle. Diagonals are runs of rects, never
+ * anti-aliased strokes (SPEC §10.8).
  *
- * A pennant: two-art-pixel INK pole with a foot, and a stepped RED triangle. Diagonals are
- * runs of rects, never anti-aliased strokes (SPEC §10.8).
+ * It takes its two colours from the caller because a flag has two moods and exactly one shape
+ * (2026-08-05). Sharing the geometry is not tidiness — it is the guarantee that the alarmed
+ * flag below is *this flag wearing different clothes* rather than a second kind of object the
+ * player has to learn, and the only way to keep that true through a later edit to the mark.
+ * The box it occupies is art x 3…12, y 3…13, which is what the alarm plate is sized against.
+ * @param {Pen} p
+ * @param {string} pole
+ * @param {string} banner
+ */
+function pennant(p, pole, banner) {
+  p(5, 3, pole, 2, 10);                 // pole
+  p(3, 12, pole, 6, 2);                 // foot — without it the pole reads as a stray line
+  for (let k = 0; k < 6; k++) p(7, 3 + k, banner, 6 - k, 1);
+}
+
+/**
+ * The ordinary flag. All four flag tiles are OVERLAYS — they paint only their own pixels and
+ * leave the rest of the tile transparent, so a flagged cell keeps the hidden tile's own variant
+ * and its inset border underneath and still reads as the same discrete minesweeper cell it was
+ * before it was marked. That holds for the alarmed pair below too, which is why they can stop
+ * short of the edge and let the cell frame them.
  * @param {Pen} p
  */
 function paintFlag(p) {
-  p(5, 3, PALETTE.INK, 2, 10);          // pole
-  p(3, 12, PALETTE.INK, 6, 2);          // foot — without it the pole reads as a stray line
-  for (let k = 0; k < 6; k++) p(7, 3 + k, PALETTE.RED, 6 - k, 1);
+  pennant(p, PALETTE.INK, PALETTE.RED);
 }
 
 /**
@@ -380,6 +398,52 @@ function paintFlag(p) {
 function paintFlagFar(p) {
   p(4, 4, PALETTE.INK, 8, 8);
   p(5, 5, PALETTE.RED, 6, 6);
+}
+
+/**
+ * THE ALARMED FLAG (2026-08-05): the same pennant, on a cell core says is the single thing
+ * standing between a stuck user and their next stop. Your guardrail has become the roadblock,
+ * and the board has to say so at a glance or the player goes looking for a bug in the routing.
+ *
+ * **The cell goes red under the flag, and the flag does not change.** Same pole, same foot,
+ * same triangle, same coordinates — `pennant()` is shared with `paintFlag` precisely so that
+ * stays true. Only the banner flips to PAPER, and only because a red banner on a red field is
+ * not a banner. That is the whole design, and both halves of it are load-bearing: the red is
+ * what the eye catches from across the board, and the untouched silhouette is what stops it
+ * reading as some new object the player has to go and learn.
+ *
+ * **The plate stops two art pixels short of the cell edge.** Endpoints and confirmed mines are
+ * RED to the border; this one leaves the hidden tile's own colour framing it, so at every zoom
+ * it is visibly *a flagged block cell that has gone hot* rather than a cell of another kind.
+ * Two is also exactly the width of the INK block boundary renderer.js strokes over the tile
+ * afterwards, so a flagged cell on the edge of its block loses none of its plate and the alarm
+ * looks the same wherever in a block it lands.
+ *
+ * **An INK rim around the plate was drawn and thrown away.** It is the obvious move — the other
+ * red tiles all carry one, and red is a mid-luminance colour that usually needs a dark edge to
+ * carry (1.5:1 against AI_HIDDEN). But the pole and its foot are INK and sit against that rim,
+ * the two blacks merge into one shape, and the flag stops being a flag. The pole IS the dark
+ * edge the red needs, and it is already standing in the middle of the picture.
+ * @param {Pen} p
+ */
+function paintFlagBlocking(p) {
+  p(2, 2, PALETTE.RED, 12, 13);         // the alarm field, framed by the cell it is still part of
+  pennant(p, PALETTE.INK, PALETTE.PAPER);
+}
+
+/**
+ * Far tier: the same trade `flagFar` makes, one step louder. The chip is the chip, grown from
+ * eight art pixels to twelve — a flag you can still count in a row of them, and an alarmed one
+ * that is unmistakably the biggest red thing on that stretch of route. It keeps the INK rim its
+ * own tier's flag has (the mid pennant has no rim to keep, which is why these two variants are
+ * built differently), and it carries no PAPER anywhere, on purpose: at this tier a destination
+ * is a red tile with a pale core (`destFar`), and a pale core has to keep meaning "stop" and
+ * nothing else.
+ * @param {Pen} p
+ */
+function paintFlagBlockingFar(p) {
+  p(2, 2, PALETTE.INK, 12, 12);
+  p(3, 3, PALETTE.RED, 10, 10);
 }
 
 /**

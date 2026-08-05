@@ -14,6 +14,7 @@
 import { RULES } from '../core/rules.js';
 import { blockMines, clue } from '../core/reduce.js';
 import { isFlagged, levelParams } from '../core/state.js';
+import { blockingFlags } from '../core/routing.js';
 import { PALETTE } from './palette.js';
 import { ART, bakeAtlas, crisp, variantOf } from './atlas.js';
 import { drawText, drawTextCentered, textWidthArt, GLYPH_H, GLYPH_GAP } from './font.js';
@@ -110,6 +111,29 @@ export function endpointLetters(s) {
   const out = new Map([[s.origin, 'A']]);
   dests(s).forEach((cell, k) => out.set(cell, stopLetter(k)));
   return out;
+}
+
+/**
+ * The flags that are, right now, the one thing standing between a stuck user and progress
+ * (2026-08-05). Core decides it — `blockingFlags()` lifts each flag and asks the same routing
+ * the walkers use — and the UI's whole job is to ask once and hand the answer to everything
+ * that draws or describes a cell.
+ *
+ * A Set rather than the ascending array core returns, because both readers are membership
+ * tests: the board asks per visible cell, hundreds of times per rebuild, and `includes()` down
+ * a list is the kind of thing that only shows up on somebody else's phone. The conversion lives
+ * here rather than at each call site so there is one answer to "what does the UI mean by
+ * blocking" and one place that pays for it.
+ *
+ * It is a function of the state and of nothing else, which is what lets it compose with the
+ * static cache: the cache is already rebuilt on every state change, so an alarmed flag lights
+ * and goes out on exactly the frames it should, with no invalidation of its own and no
+ * per-frame work. Core caches its own answer per state, so asking twice a rebuild is free.
+ * @param {GameState} s
+ * @returns {Set<number>}
+ */
+export function blockingFlagSet(s) {
+  return new Set(blockingFlags(s));
 }
 
 /**
@@ -252,6 +276,7 @@ export function createRenderer(canvas) {
     cctx.fillRect(0, 0, cam.cw, cam.ch);
 
     const ends = endpointLetters(s);
+    const blocking = blockingFlagSet(s);
     const win = visibleCells(cam, s);
     // Rectangular *iteration* over the visible window is fine; playability is decided by the
     // VOID test below, never by the loop bounds (SPEC §10.7).
@@ -280,7 +305,19 @@ export function createRenderer(canvas) {
         // The player's own mark, over the cell rather than instead of it. Present at EVERY
         // tier — a flag is a decision the player made and it may not vanish when they zoom
         // out to look at the route (SPEC §4.3); only its drawing changes.
-        if (isFlagged(s.con[i])) at.blit(cctx, tier === 'far' ? 'flagFar' : 'flag', dx, dy);
+        //
+        // A flag core has named as the roadblock swaps to the alarmed variant instead of
+        // gaining a second mark drawn live over the ordinary one. Same reason the endpoint
+        // letters are passed in rather than looked up per cell, and the same reason `beta`
+        // has a `betaFar`: the atlas is keyed on the name, the name is chosen from state
+        // here, and a tile that is a *variant* costs the bake once instead of costing a
+        // dynamic pass on every rebuild.
+        if (isFlagged(s.con[i])) {
+          const alarmed = blocking.has(i);
+          at.blit(cctx, tier === 'far'
+            ? (alarmed ? 'flagBlockingFar' : 'flagFar')
+            : (alarmed ? 'flagBlocking' : 'flag'), dx, dy);
+        }
       }
     }
 

@@ -36,6 +36,15 @@ const SAVE_KEY = 'slop-sweeper.save';
  * rather than half-read, which is the only cheap way to keep a persisted structure honest
  * against a core that is still moving. Costing a player one in-progress game at a version
  * bump is the right trade against reviving a state the reducer no longer understands.
+ *
+ * NOT BUMPED 2026-08-05 for `User.ordered`. Read the rule above precisely: it guards against
+ * reviving a state the reducer would misread, and this field cannot produce one. It is
+ * optional, an absent one reads as false everywhere it is read, and false is exactly what
+ * every user in a v3 save already is — an itinerary walkable in any order. So a v3 save
+ * revives correctly against the new shape and the player keeps the game they were mid-way
+ * through. The bar is "could an old save be misunderstood", not "did a typedef gain a line":
+ * a required field, a changed or renamed `Con` or `Phase` variant, or a field whose default
+ * is not the old behaviour all still bump on sight.
  */
 const SAVE_V = 3;   // 3: multi-destination — `dest` became `dests`, and a User gained `todo`
 

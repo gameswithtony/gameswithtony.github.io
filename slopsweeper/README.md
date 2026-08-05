@@ -30,6 +30,19 @@ carries on; the last one is arrival and scores the point, however far the user w
 lobes hanging off it, so SPEC §9.2.2's trunk-versus-branches decision arrives in the first ten
 turns. It is a showcase and its numbers are a first guess; read its header before copying them.
 
+**Ordered itineraries and blocking-flag detection** land later the same day (SPEC §6.5, §4.5).
+An itinerary entry may now be `{ stops: ['B','C','D'], ordered: true }` instead of a bare list,
+and then it is a *sequence*: the user owes `stops[0]` and nothing else, waits at the origin for
+that leg however open the others are, and walks over a later stop without ticking it off. Bare
+lists are untouched and the field machinery cannot tell the difference — every routing site
+asks `effectiveMask(u)`, which hands back the identical `todo` array for a loose walker. The
+other half is a hint rather than a rule: `blockingFlags(s)` names the flags that are
+*individually* the thing holding somebody up, because in playtest a flag on a cut vertex reads
+as a pathfinding bug rather than as a wall you built. It is view-layer only — no event, no state
+field, nothing in the tick pipeline reads it. `delta`'s third itinerary is ordered, which cost
+it eleven points of hand-only served; the six tuned levels' sim rows are byte-identical, which
+is checked rather than promised.
+
 ## There is no build step, ever
 
 Plain JavaScript ES modules. No bundler, no compiler, no `dist/`, no dependencies — nothing

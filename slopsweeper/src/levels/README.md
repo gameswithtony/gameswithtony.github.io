@@ -91,7 +91,7 @@ clues, and no block can overlap it. `VOLCANO` is mechanically near-identical but
 | `blastRadius` | `1` | flood-fill steps from a detonation; 1 = the tile plus its four orthogonals |
 | `patience` | `20` (`RULES.USER_PATIENCE`) | cumulative ticks a user will spend unable to move before it gives up and leaves for good |
 | `betaSupply` | `3` (`RULES.BETA_SUPPLY`) | beta milestones the player may ship (SPEC §4.7); `0` switches the verb off for this level |
-| `itineraries` | `[]` | which destinations each user must visit, as letters, cycled by spawn order; `[]` means **every user visits every destination** |
+| `itineraries` | `[]` | which destinations each user must visit, as letters, cycled by spawn order; `[]` means **every user visits every destination**. An entry is `['B','D']` (any order) or `{ stops: ['B','D'], ordered: true }` (that order, enforced) |
 | `destRefill` | `0.5` (`RULES.DEST_REFILL`) | fraction of `patience` handed back when a user reaches a stop that is not its last |
 
 `arrivals` is the difficulty dial. Everything else is texture.
@@ -106,9 +106,9 @@ itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']]
 - **Cycled by spawn order, never rolled.** User 0 takes the first list, user 1 the second, user
   2 the third, user 3 the first again. The demand is a property of the level, so it reads the
   same on every seed — which is what makes the HUD forecast honest and the sim comparable.
-- **Any order within a list.** A user owing `B` and `D` goes to whichever is nearer and then to
-  the other. If you need a forced sequence, that is two destinations and two itineraries, not
-  one itinerary and a wish.
+- **Any order within a list, unless you say otherwise.** A user owing `B` and `D` goes to
+  whichever is nearer and then to the other. If you want a forced sequence, say so — see
+  **ordered itineraries** below.
 - **Visited on contact.** A user routed to `C` that happens to cross `B` has been to `B`, and
   it comes off the list on the spot. A user stepping onto a destination that is **not** on its
   list does nothing at all — it is just a built cell it can walk on.
@@ -120,6 +120,35 @@ itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']]
   losing somebody. `destRefill: 0` is a real setting — it says a stop buys only the walk, which
   is exactly what a **beta** buys, and it is the honest choice for a level where the
   destinations are meant to feel like milestones rather than like relief.
+
+**Ordered itineraries** (added 2026-08-05) are the opt-in. An entry may be an object instead of
+an array, and a level may mix the two freely:
+
+```js
+itineraries: [['C'], ['B', 'D'], { stops: ['B', 'C', 'D'], ordered: true }]
+```
+
+That is `delta`'s own list, and the third entry means **B, then C, then D — enforced**:
+
+- **The user owes `stops[0]` and nothing else** until it has stood on it. It routes to that stop,
+  gates on that stop, and camps or stalls against that stop. A later stop that is nearer, or open
+  while the next one is shut, is not a place it is going: it **waits at the origin and burns
+  patience** while a route it does not currently owe sits there finished. That is the cost, and
+  it is the reason to reach for the feature at all.
+- **Crossing a later stop does nothing.** It does not come off the list, there is no `visited`
+  event, no patience refill, and the no-revisit trail is not reset. The user walks back for it
+  when its turn comes. (Crossing a stop it never owed does nothing either — that rule is older.)
+- **Everything else is identical.** Reaching `stops[0]` ticks it off, pays the refill if more
+  remain, and is arrival when the list empties. One point per user, however far it walked.
+- `{ stops: ['B','D'] }` with no `ordered` is just the loose form written the long way. Making a
+  list into a sequence should cost you the word.
+
+**Reach for it when the build order is the decision.** With `['B','C','D']` loose, closing any
+one leg serves somebody, so the player can take the cheap wins in any sequence. Ordered, the
+first leg gates the whole itinerary — a third of your schedule can be standing at the origin
+because one neck is unbuilt. That makes a level meaningfully harder without touching a single
+number, so re-sim after adding one; it is not decoration. On a one-destination level it does
+nothing at all, in either direction.
 
 Two authoring notes learned putting `delta` together:
 
@@ -260,7 +289,10 @@ registered level.
 - not exactly one `A`; no `B`; a repeated destination letter; a gap in `B`, `C`, `D`…
 - an endpoint with no buildable neighbour — nothing could ever connect to it
 - no ocean connectivity from `A` to **any** destination, each named — unwinnable by construction
-- an itinerary that is empty, names a letter the map does not carry, or visits one twice
+- an itinerary that is empty, names a letter the map does not carry, or visits one twice — in
+  either shape, `['B','C']` or `{ stops: ['B','C'], ordered: true }`, since they are checked by
+  the same code
+- an `ordered` that is not a boolean
 - a board over 64×64 (a performance ceiling, not a target — the corpus runs 32×20 to 50×30)
 - a nonsense schedule, density, pool, count, or `destRefill` outside [0, 1]
 
@@ -458,7 +490,7 @@ A##########################C
   mineDensity: 0.12,
   patience: 26,
   betaSupply: 4,
-  itineraries: [['C'], ['B', 'D'], ['B', 'C', 'D']],
+  itineraries: [['C'], ['B', 'D'], { stops: ['B', 'C', 'D'], ordered: true }],
   shapePool: 'compact+awkward',
 };
 ```
@@ -476,18 +508,24 @@ Reading it back:
   will do to you.
 - **Both necks are three rows tall**, so of `compact+awkward` only `R12` crosses them (§4) —
   the same trick `strait` plays, doubled and pulled apart. The necks are where you build by hand.
-- **`itineraries: [['C'], ['B','D'], ['B','C','D']]`** spans the range deliberately: a single
-  stop, a two-stop that never touches the trunk's own destination, and the full tour. So users
-  0, 3, 6 are served by the trunk alone; users 1, 4, 7 need both branches; users 2, 5, 8 need
-  everything and get half a bar of patience back twice on the way round. Closing the C route
-  first therefore *delivers* a third of the level, which is what makes the build order a
-  decision rather than a checklist.
+- **The three itineraries span the range deliberately**: a single stop, a two-stop that never
+  touches the trunk's own destination, and the full tour. So users 0, 3, 6 are served by the
+  trunk alone; users 1, 4, 7 need both branches; users 2, 5, 8 need everything and get half a
+  bar of patience back twice on the way round. Closing the C route first therefore *delivers* a
+  third of the level, which is what makes the build order a decision rather than a checklist.
+- **And the full tour is `ordered`** (2026-08-05): `{ stops: ['B','C','D'], ordered: true }` is
+  B, then C, then D, enforced. User 2 owes B and only B until it has stood on it — so it waits
+  at the origin for the north neck specifically, and when it finally walks it crosses C without
+  ticking C off, because C is not its turn. That is the feature carried by a real level rather
+  than only by a fixture, and it is deliberately the *longest* list that carries it, where the
+  difference against the loose two-stop beside it is legible. It cost the level about ten points
+  of hand-only served on the day it landed, which is the honest measure of what ordering does.
 - **`betaSupply: 4`** rather than three, because a three-legged trip has more places worth
   staging from than a one-legged one.
 
 **It is a showcase, not a tuned level, and the sim says so**: at these numbers hand-only clears
-it at ~89% served, so it currently sits in `plain`'s class — a control, not a level with a
-floor. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
+it at ~78% served (200 games, seed 1; it was 89% before the third itinerary was ordered), so it
+currently sits in `plain`'s class — a control, not a level with a floor. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
 to 2 moves hand-only about ten points and the AI policies not at all). The dials with something
 to say are `blastRadius`, `mineDensity`, and the geometry: lengthen the trunk, or make the
 branches share more of it. Read §6 — deaths, not delays — before reaching for `arrivals`.

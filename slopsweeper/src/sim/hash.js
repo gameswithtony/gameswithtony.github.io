@@ -61,7 +61,13 @@ export function serializeState(s) {
     // genuinely different boards. `todo` joins them on the same argument (rev. 2026-08-05):
     // two users standing on the same cell with the same clock, one owing C and one owing
     // nothing more than B, are about to walk in different directions.
-    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.waited}/${u.todo.join('.')}/${u.visited.join('.')}`).join('|'),
+    //
+    // And so does the ordered bit, on the same argument again (rev. 2026-08-05): two users
+    // owing {B, C} from the same cell walk differently if one of them may only have B. It is
+    // written as a suffix that is **empty when the bit is false or absent**, so a v3 save —
+    // whose users predate the field entirely — fingerprints exactly as it did, which is the
+    // whole reason the field is optional (state.js).
+    s.users.map((u) => `${u.id}@${u.at}/${u.state}/${u.stalled ? 1 : 0}/${u.waited}/${u.todo.join('.')}${u.ordered ? '!' : ''}/${u.visited.join('.')}`).join('|'),
     `${s.schedule.total}/${s.schedule.spawned}/${s.schedule.nextTick}/${s.schedule.every}`,
     phaseToken(s.phase),
     `${s.rng.gen}/${s.rng.move}`,

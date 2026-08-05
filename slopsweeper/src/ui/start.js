@@ -43,7 +43,7 @@ const HELP = [
     'Users move while you work: after every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
     'Users are not patient. Each turn one of them stands stuck, they lose one patience, and it never comes back. A user who runs out leaves for good.',
     'There is one way to win patience back: a user who reaches one of their stops, with more still to visit, gets half the bar back.',
-    'Tap the WAITING counter any time to see each user by name, which stops they still owe, and how many turns they have left.',
+    'Tap the WAITING counter any time to see each user by name, which stops they still owe (arrows mean the order is fixed), and how many turns they have left.',
   ]],
   ['WRITE CODE', [
     'PLACE writes one tile of code by hand. One turn. It must touch code already built. Hand-written code never has bugs.',
@@ -61,6 +61,7 @@ const HELP = [
     'If the cell is clean, it flips over and shows its number. If that number is zero, its neighbours open too, free.',
     'If the cell is a defect, it explodes. The numbers are there so you can know before you click.',
     'FLAG is free and reversible. Mark a cell you do not trust and users will refuse to walk through it.',
+    'A flag can also close your only road. When your flag is the one thing keeping stuck users from their next stop, it glows red: the guardrail has become the roadblock.',
   ]],
   ['BETAS', [
     'You get a few beta releases per run. The BETA button counts them down.',

@@ -49,6 +49,21 @@ export const RULES = Object.freeze({
 });
 
 /**
+ * One user's itinerary as the level writes it down (rev. 2026-08-05, owner decision — opt-in
+ * ordered visitation). The bare `string[]` is the original form and means exactly what it
+ * always meant: these stops, in any order the walk finds convenient. The object form is the
+ * opt-in: `ordered: true` says the list is a **sequence**, and the user owes `stops[0]` and
+ * nothing else until it has stood on it (SPEC §6.5).
+ *
+ * A union rather than a second field on LevelDef, because orderedness is a property of one
+ * itinerary and not of the level: `delta` carries two loose lists and one sequence, and a
+ * level-wide flag could not say that. `{ stops }` with no `ordered` is the loose form spelled
+ * the long way, which is deliberate — an author converting a list into a sequence should have
+ * to type the word.
+ * @typedef {string[] | { stops: string[], ordered?: boolean }} Itinerary
+ */
+
+/**
  * Defaults for every optional LevelDef field (PLAN §6). `levels/index.js` applies them;
  * they live here so there is exactly one place a number is written down.
  * @typedef {object} LevelParams
@@ -56,9 +71,10 @@ export const RULES = Object.freeze({
  * @property {number} mineDensity
  * @property {number} patience
  * @property {number} betaSupply
- * @property {string[][]} itineraries  destination letters per user, cycled by spawn order
+ * @property {Itinerary[]} itineraries  destination letters per user, cycled by spawn order
  * @property {number} destRefill       patience returned on reaching an intermediate stop
- * @property {'compact' | 'awkward' | 'heavy' | string[]} shapePool
+ * @property {string | string[]} shapePool  a preset name, a `+`-joined union of preset
+ *   names (`'compact+awkward'` — see shapes.poolShapes), or an explicit array of shape ids
  * @property {number} userMoveEvery
  * @property {number} blastRadius
  */
