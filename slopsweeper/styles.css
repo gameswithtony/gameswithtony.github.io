@@ -1,0 +1,940 @@
+/* HUD layout and typography only — the board is canvas and lays itself out (SPEC §10.3).
+   Every colour here is a §11.1 palette entry, so the DOM and the board read as one thing. */
+
+:root {
+  --ink: #16131c;
+  --paper: #f2efe4;
+  --void: #0d1016;
+  --ocean: #14324f;
+  --ocean-dither: #1a4066;
+  --coast: #e8dcc0;
+  --hand: #c98f3f;
+  --hidden: #6b4d93;
+  --revealed: #a08cc0;
+  --red: #d4405c;
+  --user: #ffd23e;
+  --select: #55d6ff;
+  --ok: #4ade80;
+
+  --chrome: #11151d;      /* VOID lifted a hair so the bars separate from the board */
+  --edge: #232a36;
+  --dim: #9aa7b8;
+
+  /* Fixed chrome heights — the board is everything left over (see body below). Each
+     breakpoint declares the height its own layout needs; nothing is ever content-driven.
+       ≥900px  topbar 1 row  (44) · footer 1 row  (82)
+       560-899 topbar 2 rows (64) · footer 2 rows (96)
+       ≤559px  topbar 3 rows (96) · footer 2 rows (96)
+     Every element whose text can change length (seed, tick, level, forecast values) is
+     given a fixed width below, so which row an item lands on depends on the viewport and
+     nothing else. */
+  --top-h: 44px;
+  --hud-h: 82px;
+
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--void);
+  color: var(--paper);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The chrome rows are FIXED height and the board takes the remainder, so board geometry is
+   a pure function of the viewport. Nothing the HUD says — a longer verb label, the tray
+   appearing, a two-digit tick — may resize the canvas: a board that moves under the finger
+   between the tap and the action is how a scarce turn gets spent on the wrong cell. */
+body {
+  display: grid;
+  grid-template-rows:
+    var(--top-h)
+    minmax(0, 1fr)
+    calc(var(--hud-h) + env(safe-area-inset-bottom, 0px));
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#topbar, #hud {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--chrome);
+  border-color: var(--edge);
+  border-style: solid;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#topbar {
+  border-width: 0 0 1px;
+  flex-wrap: wrap;          /* one row on desktop, two on mobile — both sized by --top-h */
+  align-content: center;
+}
+
+#hud {
+  border-width: 1px 0 0;
+  padding-bottom: max(7px, env(safe-area-inset-bottom));
+  align-items: center;
+  flex-wrap: nowrap;        /* wrapping here used to move the board (see #actionbar) */
+}
+
+.field, .chip, .forecast > span, .forecast > button, .hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.chip {
+  padding: 4px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* Widths that must not depend on their contents: a ten-digit random seed or a four-digit
+   tick must wrap the top bar exactly the way a one-digit one does. */
+#seed { width: 128px; justify-content: center; overflow: hidden; white-space: nowrap; }
+#tick { display: inline-block; min-width: 30px; text-align: right; }
+/* 18px holds the two digits every one of these values can reach (arrivals top out in the
+   teens, the next-arrival countdown at the level's cadence). Trimmed from 22 when the waiting
+   item grew its second number — the row-packing arithmetic in the media queries below is
+   what pays for that, and it had to come from somewhere. */
+.forecast b { display: inline-block; min-width: 18px; text-align: right; }
+
+/* The waiting item is a BUTTON: it opens the roster (src/ui/roster.js). It keeps the chip's
+   border so it reads as tappable among the forecast's plain spans, and a FIXED width so a
+   two-digit count or a two-digit countdown cannot rewrap the top bar — the same rule every
+   other variable-length item up here follows. 102px holds the worst case measured in Chrome —
+   WAITING 12 ·20 comes to 99 with its padding and gaps, and the three left over are the
+   difference between a fixed width and a lucky one. */
+#btn-roster {
+  width: 102px;
+  gap: 4px;
+  padding: 4px 6px;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Inside the chip the numbers pack tight against their labels; the fixed width above is what
+   holds the layout still, so a min-width here would only push the pair off-centre. */
+#btn-roster b { min-width: 0; }
+#fc-soonest { color: var(--dim); }
+#fc-soonest.urgent { color: var(--red); }
+
+/* Label variants, swapped by the breakpoints below: `narrow` at ≤899, `tiny` at ≤559. */
+.narrow-only, .tiny-only { display: none; }
+
+.chip:hover { border-color: var(--select); }
+
+b { color: var(--paper); font-weight: 700; }
+
+/* 8px rather than the 12 it carried before the waiting item became a two-number chip: the
+   trio is the last thing on the top bar's single row at ≥900, and the row's own worst case
+   (131 + 66 + 128 + 80 + 148 + trio, five 8px gaps, 20 of padding) is what pays for the chip.
+   Measured in Chrome at the widest labels every item can show. */
+.forecast {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* The score chip stands exactly where the confidence meter did, at exactly its widths — the
+   topbar's row packing is measured to the pixel in the media queries below, and a wider chip
+   pushed the spec-mandated forecast trio (SPEC §6.1) onto a clipped fourth row. Below 900px
+   it drops its words for a compact `9/12 ✕2`, the way the tray's ROTATE becomes ROT. */
+#score { width: 148px; justify-content: center; gap: 4px; }
+#score b { color: var(--paper); }
+#score .sep { color: var(--edge); }
+#score .narrow-only { color: var(--dim); margin-left: 2px; }
+
+/* --- board ------------------------------------------------------------------ */
+
+#board {
+  position: relative;
+  min-height: 0;
+  background: var(--void);
+  touch-action: none;         /* the board owns pinch and pan (SPEC §10.5) */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+#toast, #notice {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  font-size: 11px;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#toast { bottom: 12px; color: var(--user); border-color: var(--hand); }
+#notice { top: 12px; color: var(--red); border-color: var(--red); }
+
+/* --- bottom bar -------------------------------------------------------------- */
+
+/* The action bar is the one element whose content length changes every tap. It takes the
+   leftover width and scrolls inside itself; it never wraps, never grows the footer, and
+   never pushes the minimap onto a second line. */
+#actionbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+#actionbar::-webkit-scrollbar { display: none; }
+/* Verbs keep their intrinsic width: a squeezed button whose visual centre lands on the
+   button behind it is how a tap on PLACE ends up dispatching GENERATE. */
+#actionbar > button { flex: none; }
+#globals { display: flex; gap: 6px; flex: none; }
+
+button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 7px 12px;
+  color: var(--paper);
+  background: #1b2230;
+  border: 1px solid #2e3849;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) { border-color: var(--select); }
+button:disabled { opacity: 0.35; cursor: default; }
+
+button i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--void);
+  background: var(--dim);
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
+
+button.verb { border-color: var(--select); color: var(--select); }
+button.verb i { background: var(--select); }
+
+/* A verb that spends no turn wears GENERATE's colours rather than a verb's. The cost badge
+   already reads 0, but in a game whose whole scarcity is turns, "this one is free" has to be
+   legible before you read the number. */
+button.verb.free { border-color: var(--hidden); color: var(--revealed); }
+button.verb.free i { background: var(--revealed); }
+
+/* BETA is a verb that spends a turn AND a supply, and the supply is the part the eye has to
+   catch: it wears the green of the tile it ships, so the button and the thing it puts on the
+   board are visibly the same object. Filled rather than outlined, because there are only ever
+   three of these in a run and a verb you can run out of should not look like PLACE. */
+button.verb.beta { border-color: var(--ok); background: var(--ok); color: var(--ink); }
+button.verb.beta i { background: var(--ink); color: var(--ok); }
+
+/* The selected cell's one-line explanation. It takes what is left after the verbs — which
+   keep their intrinsic width above — and truncates rather than scrolling out of reach. */
+#actionbar > .cell-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  line-height: 32px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#btn-generate { border-color: var(--hidden); color: var(--revealed); }
+#btn-generate:not(:disabled) i { background: var(--revealed); }
+
+/* RUN ⇄ STOP swap a three-letter word for a four-letter one, so the button is given the
+   width of the longer state: a control that changes size when you press it is a control
+   that moves the thing next to it under your finger. */
+#btn-run { min-width: 54px; text-align: center; }   /* STOP measures 53.7 here, RUN 46.8 */
+#btn-run.on { border-color: var(--user); color: var(--ink); background: var(--user); }
+
+select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--paper);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 4px 6px;
+  width: 92px;              /* fixed: 'caldera' and 'plain' must wrap the bar identically */
+  flex: none;
+}
+
+#tray {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--hidden);
+  background: var(--void);
+  flex: none;
+  min-width: 0;
+  max-height: 100%;
+}
+
+#tray-canvas { display: block; image-rendering: pixelated; flex: none; }
+.tray-side { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tray-controls { display: flex; gap: 6px; }
+#tray-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Zoom buttons live with the minimap because they are the same thing: the two controls that
+   change what you are looking at rather than what the board is. Sized for a thumb, not for a
+   cursor — the whole reason they exist is that pinch is awkward one-handed. */
+#viewtools { display: flex; align-items: center; gap: 6px; flex: none; }
+#zoom { display: flex; gap: 4px; }
+
+#zoom button {
+  width: 40px;
+  height: 44px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+}
+
+#minimap {
+  width: 120px;
+  height: 66px;
+  border: 1px solid var(--edge);
+  background: var(--void);
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: crosshair;
+  flex: none;
+}
+
+.hidden { display: none !important; }
+
+/* --- start screen & how to play (PLAN §11.9) ---------------------------------------
+   Both are DOM over an already-booted game. `body.starting` covers the board for the frame
+   or two the lazy import takes, so a slow load never flashes the game before the title. */
+body.starting #board > * { visibility: hidden; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(13, 16, 22, 0.94);
+}
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+  text-align: center;
+}
+
+#start h1 {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 38px);
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  color: var(--coast);
+}
+
+#start .premise {
+  margin: 0 0 4px;
+  max-width: 42ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+#start-level { width: 160px; text-align: center; }
+.overlay-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.overlay-actions button { padding: 10px 18px; }
+#start-play { border-color: var(--ok); color: var(--ok); }
+
+/* The rules card scrolls INSIDE itself. The page behind it never scrolls — the board is a
+   fixed-height grid — so an overlay that grew the document would be the one thing on the
+   page able to move the canvas. */
+.help-card { align-items: stretch; text-align: left; gap: 0; }
+
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.help-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  color: var(--coast);
+}
+
+.help-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 0;
+}
+
+.help-body h3 {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  color: var(--user);
+}
+
+.help-body h3:first-child { margin-top: 6px; }
+
+.help-body p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--paper);
+}
+
+/* --- win screen --------------------------------------------------------------------- */
+
+.end-card { gap: 6px; }
+
+.end-kicker {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--dim);
+}
+
+.end-kicker.perfect { color: var(--ok); }
+
+.end-score {
+  font-size: clamp(26px, 8vw, 44px);
+  letter-spacing: 0.1em;
+  color: var(--coast);
+}
+
+.end-sub {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dim);
+  word-break: break-all;      /* the share URL lands here when the clipboard is blocked */
+}
+
+/* Fixed columns so a three-digit tick count cannot reflow the panel, and it scrolls inside
+   itself rather than pushing the buttons off the card. */
+.end-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 132px));
+  gap: 4px 10px;
+  margin: 8px 0 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.end-stats .stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--edge);
+  background: var(--void);
+  font-size: 10px;
+  color: var(--dim);
+}
+
+#win-share { border-color: var(--user); color: var(--user); }
+
+/* --- lose screen: the LinkedUp post -------------------------------------------------
+   Deliberately the one place in the game that does NOT look like the game: a bright, round,
+   friendly little card, because that contrast is the joke. Nothing here is pixel art. */
+
+.lose-card { gap: 10px; align-items: stretch; }
+
+/* Everything in this game is monospace. The post is not — the typeface change is half the
+   joke, and it is what makes the card read as something pasted in from another world. */
+.lu-brand, .lu-post {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.lu-brand {
+  align-self: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #6aa8ff;
+}
+
+.lu-brand span {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #6aa8ff;
+  color: #10151f;
+}
+
+.lu-post {
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2230;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  max-height: min(52vh, 420px);
+  text-align: left;
+}
+
+.lu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 8px;
+}
+
+.lu-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #6aa8ff;
+  color: #fff;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.lu-who { display: flex; flex-direction: column; min-width: 0; }
+.lu-who b { font-size: 13px; color: #1d2230; }
+.lu-headline { font-size: 11px; line-height: 1.4; color: #5b6472; }
+.lu-meta { font-size: 10px; color: #8a929e; }
+
+.lu-body { padding: 2px 14px 10px; }
+
+.lu-body p {
+  margin: 0 0 9px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.lu-body p:last-child { margin-bottom: 0; }
+
+.lu-reactions {
+  padding: 8px 14px 12px;
+  border-top: 1px solid #e6e9ee;
+  font-size: 11px;
+  color: #5b6472;
+}
+
+#lose-retry { border-color: var(--ok); color: var(--ok); }
+
+/* --- the user roster (src/ui/roster.js) ---------------------------------------------
+   A scrim you can tap through to dismiss, with the panel hung under the top bar on the right
+   — directly under the chip that opens it, so the number and the list explaining it sit in
+   the same corner of the eye. The scrim is thinner than the overlays' 0.94: the roster is
+   read AGAINST the board ("who is that dot"), not instead of it.
+   z-index 35 puts it over the Lab's launcher and under the start/end cards, which are
+   decisions and must never be argued with by a list. */
+#roster {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 8px;
+  padding-top: calc(var(--top-h) + 6px);
+  background: rgba(13, 16, 22, 0.55);
+}
+
+#roster-card {
+  display: flex;
+  flex-direction: column;
+  width: min(320px, 100%);
+  max-height: 100%;
+  border: 1px solid var(--edge);
+  background: var(--chrome);
+}
+
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.roster-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--coast);
+}
+
+.roster-head .hint { margin-left: auto; font-size: 10px; }
+#roster-close { padding: 4px 8px; flex: none; }
+
+/* The list scrolls INSIDE the card, like every other overlay here: the page behind it is a
+   fixed-height grid and must not learn that a long roster exists. */
+#roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ru-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  text-align: left;
+}
+
+button.ru-row { cursor: pointer; }
+button.ru-row:hover { border-color: var(--select); }
+
+.ru-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ru-state { flex: none; font-size: 10px; letter-spacing: 0.1em; }
+/* The stops still owed, in the letters the board is wearing (B·D). Paper, the name's own tone:
+   the itinerary is a fact about the person, like their name, and the coloured word between them
+   is the only status on the row. Coast was the first choice and is wrong — WAITING is already
+   coast, so "WAITING B·D" came out as one four-character status nobody could parse. Never
+   wraps; the name beside it is the elastic one. */
+.ru-todo { flex: none; font-size: 10px; letter-spacing: 0.08em; color: var(--paper); white-space: nowrap; }
+/* Fixed and right-aligned: the countdowns are a column you read down, not a ragged edge. */
+.ru-left { flex: none; min-width: 78px; text-align: right; font-size: 10px; color: var(--dim); }
+
+/* Each status wears the colour of the thing it describes on the board: the user dot's yellow
+   for a walker, the beta tile's green for somebody camped on one. */
+.ru-row.s-queued .ru-state { color: var(--dim); }
+.ru-row.s-walking .ru-state { color: var(--user); }
+.ru-row.s-waiting .ru-state { color: var(--coast); }
+.ru-row.s-beta .ru-state { color: var(--ok); }
+
+/* Resolved rows are history: greyed as a whole, with the one word that says which kind of
+   history keeping its colour. */
+.ru-row.done { opacity: 0.5; }
+.ru-row.done.good .ru-state { color: var(--ok); }
+.ru-row.done.bad .ru-state { color: var(--red); }
+
+.ru-left.urgent { color: var(--red); }
+.ru-left.paused { opacity: 0.55; }
+
+.ru-sep {
+  padding: 8px 7px 2px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+.ru-empty { padding: 10px 7px; font-size: 11px; color: var(--dim); }
+
+/* --- ≤899px: two-row footer, two-row topbar ---------------------------------------
+   One row cannot hold the action bar, Generate/Wait and the minimap below ~900px without
+   squeezing the action bar to nothing — and a clipped verb button whose centre lands on
+   Generate steals a turn. So the footer becomes a fixed two-row grid: the verbs (or the
+   block tray) get a full row to themselves, Generate/Wait and the minimap get the other.
+   Row heights are fixed, so the board still never moves at runtime.
+       footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
+       topbar row 1 (fixed widths) 133+67+128+83+88 + 4×6 = 523 ≤ 544 at 560px;
+       the forecast takes row 2:   26 + 6 + 16 + 12 + 1 border = 61 ≤ 64 = --top-h
+   Footer widths at the worst case (280px wide, 268px usable), measured in Chrome:
+       row 1 in play    PLACE 76 + 6 + ANALYZE 91                      = 173
+       row 1 placing    tray 2+12+32+6+134                             = 186
+       row 2 (≤559)     GEN 66 + 6 + WAIT 73 + 6 + RUN 48 + 6 + map 60 = 265
+   RUN joins Generate/Wait rather than the verb bar: it is not a verb, it is the same Wait
+   the button next to it dispatches, on a timer. Its 48px is bought back by GENERATE
+   shortening to GEN in the ≤559 band (see below), which is the only band where row 2 was
+   ever close to full — 265 of 268, with the 3px of slack the tray row has always had.
+   Between 560 and 899 the row holds all three at full length.                            */
+@media (max-width: 899px) {
+  :root { --top-h: 64px; --hud-h: 98px; }
+
+  #topbar { gap: 6px; padding: 6px 8px; }
+  .forecast { gap: 8px; width: 100%; margin-left: 0; justify-content: space-between; }
+  #score { width: 88px; gap: 2px; }
+  button { padding: 6px 9px; }
+
+  #hud {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 46px 34px;    /* 46 fits the tray: 2 border + 8 padding + 36 of cells.
+                                         Blocks are generated, so a rotation can be six cells
+                                         tall; trayCellPx() in hud.js divides that 36 by the
+                                         stencil's own height rather than the row growing. */
+    grid-template-areas:
+      "main    main"
+      "globals minimap";
+    gap: 6px;
+    padding: 6px 8px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    align-items: center;
+  }
+
+  #tray, #actionbar { grid-area: main; min-width: 0; }
+  #globals { grid-area: globals; }
+  #minimap { grid-area: minimap; width: 60px; height: 34px; }
+
+  /* The zoom cluster leaves the footer grid here, and this is measured rather than taste: at
+     the 280px worst case row 2 is already exactly full (globals 198 + minimap 60 + 6 gap +
+     16 padding = 280), and a second row-2 item — or a second grid COLUMN, which is charged to
+     both rows — clips GENERATE/WAIT/RUN. Row 1 cannot take it either, because the tray fills
+     that row during `placing`.
+     So it floats just above the footer, in the same bottom-right corner as the minimap and
+     directly over it: visually one corner stack, costing the footer nothing. It also buys
+     back the 44px touch target the 34px row could not give, which is the point of the
+     buttons existing on a phone at all. */
+  #viewtools { display: contents; }
+  #zoom {
+    position: fixed;
+    right: 8px;
+    bottom: calc(var(--hud-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    z-index: 5;
+    gap: 6px;
+  }
+  #zoom button {
+    width: 44px;
+    height: 44px;
+    font-size: 17px;
+    background: rgba(27, 34, 48, 0.94);
+  }
+  /* Tray: canvas + controls only. The hint line would make the tray 50px of content in a
+     46px row; the board's green anchors say the same thing. */
+  #tray { padding: 4px 6px; gap: 6px; }
+  #tray-hint { display: none; }
+  /* Same call for the selected cell's hint: at 268px of usable row the verbs are the row,
+     and a truncated line of prose next to them would be an ellipsis and nothing else. */
+  #actionbar > .cell-hint { display: none; }
+
+  /* The tray IS the placing UI at these widths, and its CONFIRM is the same button the
+     action bar's COMMIT BLOCK would be — gated by the same legalActions() answer. */
+  #hud.placing #actionbar { display: none; }
+
+  .narrow-hide { display: none; }
+  .narrow-only { display: inline; }
+  #btn-run { min-width: 48px; }     /* STOP measures 47.7 at this padding */
+
+  /* The roster stops being a corner panel and becomes a sheet: the chip that opens it is on
+     the topbar's own row down here, nowhere near the right edge, and a 320px card floated
+     against that edge on a 360px phone is a card with a useless 40px gutter. It is inset from
+     both bars so the board stays visible behind it — the point of the panel is matching a
+     name to a dot. */
+  #roster {
+    justify-content: center;
+    padding-top: calc(var(--top-h) + 4px);
+    padding-bottom: calc(var(--hud-h) + env(safe-area-inset-bottom, 0px) + 4px);
+  }
+  #roster-card { width: 100%; }
+}
+
+/* --- ≤559px: the top bar genuinely needs three rows --------------------------------
+   Row 1 stops fitting level+restart+seed+tick+score (523px of fixed-width content) below
+   ~539px, so the forecast trio — persistent, spec-mandated UI (SPEC §6.1) — was being cut
+   mid-glyph. Three rows of 26 + two 6px gaps + 12 padding + 1 border = 93 ≤ 96 = --top-h.
+   The forecast drops its LEVEL/label prose here (LEFT · NEXT · WAIT) and is allowed to share
+   a row, so the worst packing in this band is:
+       280px (268 usable): [field 92 + restart 67] [seed 128 + tick 83] [score 76 + fc 183]
+       320px (308 usable): [field + restart + seed 299] [tick + score 165] [fc 183]
+   — three rows at every width in the band, and the trio is never clipped.
+
+   The trio measured 166 before the waiting item became the roster chip and grew a second
+   number. It is 183 now (48 + 48 + 74 and two 6px gaps, measured in Chrome), and most of the
+   difference came from inside the trio rather than from the row: LEFT and NEXT give up 6px of
+   value gutter each — min-width 16 here, and two digits measure 13. Row three lands at
+   76 + 6 + 183 = 265 of 268 at the 280px worst case, which is the same 3px of slack the
+   footer's own tightest row has always run on.                                             */
+@media (max-width: 559px) {
+  :root { --top-h: 96px; }
+  #topbar, #hud { padding-left: 6px; padding-right: 6px; }
+  #score { width: 76px; }
+  .forecast { width: auto; flex: 1 1 auto; gap: 6px; }
+  .forecast b { min-width: 16px; }
+  #btn-roster { width: 74px; padding: 3px 4px; }
+  .tiny-hide { display: none; }
+  .tiny-only { display: inline; }
+}
+
+/* --- Level Lab (PLAN §9.2) — dev overlay, only ever built when ?lab=1 ------------------
+   An overlay, so it may scroll inside itself; the board keeps its geometry underneath and
+   is never resized by anything in here. */
+
+#lab-open {
+  position: fixed;
+  right: 8px;
+  top: calc(var(--top-h) + 8px);
+  z-index: 20;
+  border-color: var(--select);
+  color: var(--select);
+}
+
+#lab {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--void);
+  padding: 10px;
+  gap: 8px;
+  overflow: hidden;
+  overflow-y: auto;           /* short viewports (landscape phones) scroll the panel, never clip it */
+}
+
+#lab.hidden { display: none !important; }
+
+.lab-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.lab-head h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--coast);
+  font-weight: 400;
+}
+
+.lab-head .hint { margin-left: auto; }
+
+.lab-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+#lab-map {
+  width: 100%;
+  min-height: 200px;
+  resize: none;
+  font: 12px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--paper);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 8px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 1;
+}
+
+#lab-map:focus, .lab-fields input:focus, .lab-fields select:focus { outline: 1px solid var(--select); }
+
+.lab-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 5px 8px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.lab-fields label { align-self: center; letter-spacing: 0.06em; }
+
+.lab-fields input, .lab-fields select {
+  font: inherit;
+  font-size: 11px;
+  width: 100%;
+  min-width: 0;
+  color: var(--paper);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  padding: 3px 5px;
+}
+
+.lab-fields .span2 { grid-column: 1 / -1; }
+
+.lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+}
+
+#lab-out {
+  flex: none;
+  max-height: 26vh;
+  overflow: auto;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--edge);
+  background: var(--void);
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#lab-out .err { color: var(--red); }
+#lab-out .warn { color: var(--hand); }
+#lab-out .ok { color: var(--ok); }
+
+@media (max-width: 720px) {
+  .lab-body { grid-template-columns: minmax(0, 1fr); }
+  #lab-map { min-height: 150px; }
+}
