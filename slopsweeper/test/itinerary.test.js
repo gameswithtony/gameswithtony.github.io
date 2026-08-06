@@ -24,7 +24,7 @@ import { init, reduce } from '../src/core/reduce.js';
 import { validateLevel } from '../src/core/validate.js';
 import { hashState } from '../src/sim/hash.js';
 import { makePolicy } from '../src/sim/policies.js';
-import { getLevel } from '../src/levels/index.js';
+import { allLevels, getLevel } from '../src/levels/index.js';
 
 /** @typedef {import('../src/core/state.js').GameState} GameState */
 /** @typedef {import('../src/core/state.js').Ev} Ev */
@@ -100,7 +100,15 @@ test('ONE DESTINATION: the per-mask field IS the field the betas left behind', (
   // A real mid-game board rather than a fixture: a bot plays caldera long enough to put slop,
   // reveals, craters, walkers and a live queue on it, and on every tick the mask machinery is
   // compared against the single-target field it generalizes.
-  let s = init(getLevel('caldera'), 20260805);
+  //
+  // Caldera with its extra destinations stripped back out (rev. 2026-08-06): the multi-dest
+  // pass left no registered level with one destination, and one destination is this test's
+  // entire subject — the degenerate mask the machinery must reduce to. Stripping `C`… from
+  // the live map (and the cast that names them) keeps the mid-game realism without freezing
+  // a copy of the level in this file.
+  const caldera = getLevel('caldera');
+  const single = { ...caldera, map: caldera.map.replace(/[C-H]/g, '#'), walkers: [], itineraries: [] };
+  let s = init(/** @type {any} */ (single), 20260805);
   const bot = makePolicy('balanced:0.5', 20260805);
   let checked = 0;
 
@@ -185,10 +193,15 @@ test('a level that lists none sends every user to every destination', () => {
   assert.equal(s.users.length >= 2, true);
   for (const u of s.users) assert.deepEqual(u.todo, [0, 1, 2, 3]);
 
-  // Which is what makes the six shipped levels the games they were: one destination, everyone
-  // owing it, arrival on contact.
-  const one = waits(init(getLevel('plain'), 1), 8).s;
-  for (const u of one.users) assert.deepEqual(u.todo, [0]);
+  // Which is what made the original single-destination levels the games they were: one
+  // destination, everyone owing it, arrival on contact. Inline now (rev. 2026-08-06, second
+  // revision — the morning's rename made this "whichever registered level still has exactly one
+  // B", and the afternoon's multi-destination pass emptied that set for good). The shape is
+  // still legal and still the baseline the itinerary machinery reduces to, which is exactly
+  // what is worth pinning after the corpus stopped shipping an example of it.
+  const one = { id: 'it-single', map: 'A####B', arrivals: { count: 2, firstTick: 0, every: 1 } };
+  const s1 = waits(init(/** @type {any} */ (one), 1), 8).s;
+  for (const u of s1.users) assert.deepEqual(u.todo, [0]);
 });
 
 test('a todo is ascending however the level wrote the itinerary down', () => {

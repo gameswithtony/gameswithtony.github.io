@@ -110,7 +110,7 @@ test('THE STREAMS ARE UNTOUCHED: casting draws on nothing the game replays from'
   };
   for (const seed of [1, 2, 12345]) {
     assert.deepEqual(init(/** @type {any} */ (level), seed).rng, initStreams(seed));
-    assert.deepEqual(init(getLevel('plain'), seed).rng, initStreams(seed));
+    assert.deepEqual(init(getLevel('tutorial'), seed).rng, initStreams(seed));
   }
   // And the split constant is genuinely its own: reusing the movement stream's would have made
   // the cast a preview of every routing tie-break in the game.
@@ -217,10 +217,21 @@ test('THE CORPUS PASSES THROUGH CASTING: a one-role pool cannot be dealt differe
   }
 
   // …and the users it produces are the users it always produced: everybody owing everything.
-  const { s } = waits(init(getLevel('plain'), 4), 16);
+  //
+  // An inline fixture rather than a corpus pick (rev. 2026-08-06, twice in one day: the morning
+  // made this "any level with no cast" instead of naming `plain`, and the afternoon's
+  // multi-destination pass gave every shipped level a roster, so the find came back empty). The
+  // promise was never about a shipped level — it is about the *absence* of a cast — and a
+  // two-destination pond with nothing authored states that absence exactly, forever.
+  const bare = /** @type {any} */ ({
+    id: 'cast-bare',
+    map: 'A###B\n####C',
+    arrivals: { count: 2, firstTick: 0, every: 1 },
+  });
+  const { s } = waits(init(bare, 4), 16);
   assert.ok(s.users.length >= 2, `only ${s.users.length} users had spawned`);
   for (const u of s.users) {
-    assert.deepEqual(u.todo, [0]);
+    assert.deepEqual(u.todo, s.dests.map((_, i) => i), 'everybody owes every destination');
     assert.equal(u.ordered, false);
     assert.equal(patienceLimit(s, u), levelParams(s).patience, 'and on the level bar, all of them');
   }
@@ -281,9 +292,12 @@ test('patienceLimit is what every reader asks, and it answers per user', () => {
   }
 
   // A level with no override answers the level's number for everybody, which is what keeps the
-  // helper a drop-in for the four sites that used to read `levelParams(s).patience`.
-  const plain = waits(init(getLevel('plain'), 1), 8).s;
-  for (const u of plain.users) assert.equal(patienceLimit(plain, u), levelParams(plain).patience);
+  // helper a drop-in for the four sites that used to read `levelParams(s).patience`. Same fixture
+  // rule as above (rev. 2026-08-06): inline, because the corpus no longer ships a cast-free
+  // level to borrow.
+  const bare = { id: 'cast-flat', map: 'A####B', arrivals: { count: 2, firstTick: 0, every: 1 } };
+  const flat = waits(init(/** @type {any} */ (bare), 1), 8).s;
+  for (const u of flat.users) assert.equal(patienceLimit(flat, u), levelParams(flat).patience);
 });
 
 test('half a bar is half of the walker’s own bar', () => {

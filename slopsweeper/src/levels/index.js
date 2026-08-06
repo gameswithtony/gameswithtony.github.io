@@ -3,13 +3,16 @@
 // optional field defaults from rules.js, so `{ id, map }` alone is a playable level.
 
 import { LEVEL_DEFAULTS } from '../core/rules.js';
-import { plain } from './plain.js';
+import { tutorial } from './tutorial.js';
 import { channel } from './channel.js';
-import { atoll } from './atoll.js';
-import { caldera } from './caldera.js';
 import { strait } from './strait.js';
-import { sprawl } from './sprawl.js';
+import { caldera } from './caldera.js';
+import { atoll } from './atoll.js';
 import { delta } from './delta.js';
+import { marina } from './marina.js';
+import { gyre } from './gyre.js';
+import { reach } from './reach.js';
+import { sprawl } from './sprawl.js';
 
 /**
  * @typedef {object} LevelDef
@@ -109,13 +112,35 @@ export function allLevels() {
 }
 
 // The corpus (PLAN §9). One line each — that is the whole registration cost.
-register(plain);
+//
+// THE TEN-LEVEL LINEUP (2026-08-06, owner decision), and the order below is not incidental:
+// **this list is the menu, and the menu is the difficulty arc.** The registry used to be
+// grouped by when a level was written — the six PLAN §9 levels in their tuning order, with
+// `delta` bolted on the end because it was the multi-destination showcase and nobody wanted to
+// disturb the corpus rows. That is a changelog, not a curriculum, and it stopped being tenable
+// the day the corpus went to ten.
+//
+// So it is re-sorted by what a player meets, front to back: `tutorial` teaches the verbs on
+// open water; `channel` and `strait` are the two one-neck levels; `caldera` and `atoll` make
+// you walk around something; `delta` is the first trunk decision with several destinations;
+// `marina`, `gyre` and `reach` are the 2026-08-06 trio — a comb of independent piers, a ring
+// with a direction to choose, and a sixty-seven-tile switchback built for betas; and `sprawl`
+// is last because it is the widest, longest and least forgiving thing here.
+//
+// Two things this order is load-bearing for. `tutorial` stays FIRST — `main.js` opens a new
+// player on `levelIds()[0]`, so line one of this list is the level the game starts on, and it
+// was `plain` in that slot until the control level was retired and rebuilt as the teaching
+// level earlier the same day (see `tutorial.js`): the id moved, the position did not. And
+// `--all` reads straight down the registry, so a corpus sim table now prints in difficulty
+// order — the rows moved on this date and the numbers did not.
+register(tutorial);
 register(channel);
-register(atoll);
-register(caldera);
 register(strait);
-register(sprawl);
-// The multi-destination showcase (2026-08-05). Registered last so the six tuned levels keep
-// their order — `--all` reads down the registry, and the corpus rows should stay where the
-// tuning notes in PLAN §9 left them.
+register(caldera);
+register(atoll);
 register(delta);
+register(marina);
+register(gyre);
+register(reach);
+register(sprawl);
+

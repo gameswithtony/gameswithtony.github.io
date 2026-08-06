@@ -38,7 +38,7 @@ function roundTrip(s) {
  * @returns {{ s: import('../src/core/state.js').GameState, log: string[] }}
  */
 function playAWhile() {
-  const id = levelIds().includes('plain') ? 'plain' : levelIds()[0];
+  const id = levelIds().includes('tutorial') ? 'tutorial' : levelIds()[0];
   let s = init(getLevel(id), 20260804);
   const log = [];
 
@@ -67,7 +67,13 @@ function playAWhile() {
   if (hidden >= 0) go({ t: 'flag', cell: hidden });
   const analyzable = s.con.findIndex((c, i) => c.k === 'aiHidden' && legalActions(s, i).includes('analyze'));
   if (analyzable >= 0) go({ t: 'analyze', cell: analyzable });
-  for (let n = 0; n < 8 && s.phase.k === 'play'; n++) go({ t: 'wait' });
+  // Then wait, and keep waiting until the schedule has actually put people on the board — the
+  // one part of GameState the verbs above cannot reach. This used to be a flat eight ticks, which
+  // worked while the first level's first arrival landed on turn 4; `tutorial` holds its burst
+  // back to turn 13 (2026-08-06) and eight ticks silently stopped covering the user list. A bound
+  // rather than a count, so the fixture follows the schedule instead of restating it.
+  for (let n = 0; n < 40 && s.phase.k === 'play' && (n < 8 || s.users.length < 2); n++) go({ t: 'wait' });
+  assert.ok(s.users.length >= 2, `the fixture never reached the schedule: ${s.users.length} users`);
   return { s, log };
 }
 
@@ -134,7 +140,7 @@ test('a revived state keeps playing to the same ending', () => {
 });
 
 test('phase placing round-trips — rotations and anchors are arrays, not something clever', () => {
-  const id = levelIds().includes('plain') ? 'plain' : levelIds()[0];
+  const id = levelIds().includes('tutorial') ? 'tutorial' : levelIds()[0];
   let s = init(getLevel(id), 7);
   s = reduce(s, { t: 'generate' }).s;
   assert.equal(s.phase.k, 'placing', 'generate did not enter placing');

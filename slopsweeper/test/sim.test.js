@@ -28,7 +28,7 @@ test('core and sim run with no DOM in sight (SPEC §10.2)', () => {
   for (const g of ['window', 'document', 'localStorage', 'HTMLElement']) {
     assert.equal(typeof /** @type {any} */ (globalThis)[g], 'undefined', `${g} exists in this runtime`);
   }
-  const st = runGames(getLevel('plain'), 'handOnly', 3, 1, { solver: false });
+  const st = runGames(getLevel('tutorial'), 'handOnly', 3, 1, { solver: false });
   assert.equal(st.games, 3);
 });
 
@@ -59,9 +59,9 @@ test('policy specs parse: names, dosages and ghost styles', () => {
   assert.throws(() => makePolicy('balanced:2', 1), /parameter must be in \[0, 1\]/);
 });
 
-test('SIM SMOKE: runGames(plain, handOnly, 5, seed) completes with sane stats', () => {
-  const st = runGames(getLevel('plain'), 'handOnly', 5, 1);
-  assert.equal(st.level, 'plain');
+test('SIM SMOKE: runGames(tutorial, handOnly, 5, seed) completes with sane stats', () => {
+  const st = runGames(getLevel('tutorial'), 'handOnly', 5, 1);
+  assert.equal(st.level, 'tutorial');
   assert.equal(st.policy, 'handOnly');
   assert.equal(st.games, 5);
   assert.equal(st.games_.length, 5);
@@ -82,7 +82,7 @@ test('SIM SMOKE: runGames(plain, handOnly, 5, seed) completes with sane stats', 
   for (const g of st.games_) {
     assert.ok(g.ticks > 0 && g.ticks <= MAX_TICKS);
     assert.equal(typeof g.won, 'boolean');
-    assert.equal(g.total, getLevel('plain').arrivals.count);
+    assert.equal(g.total, getLevel('tutorial').arrivals.count);
     assert.ok(g.served <= g.total);
     // Points economy (2026-08-04): a win is *one* arrival, not all of them. `perfect` is
     // the old bar, and it is now a separate, much rarer thing.
@@ -108,7 +108,7 @@ test('a game always terminates, and a stuck bot is a loss rather than a hang', (
     observe: () => {},
     act: () => /** @type {import('../src/core/state.js').Action} */ ({ t: 'generate' }),
   });
-  const g = runGame(getLevel('plain'), stubborn, 1, { solver: false, maxTicks: 60 });
+  const g = runGame(getLevel('tutorial'), stubborn, 1, { solver: false, maxTicks: 60 });
   assert.equal(g.won, false);
   assert.ok(g.ticks <= 60);
 });

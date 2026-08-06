@@ -75,8 +75,8 @@ test('replaying a recorded action log reproduces the game exactly', () => {
 });
 
 test('different seeds diverge', () => {
-  const a = replay('plain', 1);
-  const b = replay('plain', 2);
+  const a = replay('tutorial', 1);
+  const b = replay('tutorial', 2);
   assert.notEqual(a.hashes.join(), b.hashes.join());
   // The very first hash already differs, because the seed is part of the state.
   assert.notEqual(a.hashes[0], b.hashes[0]);
@@ -86,7 +86,7 @@ test('different seeds diverge', () => {
 });
 
 test('the hash covers everything a tick can change, in a fixed order', () => {
-  const base = init(getLevel('plain'), 3);
+  const base = init(getLevel('tutorial'), 3);
   const text = serializeState(base);
   assert.equal(typeof text, 'string');
   assert.match(hashState(base), /^[0-9a-f]{8}$/);

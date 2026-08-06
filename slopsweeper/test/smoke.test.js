@@ -92,9 +92,9 @@ test('the construction table carries the full SPEC §2.2 union', () => {
 });
 
 test('the registry boots a level into a well-formed state', () => {
-  assert.ok(levelIds().includes('plain'));
-  const s = init(getLevel('plain'), 1);
-  assert.equal(s.level, 'plain');
+  assert.ok(levelIds().includes('tutorial'));
+  const s = init(getLevel('tutorial'), 1);
+  assert.equal(s.level, 'tutorial');
   assert.equal(s.tick, 0);
   assert.equal(s.stats.served + s.stats.lost, 0);
   assert.equal(s.phase.k, 'play');

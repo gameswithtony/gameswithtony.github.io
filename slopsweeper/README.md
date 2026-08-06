@@ -78,7 +78,7 @@ python -m http.server 8000     # then open http://localhost:8000/
 
 VS Code Live Server or `npx serve` work the same way.
 
-URL parameters: `?level=plain` picks a level, `?seed=12345` reproduces a game exactly, and
+URL parameters: `?level=tutorial` picks a level, `?seed=12345` reproduces a game exactly, and
 `?lab=1` adds the Level Lab (PLAN §9.2) — paste a charmap, validate it, play it, quick-sim it
 in the browser, and export a finished `src/levels/<id>.js` to the clipboard. The Lab module is
 only fetched when that parameter is present.

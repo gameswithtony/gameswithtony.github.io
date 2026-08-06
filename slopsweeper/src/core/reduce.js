@@ -517,8 +517,9 @@ function movement(d, ev, fields) {
       // work touches a rule that predates it. A trail can go stale without any beta in sight
       // — finish a road behind a walker and the gradient reverses under it, and today that
       // user stalls where it stands until its patience runs out. Letting the retry loose on
-      // those boards measurably changes games with no beta in them (it costs `plain`/genRush
-      // its remaining `gaveUp` and buys `killed` instead), and a no-beta game must play
+      // those boards measurably changes games with no beta in them (measured on the level then
+      // called `plain`, now `tutorial`: it cost genRush its remaining `gaveUp` and bought
+      // `killed` instead), and a no-beta game must play
       // exactly as it played before this feature existed. Relaxing §6.3.3 in general is a
       // real and probably good change; it is a different one, and it is the spec owner's.
       //

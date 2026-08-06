@@ -150,7 +150,15 @@ test('NO BETA ON THE BOARD: the waypoint field IS the distance field, gate inclu
   // A real mid-game board rather than a fixture: a bot plays caldera long enough to put slop,
   // reveals, craters, walkers and a live queue on it, and on every single tick the two fields
   // and the two gates are compared.
-  let s = init(getLevel('caldera'), 20260805);
+  //
+  // Caldera with its extra destinations stripped back out (rev. 2026-08-06): the multi-dest
+  // pass gave every shipped level a second letter, and "the gate is a path to B" is an
+  // identity that only holds on a single-destination board — which is the very fast path this
+  // guarantee exists to pin. Stripping `C`… from the live map (and the cast that names them)
+  // keeps the mid-game realism without freezing a copy of the level in this file.
+  const caldera = getLevel('caldera');
+  const single = { ...caldera, map: caldera.map.replace(/[C-H]/g, '#'), walkers: [], itineraries: [] };
+  let s = init(/** @type {any} */ (single), 20260805);
   const bot = makePolicy('balanced:0.5', 20260805);
   let checked = 0;
 
@@ -193,7 +201,7 @@ test('A BETA THAT IS NOT THE BEST WAYPOINT CHANGES NOTHING', () => {
 });
 
 test('the potential field is terrain-only, cached, and blind to what is built', () => {
-  const s = init(getLevel('plain'), 1);
+  const s = init(getLevel('tutorial'), 1);
   const before = potentialField(s, s.dests[0]);
   assert.equal(before[s.dests[0]], 0);
   assert.ok(before[s.origin] > 0);

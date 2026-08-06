@@ -35,8 +35,8 @@ register(pond);
 That is a complete, playable, tuned-by-default level. Every other field is optional and
 falls back to `core/rules.js`. State only what deviates.
 
-It is also, at 6×3, very nearly a hand-only level. Of the five `compact` stencils only `R12`
-fits at all, in exactly one position, so four Generates in five refund (§4). Blocks are
+It is also, at 6×3, very nearly a hand-only level. Of the six `compact` stencils only `R12`
+fits at all, in exactly one position, so five Generates in six refund (§4). Blocks are
 12–26 cells now and they need room: the shipped corpus runs 32×20 to 50×30.
 
 ---
@@ -341,9 +341,15 @@ Two consequences for authoring, both learned the hard way in the 2026-08-04 tuni
 
 ## 4. Shape pools
 
-Twelve hand-authored stencils, **12–26 cells**, chunky on purpose — long thin tendrils
+Twenty hand-authored stencils, **12–26 cells**, chunky on purpose — long thin tendrils
 destroy the deduction layer, so every limb of every stencil is at least two cells wide (a
-standing test enforces it). Rotation is free and unlimited; there is no reflection.
+standing test enforces it). Rotation is free and unlimited; there is no reflection — so a
+sweep and its mirror image are two different blocks, and the table ships both.
+
+**Eighteen of the twenty are in the three named pools. Two are explicit-only**: `N16` and
+`M12` belong to no preset and appear only if a level names them in a `shapePool` array. They
+are narrower than a pool member is allowed to be (see the box table below), which is the
+whole reason they are kept out of the presets.
 
 A block is meant to be a small minesweeper in its own right: at `mineDensity: 0.12` a 20-cell
 block carries two or three defects, and reading it costs two or three turns. That trade —
@@ -377,37 +383,72 @@ puts it back.
 
 | pool | shapes | sizes | feel |
 | --- | --- | --- | --- |
-| `compact` | `R12 P14 O16 L16 W20` | 12–20 | dense rectangles and near-rectangles; fits almost anywhere, easy to read |
-| `awkward` | `T14 Y15 Z16 U18 C20` | 14–20 | irregular blobs with notches and staircases; harder to place *and* harder to read |
-| `heavy` | `H22 O25` | 22–25 | enormous throughput, enormous exposure; both need a clear 5×5 |
+| `compact` | `R12 P14 O16 L16 W20 K19` | 12–20 | dense rectangles and near-rectangles, plus one lozenge; fits almost anywhere, easy to read |
+| `awkward` | `T14 Y15 Z16 U18 C20 V16 S18 D20` | 14–20 | notches, clefts, sweeps and one enclosed hole; harder to place *and* harder to read |
+| `heavy` | `H22 O25 J22 B26` | 22–26 | enormous throughput, enormous exposure; every one of them needs at least a clear 5×5 |
+| *(no pool)* | `N16 M12` | 12–16 | **explicit-only.** Narrow blocks for corridor levels; a preset never draws them |
 
-Two ways to say it:
+Three ways to say it, and the third is the only one that can reach an explicit-only stencil:
 
 ```js
 shapePool: 'awkward'              // one preset
 shapePool: 'compact+awkward'      // union of presets, joined with '+'
 shapePool: ['R12', 'O25']         // explicit shape ids, any mix
+shapePool: ['R12', 'N16']         // …including the two no preset carries
 ```
 
 Empty segments in the `+` grammar are ignored, so `'compact+'` is exactly `compact`. (PLAN §9
 writes `channel`'s pool that way; it resolves to `compact`.)
 
-**Bounding boxes are now the main thing to design against.** Every stencil is at least three
-rows tall in every rotation, and eight of the twelve need four:
+### The 2026-08-06 additions, and what each is for
+
+Eight stencils joined the table in the variety pass. The brief was **moderate irregularity**:
+a shape with enormous perimeter per cell is deduced off its coastline before you have spent a
+turn on it, and a plain rectangle offers no coastline to bite on at all. What the new ones all
+have is somewhere for a *hand tile* to sit — see §6, hand tiles are the free deduction anchor —
+so building beside one reads more than a flat face would.
+
+| id | pool | what it is | why an author would want it |
+| --- | --- | --- | --- |
+| `K19` | compact | a 5×5 lozenge, four fifths solid | the only outline that steps on all four sides; beds into a diagonal coast where every rectangle leaves a ragged gap, and still places like a compact |
+| `V16` | awkward | a chevron with a two-wide cleft in its base | wants to be built *into*: a hand tile in the cleft sees four block cells where one against a flat face sees three. The most perimeter per cell in the table, deliberately at the ceiling |
+| `S18` | awkward | `Z16`'s mirror family, with a solid overlap band | rotation can never reach it, so it is a genuinely new read; the band is where the two arms' clues talk to each other |
+| `D20` | awkward | **the donut** — a ring with a one-cell hole | the strongest anchor there is: a hand tile built into the hole sees eight block cells at once. Nothing needs to be free under the hole, so it drops over volcano, void or ground you own |
+| `J22` | heavy | a two-wide mast on a six-wide foot | reaches up a channel while the foot pays for the turn; needs an L-shaped hole, so a heavy Generate becomes a placement question |
+| `B26` | heavy | a 6×5 slab with a 2×2 bite | the most ground one Generate can buy, and the first heavy block with a handle: a tile at the head of the bay sees five block cells |
+| `N16` | *(none)* | a three-row runner with a bite | for corridor levels: pair it with `R12` when you want generation to do more than twelve cells down a neck |
+| `M12` | *(none)* | a 6×2 plank | the only stencil that fits a two-row channel. Every cell is on the coast, so it is the easiest block in the table to deduce — that is the price of the width |
+
+**Widening a pool changes the draw for every level that names it.** The sim figures quoted
+elsewhere in this file predate this pass; re-run the corpus before quoting them again.
+
+**Bounding boxes are the main thing to design against.** Every *pooled* stencil is at least
+four rows tall in every rotation — `R12` excepted, and that exception is load-bearing:
 
 | box needed | stencils |
 | --- | --- |
-| 4×3 | `R12` — the only block that fits a three-row corridor |
+| 6×2 | `M12` — explicit-only; the only block that fits a two-row channel |
+| 4×3 | `R12` — the only **pooled** block that fits a three-row corridor |
+| 6×3 | `N16` — explicit-only; the other three-row block |
 | 4×4 | `P14`, `O16` |
-| 5×4 (or 4×5) | `L16`, `W20`, `Y15`, `U18`, `T14`, `C20` (4×6) |
-| 6×4 | `Z16` |
-| 5×5 | `H22`, `O25` |
+| 5×4 (or 4×5) | `L16`, `W20`, `Y15`, `U18`, `T14` |
+| 4×6 | `C20` |
+| 6×4 | `Z16`, `V16`, `S18` |
+| 5×5 | `H22`, `O25`, `K19`, `D20` |
+| 6×5 | `J22`, `B26` |
 
 So a three-row neck admits exactly one shape from `compact+awkward`, and a four-row lagoon
-refuses all of `heavy`. Both are deliberate in the corpus (`strait`, `atoll`). What you must
-not do by accident is make a level's *only* route narrower than the pool it draws from — it
-silently becomes hand-only, and the arrival cadence will then kill it. Check the `refund`
-column in the sim before shipping a narrow map.
+refuses all of `heavy`. Both are deliberate in the corpus (`strait`, `atoll`, and both of
+`delta`'s necks), and both are held by a standing test — **any stencil added to `compact` or
+`awkward` must need four rows in every rotation**, or several shipped levels quietly lose their
+central decision. The two explicit-only stencils are the escape hatch: a level that wants
+generation down a narrow neck names them and has opted in by name.
+
+What you must not do by accident is make a level's *only* route narrower than the pool it draws
+from — it silently becomes hand-only, and the arrival cadence will then kill it. The wider pools
+make this easier to trip over: `awkward` now carries `D20` at a full 5×5 and `compact` carries
+`K19` at the same, so a tight level draws a stencil it cannot place more often than it used to.
+Check the `refund` column in the sim before shipping a narrow map.
 
 ---
 
@@ -460,12 +501,15 @@ user spawned at tick `t` is gone by tick `t + patience` unless a route opens. Ta
 competent build opens the route, subtract each user's spawn tick, and any user whose gap
 exceeds `patience` is one you were never going to deliver.
 
-**Deaths, not delays, are what actually caps the corpus.** Measured across all six levels the
-AI policies lose five to nine of their nine-to-twelve users to *blasts* and one or two to
-patience — and `plain` serves the same 17% at every patience from 12 to 28, which is as clean
-a demonstration as you could ask for that the schedule is not the binding constraint. If a
+**Deaths, not delays, are what actually caps the corpus.** Measured across the corpus the
+AI policies lose most of their users to *blasts* and only one or two to patience — the old
+control level served the same 17% at every patience from 12 to 28, which is as clean a
+demonstration as you could ask for that the schedule is not the binding constraint. If a
 level scores badly, look at `killed` before you touch `arrivals`: the fix is less generated
-ground on the route, or `blastRadius`, not a looser schedule.
+ground on the route, or `blastRadius`, not a looser schedule. (The 2026-08-06 pass leaned on
+`blastRadius: 0` hard for exactly this reason — the sim bots never flag, so radius 1 prices
+their misreads at five tiles of route and the whole table converges on zero. Radius 0 keeps a
+detonation lethal to whoever is standing on it while leaving the route repairable.)
 
 **And mind the ceiling on patience.** It is not a free dial: raise it far enough and hand-only
 starts delivering on levels that are supposed to have a floor. On `sprawl`, patience 24 takes
@@ -482,10 +526,12 @@ levels overshoot by twenty or thirty ticks.
 four or five tiles per turn against hand placement's one, but every block also buys mines,
 reviews and reroutes — reading a 20-cell block costs two or three Analyzes. On a fifteen-tile
 route that trade barely pays and hand-only is a real strategy. Past thirty tiles it stops
-being one: `plain` (31 tiles) is still hand-only-winnable and is the control for exactly that
-reason, while `channel`, `caldera`, `strait` and `sprawl` (47–52) all measure 0% hand-only.
-If you want a level to *require* AI, make the route long or the cadence brutal — preferably
-both.
+being one. There is no hand-only-winnable level any more (owner rule, 2026-08-06: every level
+must make generated ground necessary, the tutorial included) — the old 31-tile control was
+retired with the rename to `tutorial`, and every level in the ten now measures 0% hand-only
+served. The dial pairing that gets a shorter route there is the schedule: arrivals timed
+inside the window where AI-built ground can exist but a hand build cannot — a long quiet
+opening before the first walker is free build time and will lift `handOnly` off zero.
 
 **Coastline eases deduction; it does not harden the level.** Ocean, void and volcano all
 count zero for clues, so an irregular coast is a free deduction anchor on every side. Inlets
@@ -538,8 +584,9 @@ export const strait = {
   name: 'The Strait',
   map: `
 ###################........###################
-… nine more rows like it …
+###################........##################C
 ###################........###################
+… seven more rows like it …
 A#############################################
 ##############################################
 #############################################B
@@ -547,9 +594,20 @@ A#############################################
 … nine more rows like it …
 ###################........###################
 `,
-  arrivals: { count: 9, firstTick: 1, every: 3 },
-  mineDensity: 0.11,
+  arrivals: { count: 12, firstTick: 20, every: 1 },
+  patience: 14,
+  mineDensity: 0.1,
+  betaSupply: 2,
+  blastRadius: 0,
   shapePool: 'compact+awkward',
+  walkers: [
+    { stops: ['B'] },
+    { stops: ['B'] },
+    { stops: ['C'] },
+    { stops: ['B', 'C'] },
+    { stops: ['C', 'B'], ordered: true },
+    { stops: ['B'], patience: 9 },
+  ],
 };
 ```
 
@@ -558,21 +616,31 @@ A#############################################
 Reading it back:
 
 - **46×22**, two 19-wide basins, a neck three rows tall and eight long. `A` and `B` sit on the
-  neck rows at opposite edges, so the shortest route is 47 tiles straight through it.
-- **`arrivals: 9 / 1 / 3`** was found by sim, not by feel. Hand-only takes 46 turns to close
-  that route; at this cadence roughly 297 waiting-user-ticks accumulate before it gets there,
-  past the ~267 the meter can absorb. Hand-only therefore loses **0%**, and the level has a
-  genuine floor. Loosen `every` to 4 and hand-only wins outright at 100% — that one step is
-  the whole margin, which is why the floor levels all sit at `every: 3`.
-- **`mineDensity: 0.11`.** Blocks here are 12–20 cells, so 0.11 still means one to two defects
-  a block — and the neck concentrates them. At 0.14 the review-and-reroute tax on a 47-tile
-  route cancelled the AI's throughput advantage and every policy converged near zero. Since
-  the schedule cannot loosen without handing the level to `handOnly` (above), density is the
-  only dial left on a level with a floor.
+  neck rows at opposite edges, so the shortest route is 47 tiles straight through it. **`C` is
+  one character of map**, on the east wall's far north — every route still pays the neck once,
+  then forks: A→B 47, A→C 54, and B→C eleven tiles straight up the east wall. The ordered
+  `{C,B}` walker crosses B on its way north without ticking it off, then comes back down for it.
+- **`arrivals: 12 / 20 / 1` with `patience: 14`** was found by sim against the measured window,
+  not by feel. A hand build opens B on turn 46; the AI policies open it on 14–39. The floor is
+  the invariant `firstTick + (count−1)·every + patience ≤ 45`: last spawn 31, gone by 45, one
+  turn short of the hand build. The margin is razor-thin and measured — `every` 1 → 2 takes
+  `handOnly` from 0% to **35% served**, `patience` 14 → 16 takes it to 8%. (The level shipped
+  for months at `9 / 1 / 3`; the old header credited the floor to `every: 3`, but that cadence
+  only worked because `firstTick: 1` bled the first third of the schedule out before any route
+  could exist — the general form above is the real rule.)
+- **`mineDensity: 0.10`**, the bottom of the tuned band. On a route this long every defect left
+  standing on it is a walker, and the two-defect floor (§4) sets the real minimum whatever this
+  dial says; all it controls is the tail above two.
 - **`shapePool: 'compact+awkward'`** rather than plain `awkward`, because the neck is three
   cells tall and only `R12` fits a three-row corridor at all. Adding `compact` lets generation
   cross the neck at all — see the box table in §4. It crosses *rarely*, which is the point:
-  the neck is where the level makes you build by hand.
+  the neck is where the level makes you build by hand. (`N16` would also fit and was
+  deliberately refused — naming it in an explicit pool would delete the level's central
+  decision.)
+- **`blastRadius: 0`.** At radius 1 strait measures ≤1% served for every policy across twelve
+  configurations — the only ground anybody can stand on *is* the route, forty-seven tiles of
+  single file, so one blast kills the walkers packed behind the culprit and craters the road.
+  See §6; nine of the ten levels landed here.
 
 The loop that produced those numbers:
 
@@ -584,12 +652,14 @@ node --test                                          # nothing else broke
 
 Targets to aim the second command at, in the points economy: **hand-only should deliver
 nobody wherever you intended a floor** (it now reads as a clean 0% served, which is the
-crispest that gate has ever been), the best AI policy should land somewhere in 30-60% served,
-and `perfect` should be rare but not zero. **Ignore win %** - it only asks whether one user
-got through, so it reads high everywhere by design. Anything at 0% served across the *whole*
-policy sweep is a level nobody can play; anything near 100% is a level with no decision in it.
-Read the spread between `genRush`, `balanced` and `careful`, and read `gaveUp` against
-`killed` to see which pressure is actually biting.
+crispest that gate has ever been), and the best AI policy should clearly dominate the sweep.
+Calibrate expectations to the bots, not to hope: they never flag (`src/sim/policies.js`), so
+every served figure is a floor a flagging human beats — the 2026-08-06 corpus's best rows run
+7–27% served, and `perfect` reads 0% almost everywhere at 200 games. **Ignore win %** — it only
+asks whether one user got through, so it reads high everywhere by design. Anything at 0% served
+across the *whole* policy sweep is a level nobody can play; anything near 100% is a level with
+no decision in it. Read the spread between `genRush`, `balanced` and `careful`, and read
+`gaveUp` against `killed` to see which pressure is actually biting.
 
 ---
 
@@ -608,31 +678,35 @@ export const delta = {
   id: 'delta',
   name: 'The Delta',
   map: `
-..................##########
-..................#########B
-..................##########
-############......##########
-######^^####......####^^^^^^
-######^^####......##########
-############################
-A##########################C
-############################
-####^^^^^^##......##########
-####^^^^^^##......####^^^^^^
-############......##########
-############################
-###########################D
-############################
+......................##########
+......................##########
+......................#########B
+......................##########
+##################....##########
+########^^^^######....##########
+########^^^^######....######^^^^
+##################....##########
+################################
+A##############################C
+################################
+#####^^^^^^^^^^###....##########
+#####^^^^^^^^^^###....##########
+##################....######^^^^
+##################....##########
+################################
+###############################D
+################################
 `,
-  arrivals: { count: 9, firstTick: 2, every: 4 },
-  mineDensity: 0.12,
-  patience: 26,
-  betaSupply: 4,
+  arrivals: { count: 9, firstTick: 11, every: 1 },
+  patience: 9,
+  mineDensity: 0.1,
+  blastRadius: 0,
+  betaSupply: 2,
   walkers: [
     { stops: ['C'] },
     { stops: ['B', 'D'] },
     { stops: ['B', 'C', 'D'], ordered: true },
-    { stops: ['C'], patience: 12 },
+    { stops: ['C'], patience: 5 },
   ],
   shapePool: 'compact+awkward',
 };
@@ -640,17 +714,20 @@ A##########################C
 
 Reading it back:
 
-- **28×15.** A west basin with `A` on its edge, two three-row necks east into a north-south
+- **32×18.** A west basin with `A` on its edge, two three-row necks east into a north-south
   spine, and three lobes off that spine — `B` top, `C` straight ahead, `D` bottom — each sealed
   from its neighbours by a volcano bar running to the east wall.
-- **`C` is the trunk**: a straight 26-tile shot along row 7. `B` and `D` are eleven tiles each
-  off the spine that route already paid for — cheap, and sharing a single point of failure in
-  the north neck. **The southern neck is the other answer**: thirty-odd tiles round the reef at
-  the bottom of the basin to reach `D` on its own, and it fails independently. That is the
-  trunk decision, and the basin makes you commit to a direction before you know what generation
-  will do to you.
-- **Both necks are three rows tall**, so of `compact+awkward` only `R12` crosses them (§4) —
-  the same trick `strait` plays, doubled and pulled apart. The necks are where you build by hand.
+- **`C` is the trunk**: a straight 30-tile shot along row 9. `B` and `D` are ten marginal tiles
+  each off the spine that route already paid for — cheap, and sharing a single point of failure
+  in the north neck. **The southern neck is the other answer**: the same 38 steps round the reef
+  to reach `D` on its own, none of them shared, failing independently. That is the trunk
+  decision, and the basin makes you commit to a direction before you know what generation will
+  do to you.
+- **Both necks are three rows tall and four columns long** — exactly `R12`'s footprint, so of
+  `compact+awkward` exactly one stencil crosses a neck in one placement (§4) — the same trick
+  `strait` plays, doubled and pulled apart. (The 2026-08-06 tuning pass found the six-column
+  necks it shipped with were wider than R12, so the level's signature sentence was decoration —
+  *nothing* could bridge a neck in one block. Four columns made it true.)
 - **The four roles span the range deliberately**: a single stop, a two-stop that never touches
   the trunk's own destination, the full tour, and the same single stop on half the goodwill. Four
   roles over nine arrivals is 3/2/2/2, so five of the nine are served by the trunk alone, two
@@ -662,28 +739,30 @@ Reading it back:
   a served user, and it is different every game — which is the difference between replaying
   `delta` and re-executing it.
 - **And the full tour is `ordered`** (2026-08-05): `{ stops: ['B','C','D'], ordered: true }` is
-  B, then C, then D, enforced. User 2 owes B and only B until it has stood on it — so it waits
-  at the origin for the north neck specifically, and when it finally walks it crosses C without
-  ticking C off, because C is not its turn. That is the feature carried by a real level rather
-  than only by a fixture, and it is deliberately the *longest* list that carries it, where the
-  difference against the loose two-stop beside it is legible. It cost the level about ten points
-  of hand-only served on the day it landed, which is the honest measure of what ordering does.
-- **The fourth role is the impatient one**: `{ stops: ['C'], patience: 12 }` against the level's
-  26. Twelve is set against the geometry — the trunk is 26 tiles, so hand-building alone cannot
-  save them, and the only thing that does is generated ground on the C leg, early. It is the
-  level's whole argument compressed into one row of the roster.
-- **`betaSupply: 4`** rather than three, because a three-legged trip has more places worth
-  staging from than a one-legged one.
+  B, then C, then D, enforced. That walker owes B and only B until it has stood on it — so it
+  waits at the origin for the north neck specifically, and when it finally walks it crosses C
+  without ticking C off, because C is not its turn. It is deliberately the *longest* list that
+  carries the feature, where the difference against the loose two-stop beside it is legible.
+- **The fourth role is the impatient one**: `{ stops: ['C'], patience: 5 }` against the level's
+  9, re-derived against the tuned geometry. These walkers spawn on turns 11–19 and are gone by
+  16–24; a hand build opens C on turn 30 and can never save one, a generate-first opening lands
+  C around turn 11 and saves them all. The level's whole argument in one roster row.
+- **`betaSupply: 2`**, re-derived for the 9-tick bar: one staging post mid-trunk, one on the
+  branch you commit to. (Four was written for the old 26-tick bar.)
 
-**It is a showcase, not a tuned level, and the sim says so**: at these numbers hand-only clears
-it at ~78% served (200 games, seed 1; it was 89% before the third itinerary was ordered), so it
-currently sits in `plain`'s class — a control, not a level with a floor. What the cast changed is
-the *shape* of that number rather than its size: hand-only used to deliver exactly 7 of 9 in all
-200 games and now spreads 6–9 for the same mean, with the level's first non-zero perfect rate at
-1%; the AI policies went from 7% to 13% served because 3/2/2/2 leans the demand toward the trunk. That is the trunk being 26 tiles, and the schedule will not fix it (`every` from 5 down
-to 2 moves hand-only about ten points and the AI policies not at all). The dials with something
-to say are `blastRadius`, `mineDensity`, and the geometry: lengthen the trunk, or make the
-branches share more of it. Read §6 — deaths, not delays — before reaching for `arrivals`.
+**Tuned 2026-08-06** — it shipped as a showcase with hand-only at ~78% served, a control by
+accident. The tuning pass took it to **0.00% hand-only over 1000 games, 0% win** — and the floor
+is arithmetic, not luck: nine walkers on turns 11–19 with a 9-tick bar put the last deadline on
+turn 28, and a hand build opens C on turn 30, every seed, no exceptions. Two findings from that
+pass are worth carrying to any level with a chokepoint: **lengthening the trunk is a trap**
+(route length costs the AI's score before it costs the hand build's — what widens the window is
+*obstruction* beside the route, which slows generation and never slows a hand build), and
+**`blastRadius: 0` is what makes a chokepoint level playable** (single-file walkers mean a
+radius-1 blast kills the queue and severs the neck; radius 0 moves hand-only by exactly zero
+while taking the best AI policies from 1% to 8%). `genRush` outscores `balanced` here — delta is
+the level that says *commit to generated ground and route around what kills you*, where
+`tutorial` says *read what you generate*. Full measurements live in the level's own header.
+Read §6 — deaths, not delays — before reaching for `arrivals`.
 
 The loop is the same one:
 

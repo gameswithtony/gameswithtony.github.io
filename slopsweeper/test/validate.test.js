@@ -86,7 +86,9 @@ test('init() refuses to load a level the validator rejects', () => {
 });
 
 test('THE STANDING TEST: every registered level is structurally sound', () => {
-  assert.deepEqual(levelIds(), ['plain', 'channel', 'atoll', 'caldera', 'strait', 'sprawl', 'delta']);
+  assert.deepEqual(levelIds(), [
+    'tutorial', 'channel', 'strait', 'caldera', 'atoll', 'delta', 'marina', 'gyre', 'reach', 'sprawl',
+  ]);
   for (const def of allLevels()) {
     const { errors: errs, warnings } = validateLevel(def);
     assert.deepEqual(errs, [], `${def.id} has errors`);
