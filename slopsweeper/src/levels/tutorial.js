@@ -165,7 +165,7 @@ A##############################C
 ################################
 ################################
 `,
-  arrivals: { count: 9, firstTick: 6, every: 1 },
+  arrivals: { count: 9, firstTick: 7, every: 1 },
   patience: 8,
   mineDensity: 0.1,
   betaSupply: 2,
