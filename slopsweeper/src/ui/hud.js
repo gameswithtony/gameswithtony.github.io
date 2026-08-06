@@ -205,7 +205,11 @@ export function createHud(h) {
   /** @type {{ s: GameState, cam: Camera } | null} */
   let lastMinimap = null;
 
-  dom.level.addEventListener('change', () => h.onLevel(dom.level.value));
+  // The blur is the fix for a real bug (owner report 2026-08-05): a <select> keeps keyboard
+  // focus after a choice, so the next hotkey went to IT — P jumped the picker to 'plain'
+  // instead of placing. Choosing a level boots a new game; there is nothing further to do in
+  // the control, so it hands the keyboard straight back.
+  dom.level.addEventListener('change', () => { dom.level.blur(); h.onLevel(dom.level.value); });
   dom.menu.addEventListener('click', () => h.onMenu());
   dom.restart.addEventListener('click', () => h.onRestart());
   dom.seed.addEventListener('click', () => h.onCopySeed());

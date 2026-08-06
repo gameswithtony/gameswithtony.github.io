@@ -135,6 +135,15 @@ export function createInput(el, camera, h) {
 
   el.addEventListener('pointerdown', (e) => {
     if (overlayOwns(e)) return;
+    // Touching the board reclaims the keyboard. The canvas is not focusable, so a click here
+    // never moves focus on its own — whatever control had it (the level select, after picking
+    // a map) KEEPS it, and the next hotkey lands in that control instead of the game: P was
+    // jumping the selector to 'plain' (owner bug report 2026-08-05). Blurring on the way in
+    // makes the guard in the keydown path ("keys are dead while a form control has focus")
+    // mean what it was always meant to mean: dead while you are USING the control, not dead
+    // forever because you once had.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused !== document.body) focused.blur();
     wake();
     refreshRect();
     const p = css(e);
