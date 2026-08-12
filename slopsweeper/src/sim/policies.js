@@ -277,7 +277,9 @@ function less(a, b) {
  * @typedef {object} Memory
  * @property {Map<number, number>} announced   block id → defects stated at commit
  * @property {Map<number, number>} analyzed    block id → how many times we reviewed it
- * @property {boolean} refunded                the last Generate found nowhere to land
+ * @property {boolean} refunded                the last Generate found nowhere to land — since
+ *                                             2026-08-12 that means the *whole pool* fits
+ *                                             nowhere, so backing off is even more right
  * @property {number} sinceAnalyze
  * @property {number} lastRemaining            tiles left to close the route, last turn
  * @property {number} genStalls                consecutive turns that bought no progress

@@ -644,7 +644,10 @@ function boot() {
   // Shipping a beta changes where users are walking, which is a bigger deal than the one tile
   // that appeared says. The toast names the consequence rather than the tile.
   bus.on('betaPlaced', () => hud.toast('BETA SHIPPED — USERS WILL WALK TO IT'));
-  bus.on('generateRefunded', () => hud.notice('NOWHERE LEGAL TO PUT IT — TURN REFUNDED'));
+  // Since 2026-08-12 a bad roll is redrawn silently, so this only fires when the whole pool
+  // fits nowhere — the message says the true thing: no block, no turn spent, try changing
+  // the board first.
+  bus.on('generateRefunded', () => hud.notice('NO BLOCK FITS ANYWHERE — GENERATE CANCELED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
     hud.toast(`REVIEWED ${ev.revealed.length} CELL${ev.revealed.length === 1 ? '' : 'S'}`);
     for (const c of ev.revealed) fx.flip(c, PALETTE.AI_REVEALED, 0);

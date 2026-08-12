@@ -349,7 +349,8 @@ export type Action =
 export type Ev =
   | { t: 'rejected'; reason: string }                 // reducer guards; UI should never trigger
   | { t: 'blockDrawn'; shape: number; rots: RotAnchors[] }
-  | { t: 'generateRefunded' }                         // §4.2: empty legal set, turn not consumed
+  | { t: 'generateRefunded' }                         // §4.2 (rev. 2026-08-12): the whole pool
+                                                      // fits nowhere; turn not consumed
   | { t: 'placed'; cells: number[] }                  // hand tile or committed block cells
   | { t: 'betaPlaced'; cell: number }                 // then the tick's usual events (2026-08-05)
   | { t: 'blockPlaced'; block: number; cells: number[]; mines: number }  // count → toast
@@ -559,8 +560,9 @@ export interface LevelDef {
 ### 7.1 Tick pipeline (inside `reduce`, deterministic order)
 
 A turn-consuming action (`place`, `beta`, `placeBlock`, `analyze`, `wait`) runs this pipeline;
-`generate` alone does not (the turn charges at `placeBlock`; an empty legal set refunds — no
-tick, `generateRefunded` event, phase unchanged):
+`generate` alone does not (the turn charges at `placeBlock`; since 2026-08-12 an unplaceable
+draw is redrawn invisibly over the pool's placeable shapes, and only a pool with no legal
+placement at all refunds — no tick, `generateRefunded` event, phase unchanged):
 
 1. Apply the player action (board mutation, mine roll, analyze reveals).
 2. **Departures:** all queued users with `gateOpen` path become `moving` (§3.9).

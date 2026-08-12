@@ -1,8 +1,9 @@
 // @ts-check
-// Generate: draw a shape from the level's pool, enumerate every legal placement before the
-// turn commits (SPEC §4.2), and roll the block's mines once position and rotation are final
-// (PLAN §3.6). VOID rejection is not written down anywhere here — it falls out of the
-// terrain capability table, exactly as SPEC §10.7 demands.
+// Generate: draw a shape from the level's pool — guaranteed placeable since 2026-08-12, see
+// drawPlaceableShape — enumerate every legal placement before the turn commits (SPEC §4.2),
+// and roll the block's mines once position and rotation are final (PLAN §3.6). VOID
+// rejection is not written down anywhere here — it falls out of the terrain capability
+// table, exactly as SPEC §10.7 demands.
 
 import { RULES } from './rules.js';
 import { n4 } from './grid.js';
@@ -15,8 +16,8 @@ import { resolvePool, rotationsOf } from './shapes.js';
 /** @typedef {import('./rng.js').Rng} Rng */
 
 /**
- * Uniform draw from the level's pool. No preview and no reroll (SPEC §4.2), so this is the
- * only place a shape is chosen and it happens on invocation.
+ * Uniform draw from the level's pool. No preview and no player reroll (SPEC §4.2); the one
+ * caller that redraws is `drawPlaceableShape`, below, and only over shapes that fit.
  * @param {Rng} gen
  * @param {'compact' | 'awkward' | 'heavy' | string | string[]} pool
  * @returns {number} index into SHAPES
@@ -24,6 +25,38 @@ import { resolvePool, rotationsOf } from './shapes.js';
 export function drawShape(gen, pool) {
   const ids = resolvePool(pool);
   return ids[Math.floor(gen() * ids.length)];
+}
+
+/**
+ * The draw the reducer uses (revised 2026-08-12, user decision). Placement cannot be
+ * declined once a block is shown (SPEC §4.2), so what is shown must be placeable: a first
+ * roll that fits nowhere is redrawn invisibly, uniformly over the pool's placeable
+ * remainder, from the same seeded stream. That is distribution-identical to rejection
+ * sampling — uniform over the placeable subset — but bounded at two stream numbers, so the
+ * replay contract (PLAN §7.5) stays exact. When the first roll fits, this is bit-identical
+ * to the plain draw it replaces.
+ *
+ * Returns null when nothing in the pool fits at any rotation; the caller cancels without
+ * saving `gen`, so a refused Generate never advances the stream.
+ * @param {GameState} s
+ * @param {Rng} gen
+ * @param {'compact' | 'awkward' | 'heavy' | string | string[]} pool
+ * @returns {{ shape: number, rots: RotAnchors[] } | null}
+ */
+export function drawPlaceableShape(s, gen, pool) {
+  const first = drawShape(gen, pool);
+  const firstRots = legalPlacements(s, first);
+  if (firstRots.some((r) => r.anchors.length > 0)) return { shape: first, rots: firstRots };
+
+  /** @type {{ shape: number, rots: RotAnchors[] }[]} */
+  const fits = [];
+  for (const shape of resolvePool(pool)) {
+    if (shape === first) continue;                     // just proven unplaceable
+    const rots = legalPlacements(s, shape);
+    if (rots.some((r) => r.anchors.length > 0)) fits.push({ shape, rots });
+  }
+  if (fits.length === 0) return null;
+  return fits[Math.floor(gen() * fits.length)];
 }
 
 /**

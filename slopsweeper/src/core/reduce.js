@@ -11,7 +11,7 @@ import {
 import { arrivalCount, castFor } from './casting.js';
 import { emptyCon, n4, n8, parseMap } from './grid.js';
 import { canProgress, gateOpen, stepCandidates, waypointFields } from './routing.js';
-import { drawShape, legalPlacements, placementCells, rollMines } from './generate.js';
+import { drawPlaceableShape, placementCells, rollMines } from './generate.js';
 import { fromState, initStreams } from './rng.js';
 import { assertValidLevel } from './validate.js';
 
@@ -125,22 +125,24 @@ export function reduce(s, a) {
       return { s: runTick(d, ev), ev };
     }
     case 'generate': {
-      // Not turn-consuming by itself: the turn charges at placeBlock, and an empty legal
-      // set refunds outright (SPEC §4.2). A refund returns the input state untouched — the
-      // generation stream does not advance — so pressing Generate again on a boxed-in board
-      // offers the same shape rather than a free reroll.
+      // Not turn-consuming by itself: the turn charges at placeBlock. The block shown is
+      // guaranteed placeable (revised 2026-08-12, user decision): placement cannot be
+      // declined, so a first roll that fits nowhere is redrawn invisibly from the pool's
+      // placeable remainder (see drawPlaceableShape). Only when *nothing* in the pool fits
+      // at any rotation does Generate cancel — the input state comes back untouched, the
+      // stream does not advance, and pressing again just says so again until the board
+      // changes.
       if (s.phase.k !== 'play') return rejected(s, `cannot generate during phase '${s.phase.k}'`);
       const gen = fromState(s.rng.gen);
-      const shape = drawShape(gen, levelParams(s).shapePool);
+      const drawn = drawPlaceableShape(s, gen, levelParams(s).shapePool);
+      if (!drawn) return { s, ev: [{ t: 'generateRefunded' }] };
       // Every distinct rotation is kept, anchors or not, so `rot` stays both an index into
       // `phase.rots` and the quarter-turn count a renderer draws (see shapes.rotationsOf).
       // A rotation that fits nowhere simply highlights nothing.
-      const rots = legalPlacements(s, shape);
-      if (rots.every((r) => r.anchors.length === 0)) return { s, ev: [{ t: 'generateRefunded' }] };
       const d = draft(s);
       d.rng.gen = gen.getState();
-      d.phase = { k: 'placing', shape, rots };
-      return { s: d, ev: [{ t: 'blockDrawn', shape, rots }] };
+      d.phase = { k: 'placing', shape: drawn.shape, rots: drawn.rots };
+      return { s: d, ev: [{ t: 'blockDrawn', shape: drawn.shape, rots: drawn.rots }] };
     }
     case 'placeBlock': {
       if (s.phase.k !== 'placing') return rejected(s, `nothing has been generated (phase '${s.phase.k}')`);

@@ -398,7 +398,10 @@ export function effectiveMask(u) {
 /**
  * @typedef {{ t: 'rejected', reason: string }
  *   | { t: 'blockDrawn', shape: number, rots: RotAnchors[] }
- *   | { t: 'generateRefunded' }
+ *   | { t: 'generateRefunded' }                                     // since 2026-08-12: no
+ *                                                                   // shape in the pool fits
+ *                                                                   // anywhere — the draw
+ *                                                                   // redraws past a bad roll
  *   | { t: 'placed', cells: number[] }
  *   | { t: 'betaPlaced', cell: number }                             // rev. 2026-08-05
  *   | { t: 'blockPlaced', block: number, cells: number[], mines: number }

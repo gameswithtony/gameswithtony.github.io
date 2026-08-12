@@ -36,8 +36,10 @@ That is a complete, playable, tuned-by-default level. Every other field is optio
 falls back to `core/rules.js`. State only what deviates.
 
 It is also, at 6×3, very nearly a hand-only level. Of the six `compact` stencils only `R12`
-fits at all, in exactly one position, so five Generates in six refund (§4). Blocks are
-12–26 cells now and they need room: the shipped corpus runs 32×20 to 50×30.
+fits at all, in exactly one position — so every Generate here hands you R12 (since
+2026-08-12 an unplaceable draw is redrawn invisibly; a Generate only cancels when *nothing*
+in the pool fits, see §4). Blocks are 12–26 cells now and they need room: the shipped
+corpus runs 32×20 to 50×30.
 
 ---
 

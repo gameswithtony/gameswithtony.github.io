@@ -7,8 +7,8 @@ import { RULES } from '../src/core/rules.js';
 import { TERRAIN, defineTerrain } from '../src/core/state.js';
 import { cellAt, n4 } from '../src/core/grid.js';
 import { SHAPES, shapeIndex } from '../src/core/shapes.js';
-import { legalPlacements, placementCells, rollMines } from '../src/core/generate.js';
-import { mulberry32 } from '../src/core/rng.js';
+import { drawShape, legalPlacements, placementCells, rollMines } from '../src/core/generate.js';
+import { fromState, mulberry32 } from '../src/core/rng.js';
 import { init, legalActions, reduce } from '../src/core/reduce.js';
 
 const NEVER = { count: 4, firstTick: 9999, every: 9999 };
@@ -131,19 +131,53 @@ test('generate draws, enters placing, and offers nothing but placeBlock (SPEC §
   }
 });
 
-test('an empty legal set refunds: no tick, no block, phase untouched (SPEC §4.2)', () => {
-  // Two ocean cells and no room for anything: A#B with the middle cell already built.
-  const level = { id: 'gen-refund', map: 'A#B', arrivals: NEVER, shapePool: ['O16'] };
+test('a pool with no legal placement anywhere cancels: no tick, no block, phase untouched (SPEC §4.2, rev. 2026-08-12)', () => {
+  // Two ocean cells and no room for anything: A#B with the middle cell already built. The
+  // pool holds several shapes on purpose — since 2026-08-12 the refund means the *whole
+  // pool* was scanned and refused, not that one unlucky draw was.
+  const level = { id: 'gen-refund', map: 'A#B', arrivals: NEVER, shapePool: ['O16', 'R12', 'M12'] };
   const s = reduce(init(level, 1), { t: 'place', cell: 1 }).s;
-  assert.equal(legalPlacements(s, shapeIndex('O16')).every((r) => r.anchors.length === 0), true);
+  for (const id of ['O16', 'R12', 'M12']) {
+    assert.equal(legalPlacements(s, shapeIndex(id)).every((r) => r.anchors.length === 0), true);
+  }
 
   const before = s.tick;
   const { s: after, ev } = reduce(s, { t: 'generate' });
   assert.deepEqual(ev, [{ t: 'generateRefunded' }]);
   assert.equal(after.tick, before, 'the turn is refunded');
   assert.equal(after.phase.k, 'play', 'the phase is untouched');
-  assert.equal(after, s, 'and so is the state — the draw is not spent, so this is not a reroll');
+  assert.equal(after, s, 'and so is the state — the stream is not spent, so cancelling is free and repeatable');
   assert.deepEqual(reduce(after, { t: 'generate' }).ev, [{ t: 'generateRefunded' }]);
+});
+
+test('an unplaceable draw is redrawn invisibly: what is shown always fits (rev. 2026-08-12)', () => {
+  // A three-row corridor: R12 (4×3) lies along it; O16 (4×4) fits at no rotation. Under the
+  // old rule half of all Generates here refunded; now every one of them must show R12.
+  const corridor = {
+    id: 'gen-redraw',
+    map: ['#'.repeat(16), `A${'#'.repeat(14)}B`, '#'.repeat(16)].join('\n'),
+    arrivals: NEVER,
+    shapePool: /** @type {string[]} */ (['R12', 'O16']),
+  };
+  const r12 = shapeIndex('R12');
+  assert.equal(rots(init(corridor, 1), 'O16').every((r) => r.anchors.length === 0), true,
+    'the square must fit nowhere, or this test tests nothing');
+
+  let redraws = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const s0 = init(corridor, seed);
+    // Peek at what the raw draw would have been, so the test can prove it exercised the
+    // redraw path rather than getting twelve lucky first rolls.
+    if (drawShape(fromState(s0.rng.gen), corridor.shapePool) !== r12) redraws++;
+
+    const { s, ev } = reduce(s0, { t: 'generate' });
+    assert.equal(ev[0].t, 'blockDrawn', `seed ${seed} refunded with a placeable shape in the pool`);
+    assert.equal(/** @type {any} */ (ev[0]).shape, r12, `seed ${seed} showed a shape that fits nowhere`);
+    assert.equal(s.phase.k, 'placing');
+    assert.ok(/** @type {any} */ (s.phase).rots.some((/** @type {any} */ r) => r.anchors.length > 0),
+      'what is shown is always placeable');
+  }
+  assert.ok(redraws > 0, 'no seed rolled the unplaceable square first — widen the seed range');
 });
 
 test('committing a block charges the turn, registers it, and states its defect count', () => {

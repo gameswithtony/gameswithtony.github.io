@@ -10,6 +10,13 @@
 //     makes placement *constrained* rather than impossible: the flat takes any stencil, the
 //     lagoon takes nothing five cells tall, and `heavy`'s squares are flat-only.
 //   · RETUNED 2026-08-04 when Analyze became one minesweeper click.
+//   · NOTE 2026-08-12: SPEC §4.2 was revised — an unplaceable draw is now redrawn invisibly,
+//     and Generate only cancels when the whole pool fits nowhere. The `refund` columns below
+//     count per-draw refusals under the old rule, so they overstate what a player now sees
+//     (the genRush 0.85 "re-draws the same refused stencil" failure mode is gone outright).
+//     The tension the shore bar buys — heavies land along the flat and nowhere else — is
+//     placement-constrained, not refund-driven, so it survives; the dials want a re-run
+//     before anyone quotes them.
 //   · REBUILT 2026-08-06 (owner decision), and the reason is embarrassing enough to write down.
 //     **The sentence at the top of this file was not true.** The south-west breach opened onto
 //     the south flat twelve tiles from the origin, so A→B was 30 and the reef walk was optional
