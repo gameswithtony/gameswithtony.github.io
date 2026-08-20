@@ -1318,6 +1318,34 @@ losses.
   with their own buttons, and the board behind them is finished. Both sit above the floating
   zoom cluster.
 
+*Revised 2026-08-20 (owner request — the level select):* the start card's `<select>` grew into
+a **card grid**: one card per registered level, in registry order, which is the difficulty arc
+(`levels/index.js`), so the cards are numbered 01–10 and the menu says it is a curriculum. Each
+card wears a **canvas thumbnail of the level's own geometry**, drawn from `parseMap(def.map)`
+in the board's palette on every open of the screen — coastline traced on the VOID boundary
+(one virtual margin cell, so a silhouette closes even when playable cells run to the array
+edge), ocean with sparse dither, volcanoes with a lava pixel, endpoints red with a user-yellow
+centre on A. The charmap is the only source and there is no thumbnail asset anywhere, so
+editing a level's map re-draws its card by construction. Below the map, the card states the
+demand — users and stops — because §6.1's forecast argument starts at the menu. Tapping a card
+opens that level — resuming its saved game when one is standing (§11.10's per-level slots, same
+day, and the `CONTINUE · served/total` badge says so), starting fresh when not — and closes
+the overlay; **PLAY is gone because every card is one**, and the card blurs itself on click
+(the 2026-08-05 focus fix): the next hotkey belongs to the board the card just revealed. Esc
+still closes the screen over whatever game is behind it, and the booted level's card is rimmed
+coast to say which game that is.
+
+The same day, second owner report — a restored save skips the title card (correctly: no door
+in front of a resumed game) and then had **no way back to the level select** short of finishing
+the game. So the bar's LEVEL `<select>` became a **button**: it names the booted level id in
+the old select's exact 88px footprint (the wrap-point arithmetic in styles.css did not move)
+and opens this screen, wearing the WAITING chip's caret because it is now a door. The dropdown
+is gone rather than kept alongside — the card grid is the picker, and a dropdown beside a door
+to a better picker is two answers to one question. Disabled until the lazily-imported overlay
+module lands, exactly like the "?" and for the same reason; the 2026-08-05 "switching maps is
+play, not bookkeeping" decision stands — the picker is still one tap from the bar, it just
+opens with thumbnails now.
+
 ### 11.10 Save & resume (2026-08-04, user decision — overturns §16's "no saves")
 
 Storage is the UI shell's job and lives in `main.js`; core stays pure and never learns a save
@@ -1349,6 +1377,29 @@ definition once and copying, rather than by restating core's defaulting logic in
 A resumed game **skips the title card** when its phase is `play` or `placing` — a refresh
 landing on the title card would be the door-in-front-of-the-repro-link problem one screen
 further in. A resumed `won`/`lost` shows its end screen, derived from the phase alone.
+
+*Revised 2026-08-20 (owner request — one save slot per level):* the single key made switching
+levels destructive — starting `channel` silently threw away a half-played `caldera` — so a
+registered level's game now lives at `slop-sweeper.save.<levelId>`, and the Lab's at its own
+`slop-sweeper.save#lab` (the `#` keeps even a Lab level named like a registered one out of the
+namespace). The legacy single key is migrated into its level's slot once at boot — with a
+`#lab` sentinel written into the last-level store for a Lab save, so "come back without
+`?lab=` and your game is waiting" survives the move — then deleted whatever happened.
+Everything above still holds per slot: `SAVE_V`, the shape check, write-on-every-dispatch,
+storage-unavailable no-ops, the WeakMap re-association, the title-card skip. What changed in
+the restore rule is only that **there is no mismatched-`?level=` case left**: asking for a
+level is asking for its slot, so `?level=` now *names* the save to resume rather than
+guarding the one save there was; `?seed=` must still match the slot's seed (repro intent
+boots fresh). **The level select is where the slots pay off**: a card whose level holds a game
+*underway* wears a `CONTINUE · served/total` badge and resumes it on tap. Underway means
+mid-`placing` at any tick (a drawn block is a commitment, SPEC §4.2), or `play` past tick 0 —
+finished saves are not offered (a card is a door into play; a finished board's doors are on
+its end screen), and neither is the untouched tick-0 board a fresh start writes, because that
+is exactly what RESTART leaves in the slot and a RESTART that still read CONTINUE would look
+like it had cleared nothing (owner report, same day). Both are overwritten by the fresh game
+a tap starts instead. RESTART is the fresh-run verb for a level whose save you mean to
+abandon. The badge reads a summary of the slot, never a revived state — the click path
+revives for real, boot's own dance, before trusting it.
 
 ---
 

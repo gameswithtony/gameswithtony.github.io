@@ -1,11 +1,22 @@
 // @ts-check
 // The overlay layer (PLAN §11.9): start · how to play · win · lose. Four DOM cards over an
 // already-booted game, built lazily like the Level Lab (§9.2). Core never learns any of them
-// exists — the level picker calls the same `onLevel` the HUD dropdown does, PLAY hides a div,
-// and the end screens are handed plain numbers rather than a GameState.
+// exists — a level card calls `onLevel` (main.js: a fresh game) and then hides the div, and
+// the end screens are handed plain numbers rather than a GameState.
+//
+// THE LEVEL SELECT (owner request 2026-08-20). The start screen's <select> grew into a card
+// grid: one card per registered level, in registry order, which is the difficulty arc
+// (levels/index.js). Each card wears a canvas thumbnail drawn from `parseMap(def.map)` on
+// every open — the charmap is the only source, so editing a level redraws its own card with
+// no asset to regenerate. Tapping a card opens that level — continuing its saved game when
+// one is standing (the CONTINUE badge says so; saves are one slot per level, same day),
+// starting fresh when not. There is no PLAY button any more because every card is one.
 //
 // WHEN THE START SCREEN IS SKIPPED. It is the front door, so it opens on a plain load and
-// stays out of the way of every flow that is not one:
+// stays out of the way of every flow that is not one — and a skip is never a lockout, because
+// the bar's LEVEL button reopens this screen at any time (owner report 2026-08-20: a restored
+// save skipped the title card and left no way back to the level select short of finishing the
+// game). The skips:
 //   · `?lab=1` — the Level Lab is a dev tool and its author did not ask for a title card.
 //   · `?seed=` — a pinned seed is a repro link, shared to show somebody one exact game. A
 //     door in front of it defeats the point, and worse, the level picker behind that door
@@ -19,9 +30,14 @@
 // screen closes. The end screens do not: they are a decision with their own buttons, and the
 // board behind them is finished. That matches the banner they replaced, which had no dismiss.
 
+import { parseMap } from '../core/grid.js';
+import { arrivalCount } from '../core/casting.js';
+import { getLevel as levelById } from '../levels/index.js';
+import { PALETTE } from './palette.js';
 import { initials, pickPost } from './linkedup.js';
 
 /** @typedef {import('./linkedup.js').PostFacts} PostFacts */
+/** @typedef {import('../core/grid.js').ParsedMap} ParsedMap */
 
 /**
  * The rules as a plain how-to-play with the story in short asides, written for somebody
@@ -92,6 +108,85 @@ function make(tag, cls, text) {
 }
 
 /**
+ * Backing-store pixels per map cell. Three, not one: the endpoints and the texture pixels
+ * below need a centre a cell can spare, and CSS does the rest of the scaling with
+ * `image-rendering: pixelated`, the same way the board itself is blown up (SPEC §10.8).
+ */
+const THUMB_PX = 3;
+
+/**
+ * A level's portrait, drawn from its parsed charmap in the board's own palette: ocean,
+ * volcano, red endpoints, and a coastline traced on the VOID cells that touch playable
+ * ground. It is re-drawn from the map string on every open of the start screen, so a level
+ * edit is a card edit — there is no thumbnail asset anywhere to fall out of date.
+ * Exported like `replayUrl` and `shareText`: a pure function of its arguments that a Node
+ * script can drive with a mock canvas, which is the only kind of check a UI module gets.
+ * @param {HTMLCanvasElement} canvas
+ * @param {ParsedMap} m
+ */
+export function drawThumb(canvas, m) {
+  const S = THUMB_PX;
+  // One virtual cell of margin all round, with everything off-map read as VOID, so the
+  // coastline closes even where playable cells run to the array edge — a level authored
+  // without its own border of '.' rows still gets a complete silhouette.
+  const x0 = m.bbox.x0 - 1, y0 = m.bbox.y0 - 1;
+  const w = m.bbox.x1 - x0 + 2, h = m.bbox.y1 - y0 + 2;
+  canvas.width = w * S;
+  canvas.height = h * S;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  /** @param {number} x @param {number} y @returns {import('../core/state.js').Terrain} */
+  const at = (x, y) => (x < 0 || y < 0 || x >= m.w || y >= m.h) ? 'void' : m.terrain[y * m.w + x];
+
+  for (let vy = 0; vy < h; vy++) {
+    for (let vx = 0; vx < w; vx++) {
+      const x = x0 + vx, y = y0 + vy;
+      const t = at(x, y);
+      if (t === 'void') {
+        // The coastline: a VOID cell touching playable ground on any of its eight sides.
+        let touches = false;
+        for (let dy = -1; dy <= 1 && !touches; dy++) {
+          for (let dx = -1; dx <= 1 && !touches; dx++) {
+            if ((dx || dy) && at(x + dx, y + dy) !== 'void') touches = true;
+          }
+        }
+        if (!touches) continue;              // open void stays the card's own dark
+        ctx.fillStyle = PALETTE.COAST;
+        ctx.fillRect(vx * S, vy * S, S, S);
+        continue;
+      }
+      ctx.fillStyle = t === 'volcano' ? PALETTE.VOLCANO : PALETTE.OCEAN;
+      ctx.fillRect(vx * S, vy * S, S, S);
+      // Texture, deterministic per cell so a card never shimmers between opens: sparse
+      // dither on ocean, sparse lava speckle on volcano — the board's own idioms in one pixel.
+      if (t === 'ocean' && (x * 7 + y * 13) % 11 === 0) {
+        ctx.fillStyle = PALETTE.OCEAN_DITHER;
+        ctx.fillRect(vx * S + 1, vy * S + 1, 1, 1);
+      } else if (t === 'volcano' && (x * 5 + y * 3) % 7 === 0) {
+        ctx.fillStyle = PALETTE.RED;
+        ctx.fillRect(vx * S + 1, vy * S + 1, 1, 1);
+      }
+    }
+  }
+
+  // Endpoints over everything, red like the board's. The origin gets a user-yellow centre —
+  // it is where everybody comes from, and the one cell a glance should find first.
+  /** @param {number} cell @param {string} [centre] */
+  const mark = (cell, centre) => {
+    const x = (cell % m.w) - x0, y = ((cell / m.w) | 0) - y0;
+    ctx.fillStyle = PALETTE.RED;
+    ctx.fillRect(x * S, y * S, S, S);
+    if (centre) {
+      ctx.fillStyle = centre;
+      ctx.fillRect(x * S + 1, y * S + 1, 1, 1);
+    }
+  };
+  for (const d of m.dests) mark(d);
+  mark(m.origin, PALETTE.USER);
+}
+
+/**
  * Everything an end screen needs, as numbers. Deliberately not a GameState: these cards are
  * shown after the game is over and must not be able to ask it anything.
  * @typedef {object} EndFacts
@@ -146,7 +241,19 @@ export function shareText(f) {
  * @typedef {object} StartHandlers
  * @property {string[]} levels          registered level ids, in registry order
  * @property {() => string} getLevel    the level the game is booted on right now
- * @property {(id: string) => void} onLevel   the same switch the HUD dropdown calls
+ * @property {(id: string) => void} onLevel   open that level: continue its saved game if one
+ *                                            is standing, a fresh game if not — main.js owns
+ *                                            that choice (saves are one slot per level,
+ *                                            2026-08-20). A card click is this, then the
+ *                                            overlay closing over the board; since the bar's
+ *                                            dropdown became a door to this screen, the
+ *                                            cards are the only caller
+ * @property {(id: string) => { tick: number, served: number, total: number } | null} getResume
+ *                                            the slot's summary when the level holds a game
+ *                                            underway — what the CONTINUE badge wears. Null
+ *                                            for no save, a finished one, an untouched
+ *                                            tick-0 board (what RESTART leaves), or one that
+ *                                            no longer parses
  * @property {() => void} onRestart     replay the level that just ended
  */
 
@@ -170,10 +277,8 @@ export function createStart(h) {
     <div class="overlay-card">
       <h1>SLOPSWEEPER</h1>
       <p class="premise"></p>
-      <label class="field" for="start-level">LEVEL</label>
-      <select id="start-level"></select>
+      <div id="start-levels"></div>
       <div class="overlay-actions">
-        <button id="start-play">PLAY</button>
         <button id="start-help">HOW TO PLAY</button>
       </div>
     </div>`;
@@ -235,7 +340,7 @@ export function createStart(h) {
     for (const line of lines) body.append(make('p', undefined, line));
   }
 
-  const level = /** @type {HTMLSelectElement} */ (start.querySelector('#start-level'));
+  const grid = /** @type {HTMLElement} */ (start.querySelector('#start-levels'));
   const back = /** @type {HTMLButtonElement} */ (help.querySelector('#help-back'));
   const shareBtn = /** @type {HTMLButtonElement} */ (win.querySelector('#win-share'));
 
@@ -254,20 +359,62 @@ export function createStart(h) {
     document.body.classList.remove('starting');
   }
 
-  function syncLevels() {
+  /**
+   * Rebuilt on every open rather than cached: ten cards of a few thousand pixels each is
+   * nothing, and it is what keeps a thumbnail a live read of the level definition instead of
+   * a copy that was right once. The current level's card is marked, because it is the game
+   * Esc backs out to.
+   */
+  function buildCards() {
     const current = h.getLevel();
-    level.innerHTML = '';
-    for (const id of h.levels) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = id;
-      opt.selected = id === current;
-      level.append(opt);
-    }
+    grid.innerHTML = '';
+    h.levels.forEach((id, i) => {
+      const def = levelById(id);
+      const m = parseMap(def.map);
+
+      const card = /** @type {HTMLButtonElement} */ (make('button', 'level-card'));
+      card.type = 'button';
+      card.classList.toggle('current', id === current);
+
+      const thumb = /** @type {HTMLCanvasElement} */ (make('canvas', 'level-thumb'));
+      drawThumb(thumb, m);
+
+      // Registry order is the difficulty arc (levels/index.js), so the cards are numbered:
+      // the menu should say it is a curriculum, not a drawer of maps.
+      const name = make('span', 'level-name', def.name.toUpperCase());
+      name.prepend(make('i', undefined, String(i + 1).padStart(2, '0')));
+
+      // The demand, on the card: §6.1's forecast argument starts at the menu — which level
+      // you can face is a dosage judgement too, and users and stops are the dose.
+      const stops = m.dests.length;
+      const facts = make('span', 'level-facts',
+        `${arrivalCount(def.arrivals)} USERS · ${stops} ${stops === 1 ? 'STOP' : 'STOPS'}`);
+
+      card.append(thumb, name, facts);
+
+      // The CONTINUE badge (owner request 2026-08-20, with the per-level slots): a level
+      // holding an unfinished game says so on its card, with the score so far — served over
+      // total is the number a player choosing which game to go finish actually wants. The
+      // card still just calls onLevel; whether that resumes or restarts is main.js's call,
+      // and the badge is a read of the same slot that call will read.
+      const resume = h.getResume(id);
+      if (resume) {
+        card.classList.add('saved');
+        card.append(make('span', 'level-resume', `CONTINUE · ${resume.served}/${resume.total}`));
+        card.title = `Continue your saved game — turn ${resume.tick}, ${resume.served}/${resume.total} served`;
+      } else {
+        card.title = 'Start a new game';
+      }
+
+      // The blur is the HUD dropdown's fix (2026-08-05) applied here: a clicked button keeps
+      // keyboard focus, and the next hotkey belongs to the board this card just revealed.
+      card.addEventListener('click', () => { card.blur(); h.onLevel(id); show(null); });
+      grid.append(card);
+    });
   }
 
   function openStart() {
-    syncLevels();
+    buildCards();
     show('start');
   }
 
@@ -375,8 +522,6 @@ export function createStart(h) {
 
   // --- wiring ------------------------------------------------------------------------
 
-  level.addEventListener('change', () => h.onLevel(level.value));
-  /** @type {HTMLButtonElement} */ (start.querySelector('#start-play')).addEventListener('click', () => show(null));
   /** @type {HTMLButtonElement} */ (start.querySelector('#start-help')).addEventListener('click', () => openHelp('start'));
   back.addEventListener('click', () => {
     if (helpReturn === 'start') openStart();

@@ -29,7 +29,21 @@ import { PALETTE } from './palette.js';
 /** @typedef {import('./renderer.js').ViewOverlay} ViewOverlay */
 
 const STORE_KEY = 'slop-sweeper.level';
-const SAVE_KEY = 'slop-sweeper.save';
+/**
+ * ONE SAVE SLOT PER LEVEL (owner request 2026-08-20). There used to be a single save, and it
+ * made switching levels destructive: starting `channel` silently threw away a half-played
+ * `caldera`, which read as a bug the moment a player wanted to keep two games going. Now a
+ * registered level's game lives at `SAVE_PREFIX + levelId`, so every level holds its own
+ * in-progress run and the level select can offer to continue any of them. The Lab's game gets
+ * a slot of its own — the '#' keeps it out of the per-level namespace, so even a Lab level
+ * that shares an id with a registered level cannot collide with its slot. The old single key
+ * is migrated into its level's slot once at boot and never written again.
+ */
+const LEGACY_SAVE_KEY = 'slop-sweeper.save';
+const SAVE_PREFIX = 'slop-sweeper.save.';
+const LAB_SAVE_KEY = 'slop-sweeper.save#lab';
+/** STORE_KEY value meaning "the last game played was the Lab's" — never a registry id. */
+const LAB_STORE = '#lab';
 
 /**
  * BUMP THIS WHENEVER `GameState`'s SHAPE CHANGES — a new field, a renamed one, a changed
@@ -100,6 +114,63 @@ function parseSave(raw) {
 }
 
 /**
+ * Parse one save slot and make its state playable again. `levelParams` is keyed on the
+ * terrain ARRAY's identity (a WeakMap in core), so a state that came back through JSON has
+ * none — it would silently fall back to the defaults and play at the wrong patience and the
+ * wrong mine density. Booting the definition once and copying its parameters across
+ * re-associates them using core's own defaulting rather than a second copy of it here, and
+ * doubles as a check that the level still loads: a slot whose level is gone from the registry
+ * comes back null rather than half-alive.
+ * @param {string} key
+ * @returns {SaveFile | null}
+ */
+function reviveSlot(key) {
+  const save = parseSave(store.get(key));
+  if (!save) return null;
+  try {
+    const def = save.labDef ?? getLevel(save.levelId);
+    setLevelParams(save.state, levelParams(init(def, save.state.seed)));
+    return save;
+  } catch {
+    return null;                       // the level no longer loads: the save is unplayable
+  }
+}
+
+/**
+ * A saved state worth offering to CONTINUE: a game actually underway. Three exclusions, each
+ * doing a job (owner report 2026-08-20, second pass):
+ *   · `won`/`lost` — a card is a door into play, and a finished board's doors are on its end
+ *     screen.
+ *   · `play` at tick 0 — an untouched fresh board, which is exactly what RESTART (and a
+ *     card's own fresh start) writes into the slot. Offering to "continue" it would pin a
+ *     CONTINUE badge on every level the player ever so much as opened, and RESTART would
+ *     read as if it had not cleared anything. Nothing meaningful fits in a tick-0 `play`
+ *     state: even a flag needs slop to sit on, and slop needs a Generate, which ends the
+ *     turn or leaves `placing`.
+ *   · `placing` is IN, tick 0 included — a drawn block is a commitment (SPEC §4.2: no
+ *     decline), so the game with one on the table is underway by definition.
+ * @param {GameState} state
+ * @returns {boolean}
+ */
+function resumable(state) {
+  return state.phase.k === 'placing' || (state.phase.k === 'play' && state.tick > 0);
+}
+
+/**
+ * The level select's read of a level's slot: a game to continue, or null — see `resumable`
+ * for what qualifies. Deliberately `parseSave` rather than `reviveSlot`: a badge has no
+ * business booting ten levels every time the screen opens, and the click path revives for
+ * real before trusting the slot.
+ * @param {string} id  a registered level
+ * @returns {SaveFile | null}
+ */
+function resumableSave(id) {
+  const save = parseSave(store.get(SAVE_PREFIX + id));
+  if (!save || save.labDef || save.levelId !== id || !resumable(save.state)) return null;
+  return save;
+}
+
+/**
  * The event drain, as a registry rather than a switch: M4 subscribes particles to
  * `detonate`, step tweens to `step`, and the reveal flip to `reveal` without touching this
  * file's dispatch path. `'*'` sees everything, in emission order.
@@ -137,6 +208,21 @@ function boot() {
   const labParam = params.get('lab');
   const isLab = labParam !== null && labParam !== '0';
   const pinnedSeed = params.has('seed') ? (Number(params.get('seed')) >>> 0) : null;
+
+  // MIGRATION (2026-08-20, one-time): the single save slot becomes one slot per level. The
+  // old key is moved into its level's slot — and, for a Lab game, the sentinel is stored so
+  // a plain load still resumes it, which is exactly what the single slot used to do — then
+  // deleted whatever happened, so an unparseable legacy save is discarded on sight, per the
+  // SAVE_V rule above.
+  {
+    const legacy = parseSave(store.get(LEGACY_SAVE_KEY));
+    if (legacy) {
+      store.set(legacy.labDef ? LAB_SAVE_KEY : SAVE_PREFIX + legacy.levelId, JSON.stringify(legacy));
+      if (legacy.labDef) store.set(STORE_KEY, LAB_STORE);
+    }
+    store.del(LEGACY_SAVE_KEY);
+  }
+
   const wanted = params.get('level') ?? store.get(STORE_KEY) ?? ids[0];
   let levelId = ids.includes(wanted) ? wanted : ids[0];
 
@@ -146,42 +232,36 @@ function boot() {
   const fx = createEffects();
 
   /**
-   * The save, if there is one this URL agrees with (PLAN §11.10). Resolved before anything is
-   * built, because it decides which level boots, which state it boots into, and whether the
+   * The save this URL asks for, if its slot holds one (PLAN §11.10). Resolved before anything
+   * is built, because it decides which level boots, which state it boots into, and whether the
    * title card is shown at all.
    *
    * THE RULE, and why each clause is there:
    *   · `?lab` absent — the Lab boots definitions by hand and must never have one restored
    *     underneath it.
-   *   · `?seed=` present — restore only when it is the seed we saved, and only when `?level=`
-   *     (if present) agrees too. A share link REFRESHED MID-PLAY is the same game and has to
-   *     resume; a share link for a *different* game is repro intent and boots fresh.
-   *   · `?level=` present — must match. The game writes this parameter into the URL itself on
-   *     every start, so an ordinary refresh always agrees and always resumes; choosing a
-   *     different level from the URL is a request for that level, not for the saved one.
+   *   · WHICH SLOT: `?level=` names it; with no `?level=`, the last level played does — and
+   *     the Lab sentinel in that store means the Lab's own slot. Since the slots went
+   *     per-level (2026-08-20) there is no "mismatched level" case left to refuse: asking for
+   *     a level IS asking for its save, which is the whole point of keeping one per level.
+   *   · `?seed=` present — restore only when it is the seed that slot saved. A share link
+   *     REFRESHED MID-PLAY is the same game and has to resume; a share link for a *different*
+   *     game on the same level is repro intent and boots fresh.
+   *   · The slot must actually hold what its name promises (the id inside agrees, Lab-ness
+   *     agrees) — a guard against a hand-edited store, not against anything this file writes.
    * @returns {SaveFile | null}
    */
   function loadSave() {
     if (params.has('lab')) return null;
-    const save = parseSave(store.get(SAVE_KEY));
-    if (!save) return null;
+    // An unregistered `?level=` fell back to ids[0] above; honour the fallback with a fresh
+    // game rather than quietly resuming a save the URL never asked for.
     const level = params.get('level');
-    if (level !== null && level !== save.levelId) return null;
+    if (level !== null && level !== levelId) return null;
+    const wantLab = !params.has('level') && store.get(STORE_KEY) === LAB_STORE;
+    const save = reviveSlot(wantLab ? LAB_SAVE_KEY : SAVE_PREFIX + levelId);
+    if (!save) return null;
+    if (wantLab ? !save.labDef : (save.labDef !== null || save.levelId !== levelId)) return null;
     if (pinnedSeed !== null && pinnedSeed !== (save.state.seed >>> 0)) return null;
-    // A registered level must still be registered; a Lab save carries its own definition.
-    if (!save.labDef && !ids.includes(save.levelId)) return null;
-    try {
-      // `levelParams` is keyed on the terrain ARRAY's identity (a WeakMap in core), so a state
-      // that came back through JSON has none — it would silently fall back to the defaults and
-      // play at the wrong patience and the wrong mine density. Booting the definition once and
-      // copying its parameters across re-associates them using core's own defaulting rather
-      // than a second copy of it here, and doubles as a check that the level still loads.
-      const def = save.labDef ?? getLevel(save.levelId);
-      setLevelParams(save.state, levelParams(init(def, save.state.seed)));
-      return save;
-    } catch {
-      return null;                     // the level no longer loads: the save is unplayable
-    }
+    return save;
   }
 
   const restored = loadSave();
@@ -306,7 +386,6 @@ function boot() {
     onAction: act,
     onRotate: rotate,
     onConfirm: confirmBlock,
-    onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); else restart(); },
     onRestart: restart,
     onMinimapJump: jumpTo,
     onCopySeed: copySeed,
@@ -318,10 +397,9 @@ function boot() {
     onRoster: () => { drawer.close(); roster.toggle(s); },
     onMenu: () => { roster.close(); drawer.toggle(); },
   });
-  // Same union `startWith` builds: a restored Lab game boots straight past `startWith`, and
-  // without this its own level would be missing from the dropdown, which would then display
-  // some other level's name over the board actually on screen.
-  hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
+  // Same write `startWith` makes: a restored Lab game boots straight past `startWith`, and
+  // without this the bar would name some other level over the board actually on screen.
+  hud.setLevel(levelId);
 
   createInput(board, camera, {
     getState: () => s,
@@ -359,6 +437,33 @@ function boot() {
   }
 
   /**
+   * A level-select card was tapped: continue that level's saved game if one is standing,
+   * start a fresh one if not (2026-08-20 — the slots went per-level for exactly this).
+   * RESTART is the fresh-run verb for a level whose save you want to abandon. Three cases:
+   *   · the level already on screen, underway — nothing to load; the card is just the way
+   *     back to it, and rebooting would reset the camera under the player for no reason.
+   *   · a save worth continuing in the slot (`resumable`) — revive it, exactly the boot
+   *     path's dance.
+   *   · anything else (no save, a finished or untouched one, a slot that no longer loads) —
+   *     a new game.
+   * @param {string} id  a registered level
+   */
+  function openLevel(id) {
+    if (!ids.includes(id)) return;
+    if (id === levelId && !labDef && resumable(s)) return;
+    const save = resumableSave(id) && reviveSlot(SAVE_PREFIX + id);
+    if (save && !save.labDef && save.levelId === id && resumable(save.state)) {
+      levelId = id;
+      levelDef = getLevel(id);
+      labDef = null;
+      store.set(STORE_KEY, id);
+      startWith(save.state);
+    } else {
+      newGame(id, pinnedSeed ?? randomSeed());
+    }
+  }
+
+  /**
    * Boot a definition the Lab is holding, with no registry write — `init()` takes a
    * LevelDef, so a pasted level boots down exactly the same path as a registered one
    * (PLAN §9.2). Throws exactly what the validator would throw; the Lab prints it.
@@ -370,6 +475,10 @@ function boot() {
     labDef = def;
     levelDef = def;
     levelId = def.id;
+    // The sentinel, not the id: the Lab's slot is found through it on a plain load, which is
+    // how the single slot's "come back later without ?lab= and your game is waiting" survived
+    // the move to per-level saves.
+    store.set(STORE_KEY, LAB_STORE);
     startWith(next);
   }
 
@@ -389,7 +498,7 @@ function boot() {
     roster.close();          // a new game's roster is a new set of people; open it yourself
     drawer.close();          // and a level switch is made FROM the drawer: it has done its job
     endScreen?.close();
-    hud.setLevels(labDef ? [...new Set([...ids, labDef.id])] : ids, levelId);
+    hud.setLevel(levelId);
     const url = new URL(location.href);
     if (labDef) url.searchParams.delete('level');
     else url.searchParams.set('level', levelId);
@@ -406,10 +515,12 @@ function boot() {
    * Persist the reducer's state and nothing else (PLAN §11.10). Camera, selection, ghost and
    * the run toggle are all deliberately absent: they are view state, they are cheap to
    * re-derive, and serializing the camera would put a zoom level inside a saved game, which
-   * is exactly the coupling SPEC §10.5 exists to prevent.
+   * is exactly the coupling SPEC §10.5 exists to prevent. Written into the booted level's own
+   * slot (2026-08-20), so playing one level can never cost another its game.
    */
   function saveGame() {
-    store.set(SAVE_KEY, JSON.stringify({ v: SAVE_V, levelId, labDef, state: s }));
+    store.set(labDef ? LAB_SAVE_KEY : SAVE_PREFIX + levelId,
+      JSON.stringify({ v: SAVE_V, levelId, labDef, state: s }));
   }
 
   function restart() {
@@ -862,10 +973,24 @@ function boot() {
       endScreen = createStart({
         levels: ids,
         getLevel: () => levelId,
-        onLevel: (id) => { if (ids.includes(id)) newGame(id, pinnedSeed ?? randomSeed()); },
+        onLevel: openLevel,
+        // The badge's read is a summary of the slot, never the state itself: the card must
+        // not be able to ask a saved game anything the boot path would not.
+        getResume: (id) => {
+          const save = resumableSave(id);
+          return save && {
+            tick: save.state.tick,
+            served: save.state.stats.served,
+            total: save.state.schedule.total,
+          };
+        },
         onRestart: restart,
       });
       hud.onHelp(endScreen.help);
+      // The bar's LEVEL button is the mid-game door to the same screen the front door shows —
+      // without it, a player whose save was restored (which skips the title card) had no way
+      // back to the level select short of finishing the game (owner report 2026-08-20).
+      hud.onLevels(endScreen.open);
       if (wantStart) endScreen.open();
       // A game short enough to finish before this module lands is not a real possibility, but
       // if it happened the result would otherwise be swallowed.

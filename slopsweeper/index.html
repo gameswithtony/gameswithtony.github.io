@@ -14,12 +14,13 @@
        game is the people standing still, so the bar carries them and almost nothing else; the
        seed link, the turn counter and the remaining count are settings and tallies rather than
        pressure, and they moved one tap away into #drawer. The LEVEL picker went with them and
-       came back the same day (owner decision): switching maps is play, not bookkeeping. -->
+       came back the same day (owner decision): switching maps is play, not bookkeeping. On
+       2026-08-20 the picker stopped being a <select> and became a DOOR: it names the current
+       map and opens the level-select screen (start.js), which is the picker now — the dropdown
+       would have been a second, worse copy of it. Same slot, same job, same onLevel underneath. -->
   <header id="topbar">
     <button id="btn-menu" class="chip" title="Seed and turn count"><span class="burger">☰</span><span class="narrow-hide">MENU</span></button>
-    <label id="level-pick" class="field" for="f-level" title="Switch level — starts a new game"><span class="narrow-hide">LEVEL</span>
-      <select id="f-level"></select>
-    </label>
+    <button id="btn-levels" class="chip" title="Choose a level — opens the level select"><span class="narrow-hide">LEVEL</span> <b id="level-name">—</b><span class="lv-caret">▾</span></button>
     <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
     <!-- The walker strip: the bar's whole point, and the only place the eye is meant to land.
          WAITING is the tension meter, so it is the biggest type on the page — the count says you

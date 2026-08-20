@@ -66,7 +66,7 @@ export function createDrawer() {
 
     /**
      * Asked by main.js on every keystroke: the hotkeys are dead while any panel is open, so
-     * a level name typed into the select can never also place a tile.
+     * a key pressed with the drawer up can never also act on the board behind it.
      */
     isOpen: () => open,
   };

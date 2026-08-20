@@ -134,23 +134,22 @@ b { color: var(--paper); font-weight: 700; }
 
 /* The level picker, back on the bar (owner decision 2026-08-05 — it left with the walker-first
    pass and returned the same day: switching maps is play, not bookkeeping, and a dial you tune
-   levels with belongs where you can reach it). Dressed to the chip spec — same 25px height,
-   same border, same 11px mono — and given a fixed width so the walker strip never shifts when
-   a longer level name is chosen. Native select chrome is kept: the arrow is the affordance,
-   and repainting it would buy nothing but risk. The LEVEL word drops below 900 with MENU's. */
-#level-pick select {
-  width: 88px;              /* 'caldera', the longest registered id, measures 84 with chrome */
-  height: 25px;
-  padding: 2px 4px;
-  border: 1px solid var(--edge);
-  border-radius: 3px;
-  background: var(--void);
-  color: var(--paper);
-  font: inherit;
+   levels with belongs where you can reach it). Since 2026-08-20 it is a BUTTON that names the
+   current map and opens the level-select screen — the card grid with thumbnails is the picker
+   now, and a dropdown beside it would be a second, worse copy. The name gets the fixed width
+   the old <select> had, for the same reason: the walker strip never shifts, whatever is booted.
+   The caret is the WAITING chip's "this one is a door" mark; the LEVEL word drops below 900
+   with MENU's. */
+#btn-levels { flex: none; }
+#btn-levels #level-name {
+  width: 58px;              /* 'tutorial', the longest registered id, measures 53 at 11px mono */
+  overflow: hidden;         /* a Lab level's id can be anything — it trims rather than shoves */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
   font-size: 11px;
-  flex: none;
 }
-#level-pick select:hover { border-color: var(--select); }
+#btn-levels .lv-caret { font-size: 10px; color: var(--coast); }
 
 /* --- the walker strip (owner decision 2026-08-05) -----------------------------------
    The three items that say how the run is going, in the order you need them: how many people
@@ -472,10 +471,80 @@ body.starting #board > * { visibility: hidden; }
   color: var(--dim);
 }
 
-#start-level { width: 160px; text-align: center; }
+/* The level select (2026-08-20): one card per level, in registry order — the difficulty arc.
+   The start card is wider than the other overlays because it holds a grid, and the grid
+   scrolls INSIDE itself like the rules card: the page behind it must never move the board. */
+#start .overlay-card { width: min(720px, 100%); }
+
+#start-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px;
+}
+
+/* Every card is a PLAY button. It sits on board-void so the thumbnail reads as a little
+   board, and the hover ring is the board's own select blue. Relative, so the CONTINUE badge
+   can sit on the thumbnail's corner. */
+.level-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  text-align: left;
+  white-space: normal;
+  background: var(--void);
+}
+
+/* An unfinished game in this level's slot (one save per level, 2026-08-20). User-yellow,
+   because what is waiting in there is the walkers mid-journey; the plate is --void with a
+   little alpha so the map stays legible under it. */
+.level-resume {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 2px 5px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--user);
+  background: rgba(13, 16, 22, 0.85);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+}
+.level-card:hover:not(:disabled), .level-card:focus-visible { border-color: var(--select); outline: none; }
+/* The game Esc backs out to — coast, the title's own colour, not a verb's. */
+.level-card.current { border-color: var(--coast); }
+
+/* The map, 3 backing pixels per cell, blown up crisp. object-fit keeps every level's aspect
+   inside one fixed box, so a squat level and a tall one make the same size card. */
+.level-thumb {
+  width: 100%;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.level-name { font-size: 11px; letter-spacing: 0.08em; color: var(--coast); }
+/* The arc number. Un-badged: the global `button i` dresses <i> as a hotkey chip. */
+.level-name i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--dim);
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0 6px 0 0;
+}
+.level-facts { font-size: 10px; letter-spacing: 0.06em; color: var(--dim); }
+
 .overlay-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .overlay-actions button { padding: 10px 18px; }
-#start-play { border-color: var(--ok); color: var(--ok); }
 
 /* The rules card scrolls INSIDE itself. The page behind it never scrolls — the board is a
    fixed-height grid — so an overlay that grew the document would be the one thing on the
@@ -861,9 +930,11 @@ button.ru-row:hover { border-color: var(--select); }
    Row heights are fixed, so the board still never moves at runtime.
        footer rows 46 + 6 gap + 34 + 12 padding = 98 = --hud-h
    The TOPBAR keeps its single row down to 640px (it held 560 before the level picker came
-   back — the select's 88px moved the wrap point up a band, see the ≤639 block below). It pays
-   for the single row by dropping the words off MENU and LEVEL (the ☰ and the select are the
-   controls; the words were labels on them) and by nothing else. Fixed widths, summed at 640:
+   back — the select's 88px moved the wrap point up a band, see the ≤639 block below; the
+   button that replaced the select on 2026-08-20 measures the same 88 wordless, so the sums
+   below did not move). It pays for the single row by dropping the words off MENU and LEVEL
+   (the ☰ and the picker are the controls; the words were labels on them) and by nothing
+   else. Fixed widths, summed at 640:
        ☰ 34 + LEVEL 88 + RESTART 65.8 + strip 372 + 6 lead-in + 3×6 gaps + 16 padding = 599.8 ≤ 624
        strip = WAITING 150 + 6 + NEXT IN 70 + 6 + SERVED·LOST 140
    — twenty-four px to spare: the readouts shedding their chip chrome (2026-08-05, only

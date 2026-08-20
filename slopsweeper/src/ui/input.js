@@ -279,8 +279,9 @@ export function createInput(el, camera, h) {
   el.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // The keyboard. Three guards stand in front of every key, and each one is a promise:
-  //   · A DOM FIELD KEEPS ITS OWN KEYS. The level select in the drawer is the live case — 'p'
-  //     inside an open dropdown jumps to `plain`, and must not also place a tile. BUTTON is
+  //   · A DOM FIELD KEEPS ITS OWN KEYS. The Level Lab's fields are the live case since the
+  //     level dropdown became a button (2026-08-20) — 'p' typed into a Lab input is a letter
+  //     of a level id, and must not also place a tile. BUTTON is
   //     deliberately NOT on this list any more: clicking GENERATE leaves the focus on it, and a
   //     keyboard that went dead the moment you touched a button would not be a way to play.
   //     `preventDefault` below is what stops a focused button firing on its own Space/Enter.

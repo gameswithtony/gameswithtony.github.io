@@ -26,7 +26,6 @@ import * as cam from './camera.js';
  * @property {(kind: ActionKind) => void} onAction
  * @property {() => void} onRotate
  * @property {() => void} onConfirm
- * @property {(id: string) => void} onLevel
  * @property {() => void} onRestart
  * @property {(cell: number) => void} onMinimapJump
  * @property {() => void} onCopySeed
@@ -162,11 +161,14 @@ export function createHud(h) {
     hud: el('hud'),
     // The seed link, the turn counter and the remaining count live in the drawer (drawer.js)
     // since the top bar went walker-first; the level picker went with them and came back to
-    // the bar the same day (owner decision — switching maps is play). Wherever a node sits,
-    // it is written here on every update exactly as it always was — a node behind a scrim is
-    // still a node, and giving the drawer its own render pass would be a second answer to a
-    // question this function already answers.
-    level: /** @type {HTMLSelectElement} */ (el('f-level')),
+    // the bar the same day (owner decision — switching maps is play). Since 2026-08-20 the
+    // picker on the bar is a BUTTON, not a <select>: it names the current map and opens the
+    // level-select screen (start.js), which is where choosing happens now. Wherever a node
+    // sits, it is written here on every update exactly as it always was — a node behind a
+    // scrim is still a node, and giving the drawer its own render pass would be a second
+    // answer to a question this function already answers.
+    levels: /** @type {HTMLButtonElement} */ (el('btn-levels')),
+    levelName: el('level-name'),
     menu: el('btn-menu'),
     restart: el('btn-restart'),
     seed: el('seed'),
@@ -205,11 +207,15 @@ export function createHud(h) {
   /** @type {{ s: GameState, cam: Camera } | null} */
   let lastMinimap = null;
 
-  // The blur is the fix for a real bug (owner report 2026-08-05): a <select> keeps keyboard
-  // focus after a choice, so the next hotkey went to IT — P jumped the picker to 'plain'
-  // instead of placing. Choosing a level boots a new game; there is nothing further to do in
-  // the control, so it hands the keyboard straight back.
-  dom.level.addEventListener('change', () => { dom.level.blur(); h.onLevel(dom.level.value); });
+  // The blur survives from the <select> this button replaced (owner bug report 2026-08-05: a
+  // focused control eats the next hotkey — P jumped the picker instead of placing). A clicked
+  // button keeps focus the same way, and the level screen this opens is closable with Esc, so
+  // the keyboard must already belong to the board again when the overlay goes. Disabled until
+  // the overlay module lands, exactly like the "?" below and for the same reason.
+  dom.levels.disabled = true;
+  dom.levels.addEventListener('click', () => { dom.levels.blur(); levelsFn?.(); });
+  /** @type {(() => void) | null} */
+  let levelsFn = null;
   dom.menu.addEventListener('click', () => h.onMenu());
   dom.restart.addEventListener('click', () => h.onRestart());
   dom.seed.addEventListener('click', () => h.onCopySeed());
@@ -236,18 +242,12 @@ export function createHud(h) {
   });
 
   /**
-   * @param {string[]} ids
-   * @param {string} current
+   * The bar names the booted level by ID, as the old <select> did — the display names live on
+   * the level-select cards, and the ids are short enough to hold the bar's fixed width.
+   * @param {string} id
    */
-  function setLevels(ids, current) {
-    dom.level.innerHTML = '';
-    for (const id of ids) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = id;
-      opt.selected = id === current;
-      dom.level.append(opt);
-    }
+  function setLevel(id) {
+    dom.levelName.textContent = id;
   }
 
   /**
@@ -420,7 +420,7 @@ export function createHud(h) {
   }
 
   return {
-    setLevels,
+    setLevel,
     update,
 
     /**
@@ -430,6 +430,15 @@ export function createHud(h) {
     onHelp(fn) {
       helpFn = fn;
       dom.help.disabled = false;
+    },
+
+    /**
+     * Hand the LEVEL button the level-select screen, once the same module has loaded.
+     * @param {() => void} fn
+     */
+    onLevels(fn) {
+      levelsFn = fn;
+      dom.levels.disabled = false;
     },
 
     /**
