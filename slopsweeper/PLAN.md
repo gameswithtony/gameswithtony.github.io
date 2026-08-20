@@ -1346,6 +1346,17 @@ module lands, exactly like the "?" and for the same reason; the 2026-08-05 "swit
 play, not bookkeeping" decision stands — the picker is still one tap from the bar, it just
 opens with thumbnails now.
 
+And the **skip rule inverted** (same day, third owner decision): the screen now opens on any
+load whose URL does not name a level, and stays out of the way of every one that does. The
+game writes `?level=` into the URL on every start, so a mid-session refresh sails straight
+back into its board, while the bare page address is a *visit* — and a visit starts at the
+menu, saved games waiting on their cards. `?seed=` and `?lab=1` still skip, for the original
+reasons. The old rule (`?level=` does not skip; a restore does) was written when the screen
+was a formality in front of one game, and with one save per level it had quietly become
+"never show the front door again". A restored *finished* game shows its end screen only on
+the refresh case (URL named its level); on a bare visit the menu wins, and the finished board
+behind it still has RESTART and the LEVEL button if Esc uncovers it.
+
 ### 11.10 Save & resume (2026-08-04, user decision — overturns §16's "no saves")
 
 Storage is the UI shell's job and lives in `main.js`; core stays pure and never learns a save

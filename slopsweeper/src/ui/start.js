@@ -12,19 +12,22 @@
 // one is standing (the CONTINUE badge says so; saves are one slot per level, same day),
 // starting fresh when not. There is no PLAY button any more because every card is one.
 //
-// WHEN THE START SCREEN IS SKIPPED. It is the front door, so it opens on a plain load and
-// stays out of the way of every flow that is not one — and a skip is never a lockout, because
-// the bar's LEVEL button reopens this screen at any time (owner report 2026-08-20: a restored
-// save skipped the title card and left no way back to the level select short of finishing the
-// game). The skips:
-//   · `?lab=1` — the Level Lab is a dev tool and its author did not ask for a title card.
+// WHEN THE START SCREEN IS SHOWN (rule inverted 2026-08-20, owner decision, third pass): it
+// opens on any load whose URL does not name a level, and stays out of the way of every one
+// that does. The game writes `?level=` into the URL on every start, so a mid-session refresh
+// resumes straight into its board, while the bare page address is a visit — and a visit
+// starts at the menu, with the saved games waiting on their cards. The other skips:
 //   · `?seed=` — a pinned seed is a repro link, shared to show somebody one exact game. A
 //     door in front of it defeats the point, and worse, the level picker behind that door
 //     would reroll the thing the link exists to preserve. The win screen's SHARE button
 //     produces exactly such a link, so this rule is what makes a shared score land on the
 //     board it is boasting about.
-// `?level=` deliberately does NOT skip: the game writes it into the URL itself on every
-// start, so honouring it would mean the screen shows exactly once, ever, on a given browser.
+//   · `?lab=1` — the Level Lab is a dev tool and its author did not ask for a title card.
+// (`?level=` used to NOT skip, for fear the screen would otherwise show exactly once, ever —
+// written when the screen was a formality in front of one game. With per-level saves and
+// the bar's LEVEL button it is a real menu, reachable any time, and the fear inverted:
+// the old rule was quietly becoming "never show the front door again".) No skip is a
+// lockout: the LEVEL button reopens this screen mid-game.
 //
 // ESC. The informational overlays back out — help returns to whatever opened it, the start
 // screen closes. The end screens do not: they are a decision with their own buttons, and the

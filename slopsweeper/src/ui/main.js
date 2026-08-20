@@ -953,19 +953,28 @@ function boot() {
 
   // The start screen and How to Play (PLAN §11.9). Loaded lazily like the Lab, but always
   // loaded rather than gated: the "?" in the HUD reopens the rules mid-game, so the module is
-  // part of the shipped game even on the loads where the title card is skipped. The skip rule
-  // itself, and why `?seed=` is on it, lives in start.js.
+  // part of the shipped game even on the loads where the title card is skipped.
+  //
+  // THE RULE IS THE URL NOW (owner decision 2026-08-20, third pass): the level select opens
+  // on any load whose URL does not name a level, and stays out of the way of every one that
+  // does. The game writes `?level=` into the URL on every start, so a mid-session refresh
+  // sails straight back into its board — the address is the claim "I am in a game" — while
+  // the bare page is a visit, and a visit starts at the menu, saved games waiting on their
+  // cards. `?seed=` still skips (a repro link is a destination, not a visit) and so does
+  // `?lab=1` (a dev tool did not ask for a title card). `restored` deliberately stopped
+  // mattering here: with one save per level the common load restores SOMETHING, and a rule
+  // reading `!restored` had quietly become "never show the front door again".
   //
   // `body.starting` is set synchronously so the board is covered for the frame or two the
   // dynamic import takes — otherwise a slow load flashes the game before the title card.
-  // A refresh that lands back in a game must not land on the title card — that would be the
-  // door in front of the repro link all over again, one screen further in. That holds however
-  // the restored game ended: a finished one shows its END screen, derived below from the phase
-  // alone, exactly as if the final action had just resolved. Opening the title card first and
-  // letting the end screen replace it would be a visible flash of the wrong thing.
-  const wantStart = !isLab && !params.has('seed') && !restored;
+  // A restored FINISHED game shows its end screen only when the URL named its level (the
+  // refresh case, where landing back on the board you just finished should look exactly as
+  // if the final action had just resolved). On a bare visit the menu wins instead: opening
+  // an end screen over it — or under it — would be a flash of the wrong thing, and the
+  // finished board behind the menu still has RESTART and the LEVEL button if Esc uncovers it.
+  const wantStart = !isLab && !params.has('seed') && !params.has('level');
   if (wantStart) document.body.classList.add('starting');
-  if (restored && (s.phase.k === 'won' || s.phase.k === 'lost')) {
+  if (!wantStart && restored && (s.phase.k === 'won' || s.phase.k === 'lost')) {
     showEnd(s.phase.k === 'won', { served: s.stats.served, total: s.schedule.total });
   }
   import('./start.js')
