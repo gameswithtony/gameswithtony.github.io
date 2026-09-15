@@ -41,7 +41,12 @@ license; it is given here because it is the decent thing to do.
 | deadline_warn.ogg | deadline_warn | Kenney Interface Sounds, error_007 |
 | topout.ogg | topout | Kenney Digital Audio, lowThreeTone |
 | loop.mp3 | music (looped) | Juhani Junkala, Level 1 |
+| mutate.wav | mutate | generated: 150 to 240 Hz soft square, 27 Hz warble, 0.30 s |
+| refactor.wav | refactor | generated: 120 to 70 Hz soft square, 16 Hz warble, 0.62 s |
+| review_charge.wav | review_charge (looped) | generated: 110 Hz triangle, 4 Hz tremolo, 1.00 s seamless loop; the game pitches it up to 3x |
+| typing.wav | typing | generated: 320 Hz tick, 12 ms |
 
-Cues with no file, synthesized on purpose: `mutate`, `refactor` (the warble is the
-design), `review_charge` (a sustained tone pitched by the charge), `typing` (one tiny
-tick per character). To replace one, drop a file at the path named in the manifest.
+The four generated WAVs were written by a small Node script (16-bit mono, 44.1 kHz) and
+kept deliberately low in pitch. Every cue still has a synthesized fallback in the manifest
+for a file that is missing or fails to decode. To replace any file, drop one at the path
+named in the manifest.

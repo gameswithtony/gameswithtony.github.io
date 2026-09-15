@@ -11,11 +11,10 @@
  *
  * Shipped assets (see audio/README.md for the mapping and credits): sixteen
  * cues use CC0 Ogg Vorbis clips from Kenney's Interface Sounds and Digital
- * Audio packs, and the music is a CC0 chiptune loop by Juhani Junkala. Four
- * cues stay synthesized on purpose: mutate and refactor (the warble is the
- * design), review_charge (a pitch sweep tied to the charge) and typing (a
- * per-character tick too small to be worth a file). A browser that cannot
- * decode Ogg Vorbis falls back to the synth for those cues automatically.
+ * Audio packs, the music is a CC0 chiptune loop by Juhani Junkala, and four
+ * cues (mutate, refactor, review_charge, typing) are low-pitched WAVs
+ * generated for this game. The synthesized fallbacks below still cover any
+ * file that is missing or fails to decode.
  *
  * The AudioContext is never created at load time - only inside unlock(), which
  * the game calls from the start / resume / again gesture (SPEC 9.1).
@@ -34,6 +33,9 @@
    *   freqEnd  optional end frequency (exponential sweep across dur)
    *   dur      fallback length in seconds
    *   gain     fallback peak gain (pre-master; master sits at 0.5)
+   *   fileGain gain for the decoded file when one loaded (defaults to gain).
+   *            Real clips are much softer per unit gain than the square-wave
+   *            fallbacks, so most are set well above gain.
    *   notes    optional [{ freq, at, dur, freqEnd, gain, wave }] for multi-note
    *            fallbacks; "at" is an offset in seconds from the cue start
    *   warble   optional { rate, depth } frequency LFO, for the glitch cues
@@ -46,11 +48,11 @@
    * ------------------------------------------------------------------ */
   var CUES = {
     /* a workbench cell is toggled - short tick */
-    wb_toggle: { file: 'audio/wb_toggle.ogg', wave: 'square', freq: 1180, dur: 0.022, gain: 0.10 },
+    wb_toggle: { file: 'audio/wb_toggle.ogg', fileGain: 0.9, wave: 'square', freq: 1180, dur: 0.022, gain: 0.10 },
 
     /* four cells filled that do not match the ticket - low two-tone buzz */
     wb_reject: {
-      file: 'audio/wb_reject.ogg', wave: 'square', freq: 118, dur: 0.10, gain: 0.18,
+      file: 'audio/wb_reject.ogg', fileGain: 0.8, wave: 'square', freq: 118, dur: 0.10, gain: 0.18,
       notes: [
         { freq: 118, at: 0, dur: 0.09 },
         { freq: 88, at: 0.10, dur: 0.14 }
@@ -59,7 +61,7 @@
 
     /* a hand-built piece is accepted and spawns - rising two-note */
     build: {
-      file: 'audio/build.ogg', wave: 'triangle', freq: 440, dur: 0.08, gain: 0.17,
+      file: 'audio/build.ogg', fileGain: 0.5, wave: 'triangle', freq: 440, dur: 0.08, gain: 0.17,
       notes: [
         { freq: 440, at: 0, dur: 0.07 },
         { freq: 660, at: 0.075, dur: 0.11 }
@@ -67,38 +69,38 @@
     },
 
     /* a piece is generated - quick descending blip */
-    generate: { file: 'audio/generate.ogg', wave: 'square', freq: 900, freqEnd: 420, dur: 0.09, gain: 0.15 },
+    generate: { file: 'audio/generate.ogg', fileGain: 0.9, wave: 'square', freq: 900, freqEnd: 420, dur: 0.09, gain: 0.15 },
 
     /* the falling piece moves one cell - very short tick */
-    move: { file: 'audio/move.ogg', wave: 'square', freq: 620, dur: 0.015, gain: 0.08 },
+    move: { file: 'audio/move.ogg', fileGain: 0.5, wave: 'square', freq: 620, dur: 0.015, gain: 0.08 },
 
     /* the falling piece rotates - the same tick, slightly higher */
-    rotate: { file: 'audio/rotate.ogg', wave: 'square', freq: 790, dur: 0.018, gain: 0.09 },
+    rotate: { file: 'audio/rotate.ogg', fileGain: 0.7, wave: 'square', freq: 790, dur: 0.018, gain: 0.09 },
 
     /* each cell of soft drop - faint tick */
-    soft_drop: { file: 'audio/soft_drop.ogg', wave: 'triangle', freq: 330, dur: 0.014, gain: 0.05 },
+    soft_drop: { file: 'audio/soft_drop.ogg', fileGain: 0.3, wave: 'triangle', freq: 330, dur: 0.014, gain: 0.05 },
 
     /* a hard drop lands - low thud */
-    hard_drop: { file: 'audio/hard_drop.ogg', wave: 'triangle', freq: 96, freqEnd: 54, dur: 0.13, gain: 0.30 },
+    hard_drop: { file: 'audio/hard_drop.ogg', fileGain: 1, wave: 'triangle', freq: 96, freqEnd: 54, dur: 0.13, gain: 0.30 },
 
     /* any piece locks - short low click */
-    lock: { file: 'audio/lock.ogg', wave: 'square', freq: 200, freqEnd: 150, dur: 0.038, gain: 0.20 },
+    lock: { file: 'audio/lock.ogg', fileGain: 0.9, wave: 'square', freq: 200, freqEnd: 150, dur: 0.038, gain: 0.20 },
 
     /* one or more lines clear - rising chirp */
-    clear: { file: 'audio/clear.ogg', wave: 'triangle', freq: 520, freqEnd: 1320, dur: 0.22, gain: 0.22 },
+    clear: { file: 'audio/clear.ogg', fileGain: 0.9, wave: 'triangle', freq: 520, freqEnd: 1320, dur: 0.22, gain: 0.22 },
 
     /* the ... beat before a mutation - low muted tone */
-    mutate_beat: { file: 'audio/mutate_beat.ogg', wave: 'triangle', freq: 158, dur: 0.18, gain: 0.12 },
+    mutate_beat: { file: 'audio/mutate_beat.ogg', fileGain: 0.4, wave: 'triangle', freq: 158, dur: 0.18, gain: 0.12 },
 
     /* the cells swap - warbling glitch */
     mutate: {
-      file: 'audio/mutate.mp3', wave: 'square', freq: 300, freqEnd: 520, dur: 0.30, gain: 0.17,
+      file: 'audio/mutate.wav', fileGain: 0.45, wave: 'square', freq: 300, freqEnd: 520, dur: 0.30, gain: 0.17,
       warble: { rate: 27, depth: 85 }
     },
 
     /* a board refactor applies - the same glitch, longer and lower */
     refactor: {
-      file: 'audio/refactor.mp3', wave: 'square', freq: 230, freqEnd: 138, dur: 0.62, gain: 0.18,
+      file: 'audio/refactor.wav', fileGain: 0.45, wave: 'square', freq: 230, freqEnd: 138, dur: 0.62, gain: 0.18,
       warble: { rate: 16, depth: 140 }
     },
 
@@ -107,16 +109,16 @@
        decoded review_charge file is looped and pitched with playbackRate
        instead. dur is used only when the cue is auditioned from the dev panel. */
     review_charge: {
-      file: 'audio/review_charge.mp3', wave: 'triangle', freq: 110, freqEnd: 330,
+      file: 'audio/review_charge.wav', fileGain: 0.3, wave: 'triangle', freq: 110, freqEnd: 330,
       dur: 0.30, gain: 0.12, sustain: true, loop: true
     },
 
     /* the pulse fires on a stable piece - warm soft tone */
-    pulse_stable: { file: 'audio/pulse_stable.ogg', wave: 'triangle', freq: 528, dur: 0.34, gain: 0.18 },
+    pulse_stable: { file: 'audio/pulse_stable.ogg', fileGain: 0.7, wave: 'triangle', freq: 528, dur: 0.34, gain: 0.18 },
 
     /* the pulse fires on a mutating piece - dissonant two-tone */
     pulse_mutate: {
-      file: 'audio/pulse_mutate.ogg', wave: 'square', freq: 466, dur: 0.30, gain: 0.13,
+      file: 'audio/pulse_mutate.ogg', fileGain: 0.45, wave: 'square', freq: 466, dur: 0.30, gain: 0.13,
       notes: [
         { freq: 466, at: 0, dur: 0.30 },
         { freq: 330, at: 0.02, dur: 0.30 }
@@ -125,7 +127,7 @@
 
     /* a sprint transition - two-note fanfare, kept flat and quiet */
     sprint: {
-      file: 'audio/sprint.ogg', wave: 'square', freq: 392, dur: 0.12, gain: 0.13,
+      file: 'audio/sprint.ogg', fileGain: 0.6, wave: 'square', freq: 392, dur: 0.12, gain: 0.13,
       notes: [
         { freq: 392, at: 0, dur: 0.10 },
         { freq: 523, at: 0.11, dur: 0.16 }
@@ -134,7 +136,7 @@
 
     /* the clock reaches 0:10 - short alarm beep, twice */
     deadline_warn: {
-      file: 'audio/deadline_warn.ogg', wave: 'square', freq: 1046, dur: 0.08, gain: 0.16,
+      file: 'audio/deadline_warn.ogg', fileGain: 0.7, wave: 'square', freq: 1046, dur: 0.08, gain: 0.16,
       notes: [
         { freq: 1046, at: 0, dur: 0.075 },
         { freq: 1046, at: 0.12, dur: 0.075 }
@@ -143,11 +145,11 @@
 
     /* each character the assistant types - extremely quiet. Set enabled: false
        here to silence the typewriter without touching game.js. */
-    typing: { file: 'audio/typing.mp3', wave: 'square', freq: 1500, dur: 0.008, gain: 0.03, enabled: true },
+    typing: { file: 'audio/typing.wav', fileGain: 0.12, wave: 'square', freq: 1500, dur: 0.008, gain: 0.03, enabled: true },
 
     /* game over - descending three-note */
     topout: {
-      file: 'audio/topout.ogg', wave: 'triangle', freq: 440, dur: 0.16, gain: 0.22,
+      file: 'audio/topout.ogg', fileGain: 0.5, wave: 'triangle', freq: 440, dur: 0.16, gain: 0.22,
       notes: [
         { freq: 440, at: 0, dur: 0.14 },
         { freq: 330, at: 0.16, dur: 0.14 },
@@ -162,7 +164,7 @@
   /* ------------------------------------------------------------------ *
    * INTERNAL STATE
    * ------------------------------------------------------------------ */
-  var SOUND_KEY = 'sloptris.sound';
+  var SOUND_KEY = 'sloptris.sound';   /* no longer read or written; cleared on load below */
   var MASTER_GAIN = 0.5;
   var MIN_GAIN = 0.0001;          /* exponential ramps cannot reach zero */
   var CHARGE_SMOOTH = 0.05;       /* setTargetAtTime time constant, seconds */
@@ -171,7 +173,8 @@
   var master = null;
   var buffers = Object.create(null);
 
-  var enabledCache = null;        /* lazily read from localStorage */
+  var enabledCache = null;        /* false on first read: sound starts off every load */
+  try { global.localStorage.removeItem(SOUND_KEY); } catch (err) { /* private mode */ }
   var loadStarted = false;
   var loadLogged = false;
   var fetchBlocked = false;       /* a file:// page refused one fetch: skip the rest */
@@ -263,6 +266,10 @@
       return;
     }
     tone(cue.wave, cue.freq, cue.freqEnd, cue.dur, cue.gain, t0, cue.warble);
+  }
+
+  function fileGainOf(cue) {
+    return cue.fileGain == null ? cue.gain : cue.fileGain;
   }
 
   function playBuffer(buf, peak) {
@@ -428,21 +435,19 @@
   }
 
   /**
-   * Is sound on? Reads localStorage 'sloptris.sound' ("on" / "off"), defaults to
+   * Is sound on? Every page load starts with sound OFF, whatever was chosen last
+   * time, so nobody is ambushed by music (NOTES item 27). The setting lives only
+   * in memory for this page. Old doc: reads localStorage 'sloptris.sound', defaults to
    * on, and caches after the first read.
    * @returns {boolean} true when sound is on
    */
   function isEnabled() {
-    if (enabledCache === null) {
-      var v = null;
-      try { v = global.localStorage.getItem(SOUND_KEY); } catch (err) { v = null; }
-      enabledCache = (v !== 'off');
-    }
+    if (enabledCache === null) enabledCache = false;
     return enabledCache;
   }
 
   /**
-   * Turn sound on or off and persist it. Off schedules nothing at all: music and
+   * Turn sound on or off for this page load (not persisted). Off schedules nothing at all: music and
    * the charge tone stop immediately and play() becomes a no-op. On restarts
    * music from the top when a context exists and music was running when it was
    * switched off (music stopped with stopMusic(), as on the retro, stays off).
@@ -452,7 +457,6 @@
   function setEnabled(on) {
     on = !!on;
     enabledCache = on;
-    try { global.localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch (err) { /* private mode */ }
     if (!on) {
       stopCharge();
       stopMusicNodes();   /* musicWanted is kept, so 'on' can restore it */
@@ -476,7 +480,7 @@
     if (!ctx || !master || !isEnabled()) return;
     try {
       var buf = buffers[name];
-      if (buf) playBuffer(buf, cue.gain);
+      if (buf) playBuffer(buf, fileGainOf(cue));
       else synth(cue);
     } catch (err) { /* a dropped cue is never worth an error */ }
   }
@@ -495,7 +499,8 @@
       var t0 = ctx.currentTime;
       var g = ctx.createGain();
       g.gain.setValueAtTime(MIN_GAIN, t0);
-      g.gain.exponentialRampToValueAtTime(Math.max(MIN_GAIN * 2, cue.gain), t0 + 0.09);
+      var peak = buffers.review_charge ? fileGainOf(cue) : cue.gain;
+      g.gain.exponentialRampToValueAtTime(Math.max(MIN_GAIN * 2, peak), t0 + 0.09);
       g.connect(master);
 
       var node;

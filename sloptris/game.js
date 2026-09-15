@@ -2747,13 +2747,14 @@
     requestDraw();
   }
 
+  // Sound starts with the run, not with the title or the first-visit how-to.
   function startFromTitle() {
-    audioUnlock();
     if (!howtoSeen()) {
       markHowtoSeen();
       openHowto('start');
       return;
     }
+    audioUnlock();
     newRun();
   }
 
@@ -2771,7 +2772,7 @@
     var ret = G.howtoReturn;
     G.howtoReturn = 'title';
     applyScreenClass();
-    if (ret === 'start') { newRun(); return; }
+    if (ret === 'start') { audioUnlock(); newRun(); return; }
     G.lastTickAt = nowMs();
     resumePendingBuild();
     requestDraw();

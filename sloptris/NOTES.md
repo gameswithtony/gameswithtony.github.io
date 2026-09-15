@@ -132,6 +132,14 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     lamejs in a scratchpad script; the WAV originals are not in the repo.
     The synthesized review_charge sweep was 220 to 880 Hz; the owner found it far too high,
     so it is 110 to 330 Hz (A2 up a twelfth), same exponential mapping over the charge.
+    The four synthesized cues also fetched files that did not exist (four 404s in the
+    console on every start), so mutate, refactor, review_charge and typing now ship as
+    generated low-pitched WAVs (gen script in the session scratchpad, parameters in
+    audio/README.md); the synth fallbacks stay in the manifest.
+    The owner could not hear the workbench tick: the manifest gains were tuned for the
+    square-wave fallbacks, and the clips are far softer per unit gain. Each file-backed cue
+    now has a fileGain (0.3 to 1.0, set against each clip's measured RMS) used for the
+    decoded file, while gain stays the fallback's peak.
 
 20. **New game during play.** SPEC only starts a run from the title, the resume screen or
     the retro. Added `N` during play (fine pointer, listed in the hint row) and a `[new]`
@@ -214,6 +222,19 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     `resumePendingBuild`). Lock-pipeline beats already under way run to completion; the
     piece they belong to has landed. On the title screen nothing is running, so nothing
     changes there.
+
+26. **Sound starts with the run.** SPEC 9.1 unlocks audio on the start gesture, and the
+    first-visit flow opened the how-to after that unlock, so music played under the
+    instructions before any game began. `startFromTitle` now unlocks only when it goes
+    straight to `newRun`; when the how-to comes first, the dismiss that starts the run
+    unlocks. The title screen never creates an AudioContext, so the sound toggle there only
+    sets the preference (label and localStorage) and is honoured when the run starts.
+
+27. **Sound starts off.** SPEC 9.1 persists the sound setting and defaults it to on. The owner
+    wants every page load to start silent so nobody is ambushed by music: `isEnabled`
+    defaults to false, `setEnabled` no longer writes localStorage, and the old
+    `sloptris.sound` key is removed on load. The header shows `[m] sound off` until the
+    player turns it on, and the choice lasts for that page load only.
 
 ## Tuning
 
