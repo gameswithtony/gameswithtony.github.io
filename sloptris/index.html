@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sloptris</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="app">
+  <header id="header" class="header">
+    <button id="sound-toggle" class="hdr-item hdr-btn" type="button">[m] sound on</button>
+    <button id="title-label" class="hdr-item hdr-btn hdr-title" type="button">sloptris</button>
+    <button id="sprint-label" class="hdr-item hdr-btn" type="button">sprint 1</button>
+    <span id="clock" class="hdr-item hdr-clock" role="timer" aria-label="deadline">03:00</span>
+  </header>
+
+  <main id="play" class="play">
+    <section id="well-panel" class="panel well-panel">
+      <span class="panel-title">main</span>
+      <div class="well-wrap">
+        <canvas id="well" width="10" height="20" aria-label="well"></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+        <div id="resume-panel" class="panel resume-panel" role="dialog" aria-label="resume" hidden>
+          <p id="resume-line" class="resume-line">Reloaded. The clock is stopped at 02:14, sprint 3.</p>
+          <p id="resume-controls" class="resume-controls">[enter] resume    [n] new game</p>
+          <div id="resume-buttons" class="btn-row">
+            <button id="btn-resume" class="btn" type="button">[resume]</button>
+            <button id="btn-newgame" class="btn" type="button">[new game]</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside id="right-col" class="right-col">
+      <section id="ticket-panel" class="panel ticket-panel">
+        <span id="ticket-title" class="panel-title">TICKET #1</span>
+        <div id="ticket-shape" class="ticket-shape" aria-hidden="true">
+          <!-- 16 x .tk-cell, row-major (y outer, x inner); game.js adds .filled -->
+          <span class="tk-cell" data-x="0" data-y="0"></span>
+          <span class="tk-cell" data-x="1" data-y="0"></span>
+          <span class="tk-cell" data-x="2" data-y="0"></span>
+          <span class="tk-cell" data-x="3" data-y="0"></span>
+          <span class="tk-cell" data-x="0" data-y="1"></span>
+          <span class="tk-cell" data-x="1" data-y="1"></span>
+          <span class="tk-cell" data-x="2" data-y="1"></span>
+          <span class="tk-cell" data-x="3" data-y="1"></span>
+          <span class="tk-cell" data-x="0" data-y="2"></span>
+          <span class="tk-cell" data-x="1" data-y="2"></span>
+          <span class="tk-cell" data-x="2" data-y="2"></span>
+          <span class="tk-cell" data-x="3" data-y="2"></span>
+          <span class="tk-cell" data-x="0" data-y="3"></span>
+          <span class="tk-cell" data-x="1" data-y="3"></span>
+          <span class="tk-cell" data-x="2" data-y="3"></span>
+          <span class="tk-cell" data-x="3" data-y="3"></span>
+        </div>
+        <p id="ticket-copy" class="ticket-copy">Build an L.</p>
+      </section>
+
+      <section id="workbench-panel" class="panel workbench-panel">
+        <span class="panel-title">workbench</span>
+        <div id="workbench" class="workbench" role="group" aria-label="workbench">
+          <!-- 16 x .wb-cell, row-major (y outer, x inner); game.js toggles .filled and .cursor -->
+          <button class="wb-cell" type="button" data-x="0" data-y="0"></button>
+          <button class="wb-cell" type="button" data-x="1" data-y="0"></button>
+          <button class="wb-cell" type="button" data-x="2" data-y="0"></button>
+          <button class="wb-cell" type="button" data-x="3" data-y="0"></button>
+          <button class="wb-cell" type="button" data-x="0" data-y="1"></button>
+          <button class="wb-cell" type="button" data-x="1" data-y="1"></button>
+          <button class="wb-cell" type="button" data-x="2" data-y="1"></button>
+          <button class="wb-cell" type="button" data-x="3" data-y="1"></button>
+          <button class="wb-cell" type="button" data-x="0" data-y="2"></button>
+          <button class="wb-cell" type="button" data-x="1" data-y="2"></button>
+          <button class="wb-cell" type="button" data-x="2" data-y="2"></button>
+          <button class="wb-cell" type="button" data-x="3" data-y="2"></button>
+          <button class="wb-cell" type="button" data-x="0" data-y="3"></button>
+          <button class="wb-cell" type="button" data-x="1" data-y="3"></button>
+          <button class="wb-cell" type="button" data-x="2" data-y="3"></button>
+          <button class="wb-cell" type="button" data-x="3" data-y="3"></button>
+        </div>
+      </section>
+
+      <section id="retro-panel" class="panel retro-panel" hidden>
+        <span class="panel-title">retro</span>
+        <pre id="retro-stats" class="retro-stats"></pre>
+      </section>
+    </aside>
+  </main>
+
+  <section id="assistant-panel" class="panel assistant-panel">
+    <span class="panel-title">assistant</span>
+    <div id="chat" class="chat" aria-live="polite">
+      <!-- 0..3 x .chat-line; CSS prepends "> " via ::before -->
+    </div>
+  </section>
+
+  <div id="hint-row" class="hint-row">
+    <span id="hint-keys" class="hint-keys">[B] build   [G] generate   [R] review (hold)</span>
+    <div id="hint-buttons" class="btn-row hint-buttons">
+      <button id="btn-generate" class="btn" type="button">[generate]</button>
+      <button id="btn-clear" class="btn" type="button">[clear]</button>
+      <button id="btn-again" class="btn" type="button" hidden>[again]</button>
+      <button id="btn-share" class="btn" type="button" hidden>[share]</button>
+    </div>
+  </div>
+
+  <div id="status-bar" class="status-bar" aria-live="polite">shipped 0   generated 0   debt 0</div>
+
+  <!-- Overlays cover everything below the header, so the header (sound toggle) stays usable -->
+  <div id="title-screen" class="screen" hidden>
+    <div class="screen-inner">
+      <h1 class="screen-title">sloptris</h1>
+      <p class="screen-copy">There's a spec and a clock. Build the piece on the workbench, or press G and let the assistant do it. Building takes a few seconds each time. Generating takes none, and the piece usually comes out right.</p>
+      <p id="title-best" class="screen-best" hidden>best 0 shipped</p>
+      <p id="title-controls" class="screen-controls">[enter] start    [?] how to play</p>
+    </div>
+  </div>
+
+  <div id="howto-screen" class="screen" hidden>
+    <div class="screen-inner">
+      <p class="screen-copy">Each ticket is a shape. Click the cells on the workbench until they match and the piece drops. Or press G and it drops now.</p>
+      <p class="screen-copy">A generated piece can change shape after it locks. The more you generate in a row, the more likely that gets. Building one by hand resets it.</p>
+      <p class="screen-copy">Hold R while a generated piece falls to find out. It falls slower while you look, you can't move it, and the clock doesn't care. The answer comes all at once or not at all.</p>
+      <p class="screen-copy">The deadline gets shorter every sprint.</p>
+      <pre id="howto-controls-fine" class="screen-controls">move: arrows or hjkl    rotate: up / x / z    hard drop: space
+generate: g    review: r (hold)    clear workbench: esc    sound: m</pre>
+      <pre id="howto-controls-coarse" class="screen-controls">move: drag sideways    rotate: tap    drop: drag down    slam: flick down
+review: press and hold    generate and clear: buttons below</pre>
+    </div>
+  </div>
+</div>
+
+<div id="dev-panel" class="panel dev-panel" hidden>
+  <span class="panel-title">dev</span>
+  <button id="dev-close" class="panel-title dev-close" type="button" aria-label="close dev panel" title="close (backtick)">[x]</button>
+  <div class="dev-body">
+    <div class="dev-row"><span class="dev-label">seed mode</span>
+      <label><input type="radio" name="seed-mode" id="dev-mode-random" value="random"> random</label>
+      <label><input type="radio" name="seed-mode" id="dev-mode-daily" value="daily"> daily</label>
+      <label><input type="radio" name="seed-mode" id="dev-mode-fixed" value="fixed"> fixed</label>
+    </div>
+    <div class="dev-row"><label class="dev-label" for="dev-seed">seed</label>
+      <input type="text" id="dev-seed" inputmode="numeric" readonly>
+      <button id="dev-seed-copy" class="btn btn-small" type="button">copy</button>
+    </div>
+    <div class="dev-row"><span class="dev-label">mutation table</span>
+      <input type="number" id="dev-mut-1" min="0" max="100">
+      <input type="number" id="dev-mut-2" min="0" max="100">
+      <input type="number" id="dev-mut-3" min="0" max="100">
+      <input type="number" id="dev-mut-4" min="0" max="100">
+      <input type="number" id="dev-mut-5" min="0" max="100">
+    </div>
+    <div class="dev-row"><label class="dev-label" for="dev-refactor">refactor chance</label>
+      <input type="number" id="dev-refactor" min="0" max="100"></div>
+    <div class="dev-row"><label class="dev-label" for="dev-review-threshold">review threshold</label>
+      <input type="number" id="dev-review-threshold" min="1" max="20"></div>
+    <div class="dev-row"><label class="dev-label" for="dev-review-gravity">review gravity (ms)</label>
+      <input type="number" id="dev-review-gravity" min="50" max="10000"></div>
+    <div class="dev-row"><span class="dev-label">deadlines</span>
+      <input type="number" id="dev-deadline-1" min="5">
+      <input type="number" id="dev-deadline-2" min="5">
+      <input type="number" id="dev-deadline-3" min="5">
+      <input type="number" id="dev-deadline-4" min="5">
+      <input type="number" id="dev-deadline-5" min="5">
+    </div>
+    <div class="dev-row"><label class="dev-label" for="dev-gravity">gravity (ms)</label>
+      <input type="number" id="dev-gravity" min="50" max="5000"></div>
+    <div class="dev-row"><label><input type="checkbox" id="dev-force-mutation"> force mutation on next generate</label></div>
+    <div class="dev-row"><label><input type="checkbox" id="dev-force-refactor"> force refactor on next generate</label></div>
+    <div class="dev-row"><label><input type="checkbox" id="dev-show-targets"> show hidden targets</label></div>
+    <div class="dev-row"><label><input type="checkbox" id="dev-show-streak"> show streak</label></div>
+    <div class="dev-row"><label class="dev-label" for="dev-cue">play cue</label>
+      <select id="dev-cue"></select>
+      <button id="dev-cue-play" class="btn btn-small" type="button">play</button>
+    </div>
+    <div class="dev-row"><button id="dev-reset" class="btn btn-small" type="button">reset to defaults</button></div>
+  </div>
+</div>
+
+<script src="audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
