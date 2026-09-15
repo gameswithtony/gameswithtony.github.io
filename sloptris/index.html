@@ -120,7 +120,7 @@
 
   <div id="howto-screen" class="screen" hidden>
     <div class="screen-inner">
-      <p class="screen-copy">Each ticket is a shape. Build it on the workbench, or generate it and it drops now.</p>
+      <p class="screen-copy">Each ticket is a shape. Build it on the workbench and wait for it, or generate it and it drops now.</p>
       <p class="screen-copy">Generated pieces can change shape after they land. The more you generate in a row, the more it happens. Build one by hand and the streak resets.</p>
       <p class="screen-copy">Review a falling generated piece to see what it becomes. It falls slower, you can't steer it, and the clock doesn't stop.</p>
       <p class="screen-copy">Ship the sprint's lines before the clock hits zero or the run ends. Every sprint wants more lines in less time.</p>
@@ -175,6 +175,8 @@ review: press and hold    generate and clear: buttons below</pre>
     </div>
     <div class="dev-row"><label class="dev-label" for="dev-gravity">gravity (ms)</label>
       <input type="number" id="dev-gravity" min="50" max="5000"></div>
+    <div class="dev-row"><label class="dev-label" for="dev-build-ms">build time (ms)</label>
+      <input type="number" id="dev-build-ms" min="0" max="20000"></div>
     <div class="dev-row"><label><input type="checkbox" id="dev-force-mutation"> force mutation on next generate</label></div>
     <div class="dev-row"><label><input type="checkbox" id="dev-force-refactor"> force refactor on next generate</label></div>
     <div class="dev-row"><label><input type="checkbox" id="dev-show-targets"> show hidden targets</label></div>

@@ -22,10 +22,16 @@
     GRAVITY_MS: 700,
     SOFT_DROP_MS: 50,
     LOCK_DELAY_MS: 300,
-    DEADLINES_S: [180, 150, 120, 90, 60],
-    // Lines to ship per sprint, index = min(sprint, 5) - 1. Missing the
-    // deadline ends the run (NOTES item 15).
-    GOALS_LINES: [3, 4, 5, 5, 5],
+    // Deadlines and goals come from the balance model in NOTES item 21:
+    // seconds per line 18 / 16.7 / 16.3 / 15.8 / 16.3 against a measured best
+    // pace of about 13.8. Missing the deadline ends the run (NOTES item 15).
+    DEADLINES_S: [180, 150, 130, 95, 65],
+    // Lines to ship per sprint, index = min(sprint, 5) - 1.
+    GOALS_LINES: [10, 9, 8, 6, 4],
+    // A hand-built piece takes this long to build after the fourth cell
+    // matches. Without it, building is nearly as fast per line as generating
+    // and far cleaner, and no clock can make generating necessary (NOTES 21).
+    BUILD_MS: 2500,
     LINE_FLASH_MS: 150,
     MUTATE_BEAT_MS: 400,
     REFACTOR_BEAT_MS: 700,
@@ -101,7 +107,7 @@
     TITLE_BEST: 'best {n} shipped',
 
     // 11.2 How to play
-    HOWTO_P1: 'Each ticket is a shape. Build it on the workbench, or generate it and it drops now.',
+    HOWTO_P1: 'Each ticket is a shape. Build it on the workbench  or have the AI generate it.',
     HOWTO_P2: 'Generated pieces can change shape after they land. The more you generate in a row, the more it happens.',
     HOWTO_P3: "Review a falling generated piece to see what it will become.",
     HOWTO_P4: "Complete the required number of lines before the clock hits zero to successfully complete a sprint.",
@@ -110,13 +116,13 @@
 
     // 11.3 Ticket lines
     TICKET: {
-      I: ["Line piece. Don't overthink it.", 'Need a straight one.'],
-      O: ['Square. Should be easy.', 'Just a square.'],
-      T: ['Need a T here.', 'T piece.'],
-      S: ['S piece. Same as last time.', 'Build an S.'],
-      Z: ['Z this time.', 'Build a Z.'],
-      J: ['J. Not L. J.', 'Need a J.'],
-      L: ['Build an L.', 'L piece, standard.']
+      I: ["Line piece by EOD.", 'Straight one spec.'],
+      O: ['Stakeholder says square', 'Square only.'],
+      T: ['Ticket says T.', 'Customer wants T.'],
+      S: ['S needed this quarter.', 'S by EOD.'],
+      Z: ['Competitor has a Z.', 'Z will close that ticket.'],
+      J: ['J aligns us.', 'Meeting notes say J.'],
+      L: ['L is standard.', 'L is a must-have.']
     },
 
     // 11.4 Assistant lines (the only voice that sounds upbeat)
@@ -155,6 +161,7 @@
     BANNER_GOAL_ONE: 'ship 1 line',
     BANNER_BY: 'by {time}',
     STATUS_REVIEWING: 'reviewing.',
+    STATUS_BUILDING: 'building…',
 
     // 11.6 Retro
     RETRO_HEAD: 'Board is full with {time} left in sprint {n}.',
@@ -832,6 +839,7 @@
     sprintBanner: null,       // { kind, start, hold, lines: [[text, bright]] } sprint transition
     overReason: '',           // '' while playing; 'topout' or 'deadline' on the retro
     runId: 0,                 // bumped by newRun so a lock pipeline mid-await can bail out
+    building: null,           // { until, timer } while a hand-built piece is being built
     newConfirmUntil: 0,       // nowMs() deadline for the second N press, 0 when idle
 
     // animation
@@ -1907,6 +1915,8 @@
     var text;
     if (reviewActive()) {
       text = COPY.STATUS_REVIEWING;
+    } else if (G.building) {
+      text = COPY.STATUS_BUILDING;
     } else if (G.statusEvent && nowMs() < G.statusEventUntil) {
       text = G.statusEvent;
     } else {
@@ -1932,6 +1942,7 @@
     deleteSave();
     G.runId += 1;
     G.newConfirmUntil = 0;
+    cancelBuild();
     G.seedMode = G.seedModePref;
     G.seed = resolveSeed(G.seedMode, G.fixedSeed);
     G.rng = mulberry32(G.seed);
@@ -2011,7 +2022,7 @@
   }
 
   function canUseWorkbench() {
-    return G.screen === 'play' && G.state === 'spec' && !G.paused && !G.howtoOpen;
+    return G.screen === 'play' && G.state === 'spec' && !G.paused && !G.howtoOpen && !G.building;
   }
 
   function toggleWorkbenchCell(x, y) {
@@ -2030,19 +2041,55 @@
     saveNow();
   }
 
-  // The piece spawns in the ticket's orientation however the player drew it.
+  /* The fourth matching cell starts the build. BUILD_MS later the piece spawns
+   * in the ticket's orientation however the player drew it. The clock keeps
+   * running; that wait is the price of a piece that will not change shape.
+   * Generate or clear during the wait cancels the build (NOTES item 21).
+   */
   function acceptBuild() {
+    if (G.building) return;
+    var run = G.runId;
+    G.building = { until: nowMs() + cfg.BUILD_MS, timer: 0 };
+    if (D.workbench) D.workbench.classList.add('building');
+    updateStatusBar();
+    G.building.timer = setTimeout(function () {
+      if (G.runId !== run || !G.building) return;
+      finishBuild();
+    }, cfg.BUILD_MS);
+  }
+
+  function finishBuild() {
+    G.building = null;
+    if (D.workbench) D.workbench.classList.remove('building');
+    if (G.screen !== 'play' || G.state !== 'spec' || G.paused) return;
     SFX('build');
     G.streak = 0;
     G.counters.built += 1;
     clearWorkbench(false);
     spawnPiece(G.ticket.shape, false, false, false, null, null);
+    updateStatusBar();
+  }
+
+  function cancelBuild() {
+    if (!G.building) return;
+    clearTimeout(G.building.timer);
+    G.building = null;
+    if (D.workbench) D.workbench.classList.remove('building');
+    updateStatusBar();
+  }
+
+  // After a reload, a workbench that already matches the ticket resumes its build.
+  function resumePendingBuild() {
+    if (G.screen !== 'play' || G.state !== 'spec' || G.building) return;
+    var cells = workbenchCells();
+    if (cells.length === 4 && matchesShape(cells, G.ticket.shape)) acceptBuild();
   }
 
   /* --- generate ------------------------------------------------------- */
 
   function generate() {
     if (G.screen !== 'play' || G.state !== 'spec' || G.paused) return;
+    cancelBuild();
     clearWorkbench(false);
 
     G.streak += 1;
@@ -2336,6 +2383,7 @@
    * the well and lets the assistant have the last word.
    */
   function endRun(reason) {
+    cancelBuild();
     G.falling = null;
     G.pulse = null;
     G.reviewFlash = null;
@@ -2581,6 +2629,7 @@
       G.falling.lockTimerMs = 0;
       G.falling.lockResetUsed = false;
     }
+    resumePendingBuild();
     applyScreenClass();
     updateStatusBar();
     requestDraw();
@@ -2762,6 +2811,7 @@
 
     if (lk === 'c' || k === 'Escape') {
       e.preventDefault();
+      cancelBuild();
       clearWorkbench(true);
       saveNow();
       return;
@@ -2986,7 +3036,7 @@
     });
 
     on(D.btnGenerate, 'click', function (e) { e.preventDefault(); audioResume(); generate(); });
-    on(D.btnClear, 'click', function (e) { e.preventDefault(); audioResume(); clearWorkbench(true); saveNow(); });
+    on(D.btnClear, 'click', function (e) { e.preventDefault(); audioResume(); cancelBuild(); clearWorkbench(true); saveNow(); });
     on(D.btnAgain, 'click', function (e) { e.preventDefault(); againFromRetro(); });
     on(D.btnNew, 'click', function (e) { e.preventDefault(); audioResume(); newGamePressed(); });
     on(D.btnHelp, 'click', function (e) {
@@ -3078,6 +3128,7 @@
     setValue(D.devReviewThreshold, cfg.REVIEW_THRESHOLD);
     setValue(D.devReviewGravity, cfg.REVIEW_GRAVITY_MS);
     setValue(D.devGravity, cfg.GRAVITY_MS);
+    setValue(D.devBuildMs, cfg.BUILD_MS);
     setChecked(D.devForceMutation, G.forceMutation);
     setChecked(D.devForceRefactor, G.forceRefactor);
     setChecked(D.devShowTargets, G.showTargets);
@@ -3128,6 +3179,7 @@
     bindNumber(D.devReviewThreshold, function (v) { cfg.REVIEW_THRESHOLD = v; });
     bindNumber(D.devReviewGravity, function (v) { cfg.REVIEW_GRAVITY_MS = v; });
     bindNumber(D.devGravity, function (v) { cfg.GRAVITY_MS = v; });
+    bindNumber(D.devBuildMs, function (v) { cfg.BUILD_MS = v; });
 
     bindCheck(D.devForceMutation, function (v) { G.forceMutation = v; });
     bindCheck(D.devForceRefactor, function (v) { G.forceRefactor = v; });
@@ -3309,6 +3361,7 @@
     D.devDeadline = [byId('dev-deadline-1'), byId('dev-deadline-2'), byId('dev-deadline-3'), byId('dev-deadline-4'), byId('dev-deadline-5')];
     D.devGoal = [byId('dev-goal-1'), byId('dev-goal-2'), byId('dev-goal-3'), byId('dev-goal-4'), byId('dev-goal-5')];
     D.devGravity = byId('dev-gravity');
+    D.devBuildMs = byId('dev-build-ms');
     D.devForceMutation = byId('dev-force-mutation');
     D.devForceRefactor = byId('dev-force-refactor');
     D.devShowTargets = byId('dev-show-targets');

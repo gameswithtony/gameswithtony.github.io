@@ -132,6 +132,39 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     `G.runId` and `runLock` re-checks it after each of its awaits, so a pipeline from the
     old run stops touching the new board.
 
+21. **Balance model and the build time (2026-09-15).** The owner's brief: some generation
+    must always be necessary, never all of it, there must be time to review even in the
+    hardest sprint, and hard-dropping unreviewed pieces must sometimes be forced. Measured
+    first (greedy hole-avoiding bot through the real UI, seed 1234, 80 pieces, no reviews):
+
+    | play style | pieces per line | outcome |
+    |---|---|---|
+    | every piece hand-built | 2.6 | no top-out |
+    | two generated, one built (streak stays at 2) | 3.3 | no top-out |
+    | four generated, one built (streak reaches 4) | 5.6 | top-out at 67 pieces, 12 lines |
+    | every piece generated | 5.8 | top-out at 64 pieces, 11 lines |
+
+    So slop, not the clock, kills heavy generation, and hand-building was nearly as fast per
+    line as generating while producing no slop: no deadline could make generating necessary.
+    Hence `BUILD_MS` (2500, dev-panel "build time"): the fourth matching cell starts a build,
+    the status bar reads `building...`, the workbench border breathes, and the piece spawns
+    when the timer ends. The clock runs meanwhile. Generate or clear cancels it; a reload
+    mid-build resumes it on the resume screen's continue; `newRun` and `endRun` cancel it
+    and the timer is guarded by `G.runId`. The title copy's "Building takes a few seconds
+    each time" (SPEC 11.1) is now literally true.
+
+    Human time assumptions (unmeasured, retune from playtests): generate and place 2.8 s
+    including the average lock beat; build 7 s (3 s of clicks + 2.5 s build + 1.5 s to
+    place); a review adds 3.6 s. Pace per line: hand-only 2.6 x 7 = 18.2 s; the best mixed
+    pattern 3.3 x (0.67 x 2.8 + 0.33 x 7) = 13.8 s; four-in-a-row generation 21 s and the
+    board dies. Sprint targets sit between those: seconds per line 18, 16.7, 16.3, 15.8,
+    16.3, giving `DEADLINES_S` 180/150/130/95/65 and `GOALS_LINES` 10/9/8/6/4. Slack over
+    the best pace is 42, 26, 20, 12, 10 seconds per sprint, i.e. roughly 11, 7, 5, 3 and 2
+    reviews' worth, so a hand-only player misses sprint 1 by a few seconds, a mixed player
+    has time to review a good share early and only a couple of pieces late, and anyone who
+    generates four in a row is punished by the board rather than the clock. SPEC 7's
+    deadlines (3:00 to 1:00) are replaced by this table.
+
 ## Tuning
 
 Defaults in `CONFIG` differ from the numbers in SPEC 6.1 after playtesting. The owner found

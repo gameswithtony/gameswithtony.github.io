@@ -340,6 +340,14 @@ pre {
 /* Border flash when four cells do not match the ticket (game.js adds .flash). */
 #workbench.flash { animation: wb-flash 300ms ease-out 1; }
 
+/* A build in progress: the border breathes until the piece spawns. */
+#workbench.building { animation: wb-building 700ms ease-in-out infinite alternate; }
+
+@keyframes wb-building {
+  from { outline-color: var(--accent); }
+  to   { outline-color: var(--hi); }
+}
+
 @keyframes wb-flash {
   0%   { outline-color: var(--hi); }
   60%  { outline-color: var(--hi); }
@@ -725,5 +733,6 @@ body.screen-retro .status-bar { color: var(--accent); }
   #clock.danger,
   .hdr-clock.reset,
   .hdr-goal.reset,
+  #workbench.building,
   #workbench.flash { animation: none; }
 }
