@@ -12,26 +12,27 @@
   var CONFIG = {
     // Mutation odds, index = min(streak, 5) - 1. Tuned up from the spec's
     // 10/20/35/50/60 and 25 after playtesting (see NOTES.md, Tuning).
-    MUTATION_TABLE: [25, 40, 55, 70, 80],
+    MUTATION_TABLE: [35, 45, 65, 75, 80],
     REFACTOR_CHANCE: 10,
     // How many times a board-aware target box may widen (CONTRACT res. 1, 12).
     TARGET_WIDEN_MAX: 2,
-    // Rows a review must fall before it answers. Spec said 6; 3 after playtesting.
-    REVIEW_THRESHOLD: 3,
+    // Rows a review must fall before it answers. Spec said 6; 3, then 2 after
+    // playtesting. The charge display ramps continuously between rows
+    // (reviewProgress), so any threshold reads as one smooth build.
+    REVIEW_THRESHOLD: 2,
     REVIEW_GRAVITY_MS: 1200,
     GRAVITY_MS: 700,
     SOFT_DROP_MS: 50,
     LOCK_DELAY_MS: 300,
-    // Deadlines and goals come from the balance model in NOTES item 21:
-    // seconds per line 18 / 16.7 / 16.3 / 15.8 / 16.3 against a measured best
-    // pace of about 13.8. Missing the deadline ends the run (NOTES item 15).
+    // Deadlines from the balance model in NOTES item 21; goals set by the
+    // owner in play (NOTES item 22). Missing the deadline ends the run (15).
     DEADLINES_S: [180, 150, 130, 95, 65],
     // Lines to ship per sprint, index = min(sprint, 5) - 1.
-    GOALS_LINES: [10, 9, 8, 6, 4],
+    GOALS_LINES: [3, 3, 3, 2, 2],
     // A hand-built piece takes this long to build after the fourth cell
     // matches. Without it, building is nearly as fast per line as generating
     // and far cleaner, and no clock can make generating necessary (NOTES 21).
-    BUILD_MS: 2500,
+    BUILD_MS: 1600,
     LINE_FLASH_MS: 150,
     MUTATE_BEAT_MS: 400,
     REFACTOR_BEAT_MS: 700,
@@ -65,6 +66,12 @@
     OUTLINE_TRAVEL_MS: 600,
     // The whole-well flash and ring when a review completes.
     REVIEW_FLASH_MS: 600,
+    // Crossfade when cells change after lock (mutation or refactor).
+    MUTATE_FLASH_MS: 700,
+    // A changed piece then drops into place: this long after the change it
+    // starts, and it falls one cell per SETTLE_MS until it rests (NOTES 24).
+    SETTLE_DELAY_MS: 700,
+    SETTLE_MS: 45,
     // The in-well banner when a sprint ends, either way.
     SPRINT_BANNER_MS: 3000
   };
@@ -91,6 +98,8 @@
     accentRGB: [230, 180, 80],
     hi: '#fff3d6',
     hiRGB: [255, 243, 214],
+    // The accent pushed toward black, for the mutation flash. Same hue.
+    darkRGB: [118, 76, 16],
     muted: '#6b7075',
     danger: '#d9534f'
   };
@@ -107,9 +116,9 @@
     TITLE_BEST: 'best {n} shipped',
 
     // 11.2 How to play
-    HOWTO_P1: 'Each ticket is a shape. Build it on the workbench  or have the AI generate it.',
+    HOWTO_P1: 'Build the next shape on the workbench or have the AI generate it.',
     HOWTO_P2: 'Generated pieces can change shape after they land. The more you generate in a row, the more it happens.',
-    HOWTO_P3: "Review a falling generated piece to see what it will become.",
+    HOWTO_P3: "Review a falling generated piece to see what it will become. Whatever it becomes drops into place.",
     HOWTO_P4: "Complete the required number of lines before the clock hits zero to successfully complete a sprint.",
     HOWTO_CONTROLS_FINE: 'move: arrows or hjkl    rotate: up / x / z    hard drop: space\ngenerate: g    review: r (hold)    clear workbench: esc    sound: m',
     HOWTO_CONTROLS_COARSE: 'move: drag sideways    rotate: tap    drop: drag down    slam: flick down\nreview: press and hold    generate and clear: buttons below',
@@ -117,7 +126,7 @@
     // 11.3 Ticket lines
     TICKET: {
       I: ["Line piece by EOD.", 'Straight one spec.'],
-      O: ['Stakeholder says square', 'Square only.'],
+      O: ['Stakeholder says square.', 'Square only.'],
       T: ['Ticket says T.', 'Customer wants T.'],
       S: ['S needed this quarter.', 'S by EOD.'],
       Z: ['Competitor has a Z.', 'Z will close that ticket.'],
@@ -315,6 +324,17 @@
     var out = verts.map(function (v) { return [v[0], v[1]]; });
     var n = ((times % 4) + 4) % 4;
     for (var i = 0; i < n; i++) out = out.map(rotateVertexCW);
+    return out;
+  }
+
+  // Cells in a that are not in b.
+  function cellsMinus(a, b) {
+    var set = {};
+    for (var i = 0; i < b.length; i++) set[b[i][0] + ',' + b[i][1]] = true;
+    var out = [];
+    for (var j = 0; j < a.length; j++) {
+      if (!set[a[j][0] + ',' + a[j][1]]) out.push([a[j][0], a[j][1]]);
+    }
     return out;
   }
 
@@ -734,6 +754,9 @@
     shuffleInPlace(ids, G.rng);
 
     var changed = 0;
+    var from = [];
+    var to = [];
+    var movedIds = [];
     for (var i = 0; i < ids.length; i++) {
       var piece = G.pieces[ids[i]];
       if (!piece || piece.cells.length !== 4) continue;
@@ -750,9 +773,134 @@
       eraseCells(cells);
       writeCells(pick.cells, piece.id, true, true);
       piece.cells = pick.cells.map(function (c) { return [c[0], c[1]]; });
+      for (var m = 0; m < 4; m++) {
+        from.push([cells[m][0], cells[m][1]]);
+        to.push([pick.cells[m][0], pick.cells[m][1]]);
+      }
+      movedIds.push(piece.id);
       changed++;
     }
-    return changed;
+    return { gone: cellsMinus(from, to), came: cellsMinus(to, from), ids: movedIds };
+  }
+
+  /* After a mutation or refactor, each changed piece falls as a unit until it
+   * rests on the floor, on other cells, or on the falling piece. It runs in
+   * the frame loop, so it happens while the next ticket is already in play,
+   * and a full row it completes ships through shipFullRows like any other.
+   */
+  function startSettling(ids) {
+    for (var i = 0; i < ids.length; i++) {
+      var dup = false;
+      for (var j = 0; j < G.settling.length; j++) if (G.settling[j].id === ids[i]) dup = true;
+      if (!dup) G.settling.push({ id: ids[i], wait: cfg.SETTLE_DELAY_MS, acc: 0, fell: false });
+    }
+    requestDraw();
+  }
+
+  function pieceMaxY(piece) {
+    var m = -1;
+    for (var i = 0; i < piece.cells.length; i++) if (piece.cells[i][1] > m) m = piece.cells[i][1];
+    return m;
+  }
+
+  function canSettleDown(piece, blocked) {
+    for (var i = 0; i < piece.cells.length; i++) {
+      var x = piece.cells[i][0], ny = piece.cells[i][1] + 1;
+      if (ny >= ROWS) return false;
+      var c = G.board[ny][x];
+      if (c.filled && c.pieceId !== piece.id) return false;
+      if (blocked[x + ',' + ny]) return false;
+    }
+    return true;
+  }
+
+  function shiftPieceDown(piece) {
+    var first = G.board[piece.cells[0][1]][piece.cells[0][0]];
+    var slop = first.slop, mutated = first.mutated;
+    var next = piece.cells.map(function (c) { return [c[0], c[1] + 1]; });
+    eraseCells(piece.cells);
+    writeCells(next, piece.id, slop, mutated);
+    piece.cells = next;
+  }
+
+  function updateSettling(dt) {
+    if (!G.settling.length) return;
+    var blocked = {};
+    if (G.state === 'falling' && G.falling) {
+      var fc = pieceCells(G.falling);
+      for (var k = 0; k < fc.length; k++) blocked[fc[k][0] + ',' + fc[k][1]] = true;
+    }
+    // Lowest first, so a stack of changed pieces settles from the bottom up.
+    G.settling.sort(function (a, b) {
+      var pa = G.pieces[a.id], pb = G.pieces[b.id];
+      return (pb ? pieceMaxY(pb) : -1) - (pa ? pieceMaxY(pa) : -1);
+    });
+    var moved = false, rested = false;
+    for (var i = G.settling.length - 1; i >= 0; i--) {
+      var s = G.settling[i];
+      var piece = G.pieces[s.id];
+      if (!piece || !piece.cells.length) { G.settling.splice(i, 1); continue; }
+      if (s.wait > 0) { s.wait -= dt; continue; }
+      s.acc += dt;
+      var guard = ROWS;
+      while (s.acc >= cfg.SETTLE_MS && guard-- > 0) {
+        s.acc -= cfg.SETTLE_MS;
+        if (canSettleDown(piece, blocked)) {
+          shiftPieceDown(piece);
+          s.fell = true;
+          moved = true;
+        } else {
+          G.settling.splice(i, 1);
+          if (s.fell) { SFX('lock'); rested = true; }
+          break;
+        }
+      }
+    }
+    if (moved || rested) requestDraw();
+    if (rested) shipFullRows();
+  }
+
+  /* Row clears are serialized so a settling piece and the lock pipeline can
+   * both ask for one without double-clearing the same rows.
+   */
+  var shipChain = Promise.resolve();
+  function shipFullRows() {
+    var p = shipChain.then(function () { return shipOnce(G.runId); });
+    shipChain = p.then(null, function () { /* keep the chain alive */ });
+    return p;
+  }
+
+  async function shipOnce(run) {
+    if (G.runId !== run || G.screen !== 'play') return false;
+    var rows = fullRows();
+    if (!rows.length) return false;
+    SFX('clear');
+    var slopN = countSlopInRows(rows);
+    G.lineFlash = { rows: rows, start: nowMs() };
+    requestDraw();
+    await wait(cfg.LINE_FLASH_MS);
+    if (G.runId !== run) return false;
+    G.lineFlash = null;
+    clearRows(rows);
+    G.counters.lines += rows.length;
+    G.sprintLines += rows.length;
+    updateGoalLabel();
+    if (slopN > 0) {
+      setStatusEvent(fill(
+        rows.length > 1 ? COPY.STATUS_SHIPPED_SLOP_MANY : COPY.STATUS_SHIPPED_SLOP,
+        { n: slopN }
+      ));
+    } else {
+      setStatusEvent(COPY.STATUS_SHIPPED);
+    }
+    // Cells that dropped into a falling piece's rows lift it clear.
+    if (G.state === 'falling' && G.falling) {
+      var lift = ROWS;
+      while (lift-- > 0 && !fits(pieceCells(G.falling))) G.falling.y -= 1;
+    }
+    requestDraw();
+    if (G.screen === 'play' && G.sprintLines >= G.sprintGoal) advanceSprint();
+    return true;
   }
 
   function makeFreeCheck(own) {
@@ -836,6 +984,8 @@
     chargeTone: false,
     pulse: null,              // { kind: 'stable'|'mutate', start }
     reviewFlash: null,        // { start } well-wide flash when the pulse fires
+    mutateFlash: null,        // { start, gone, came } crossfade when cells change after lock
+    settling: [],             // [{ id, wait, acc, fell }] changed pieces dropping into place
     sprintBanner: null,       // { kind, start, hold, lines: [[text, bright]] } sprint transition
     overReason: '',           // '' while playing; 'topout' or 'deadline' on the retro
     runId: 0,                 // bumped by newRun so a lock pipeline mid-await can bail out
@@ -1091,6 +1241,8 @@
     // Not saved, and never restored mid-animation.
     G.pulse = null;
     G.reviewFlash = null;
+    G.mutateFlash = null;
+    G.settling = [];
     G.sprintBanner = null;
     G.lineFlash = null;
     G.reviewHeld = false;
@@ -1107,7 +1259,7 @@
   function saveNow() {
     if (G.state === 'locking') return;
     if (G.screen === 'title') return;
-    if (G.pulse || G.lineFlash) return;
+    if (G.pulse || G.lineFlash || G.settling.length) return;
     var ok = lsSet(CONFIG.SAVE_KEY, JSON.stringify(serialize()));
     if (!ok && !G.saveWarned) {
       G.saveWarned = true;
@@ -1340,10 +1492,7 @@
     var groups = collectBoardCells();
     var fp = (G.falling && G.state === 'falling') ? G.falling : null;
     var fpCells = fp ? pieceCells(fp) : [];
-    var charge = 0;
-    if (fp && fp.slop && cfg.REVIEW_THRESHOLD > 0) {
-      charge = Math.min(fp.reviewCharge, cfg.REVIEW_THRESHOLD) / cfg.REVIEW_THRESHOLD;
-    }
+    var charge = reviewProgress(fp);
 
     // One glow pass for every filled cell, falling piece included, so the
     // phosphor never stacks on neighbours.
@@ -1399,6 +1548,7 @@
     if (fp && G.reviewFlash) drawReviewFlash(fpCells, now);
     if (fp && G.pulse) drawPulse(fp, fpCells, now);
     if (fp && fp.reviewed && !G.pulse) drawReviewed(fp, fpCells);
+    if (G.mutateFlash) drawMutateFlash(now);
 
     // Dev: show hidden targets.
     if (G.showTargets && fp && fp.targetOutline) {
@@ -1532,6 +1682,56 @@
     ctx.shadowColor = rgba(COLORS.hiRGB, 0.6 * (1 - t));
     ctx.stroke();
     ctx.restore();
+  }
+
+  /* When cells change after lock, the change crossfades so the eye can read
+   * it: cells that left fade out (their slop look painted over the now-empty
+   * cells), cells that arrived fade in (the background lifts off them), and a
+   * dark-amber halo sits around the arriving cells while it lasts. Cells the
+   * old and new shapes share never flicker. The board itself already holds
+   * the new shape; this is drawn over it.
+   */
+  function drawMutateFlash(now) {
+    var m = G.mutateFlash;
+    var el = now - m.start;
+    var total = cfg.MUTATE_FLASH_MS;
+    if (el >= total) { G.mutateFlash = null; return; }
+    var cell = G.cell;
+    var t = clamp(0, el / total, 1);
+    var fade = (1 - t) * (1 - t);
+    var i, r;
+
+    if (m.gone.length) {
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      paintSlop(m.gone);
+      ctx.restore();
+    }
+
+    if (m.came.length) {
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      ctx.fillStyle = COLORS.bg;
+      for (i = 0; i < m.came.length; i++) fillCell(m.came[i][0], m.came[i][1], 0.5);
+      ctx.restore();
+
+      // The halo only, outside the cells: clip the cells out, then let the
+      // shadow of a dark fill spill around them.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, COLS * cell, ROWS * cell);
+      for (i = 0; i < m.came.length; i++) {
+        r = cellRect(m.came[i][0], m.came[i][1], 0.5);
+        ctx.rect(r[0], r[1], r[2], r[3]);
+      }
+      ctx.clip('evenodd');
+      ctx.shadowBlur = cfg.GLOW_BLUR * 3;
+      ctx.shadowColor = rgba(COLORS.darkRGB, 0.95 * fade);
+      ctx.fillStyle = rgba(COLORS.darkRGB, 0.95 * fade);
+      for (i = 0; i < m.came.length; i++) fillCell(m.came[i][0], m.came[i][1], 0.5);
+      for (i = 0; i < m.came.length; i++) fillCell(m.came[i][0], m.came[i][1], 0.5);
+      ctx.restore();
+    }
   }
 
   /* A reviewed piece reads as one tetromino, not four cells: the seams close,
@@ -1968,6 +2168,8 @@
     G.typeQueue = [];
     G.pulse = null;
     G.reviewFlash = null;
+    G.mutateFlash = null;
+    G.settling = [];
     G.lineFlash = null;
     G.reviewHeld = false;
     G.statusEvent = '';
@@ -2061,7 +2263,9 @@
   function finishBuild() {
     G.building = null;
     if (D.workbench) D.workbench.classList.remove('building');
-    if (G.screen !== 'play' || G.state !== 'spec' || G.paused) return;
+    // Under the resume screen or the how-to the workbench keeps its cells and
+    // the build restarts when play resumes (resumePendingBuild).
+    if (G.screen !== 'play' || G.state !== 'spec' || G.paused || G.howtoOpen) return;
     SFX('build');
     G.streak = 0;
     G.counters.built += 1;
@@ -2286,6 +2490,8 @@
     G.falling = null;
     G.pulse = null;
     G.reviewFlash = null;
+    G.mutateFlash = null;
+    G.settling = [];
     endReviewTone();
     requestDraw();
     runLock(p);
@@ -2316,6 +2522,8 @@
         await wait(cfg.MUTATE_BEAT_MS);
         if (G.runId !== run) return;          // a new game started under us
         commitMutation(p, cells, plan);
+        G.mutateFlash = { start: nowMs(), gone: cellsMinus(cells, plan), came: cellsMinus(plan, cells) };
+        startSettling([p.pieceId]);
         SFX('mutate');
         var newShape = shapeOfCells(plan) || p.shape;
         var line = COPY.MUTATED[pickIndex(COPY.MUTATED.length, G.rng)];
@@ -2332,7 +2540,9 @@
       requestDraw();
       await wait(cfg.REFACTOR_BEAT_MS);
       if (G.runId !== run) return;
-      boardRefactor(p.pieceId);
+      var moved = boardRefactor(p.pieceId);
+      G.mutateFlash = { start: nowMs(), gone: moved.gone, came: moved.came };
+      startSettling(moved.ids);
       SFX('refactor');
       chatReplace(beat2, COPY.REFACTORED);
       setStatusEvent(COPY.STATUS_REFACTOR);
@@ -2340,30 +2550,8 @@
       requestDraw();
     }
 
-    var rows = fullRows();
-    if (rows.length) {
-      SFX('clear');
-      var slopN = countSlopInRows(rows);
-      G.lineFlash = { rows: rows, start: nowMs() };
-      requestDraw();
-      await wait(cfg.LINE_FLASH_MS);
-      if (G.runId !== run) return;
-      G.lineFlash = null;
-      clearRows(rows);
-      G.counters.lines += rows.length;
-      G.sprintLines += rows.length;
-      updateGoalLabel();
-      if (slopN > 0) {
-        setStatusEvent(fill(
-          rows.length > 1 ? COPY.STATUS_SHIPPED_SLOP_MANY : COPY.STATUS_SHIPPED_SLOP,
-          { n: slopN }
-        ));
-      } else {
-        setStatusEvent(COPY.STATUS_SHIPPED);
-      }
-      requestDraw();
-      if (G.screen === 'play' && G.sprintLines >= G.sprintGoal) advanceSprint();
-    }
+    await shipFullRows();
+    if (G.runId !== run) return;
 
     if (G.screen !== 'play') return;
     G.state = 'spec';
@@ -2387,6 +2575,8 @@
     G.falling = null;
     G.pulse = null;
     G.reviewFlash = null;
+    G.mutateFlash = null;
+    G.settling = [];
     G.lineFlash = null;
     G.reviewHeld = false;
     G.overReason = reason;
@@ -2487,7 +2677,8 @@
     var now = nowMs();
     var dt = G.lastTickAt ? Math.min(1000, now - G.lastTickAt) : 0;
     G.lastTickAt = now;
-    if (G.screen !== 'play' || G.paused || dt <= 0) return;
+    // The how-to covers the well, so a game under it holds (NOTES item 25).
+    if (G.screen !== 'play' || G.paused || G.howtoOpen || dt <= 0) return;
 
     G.clockMs -= dt;
     if (!G.warned && G.clockMs <= 10000) {
@@ -2497,7 +2688,7 @@
     if (G.clockMs <= 0) deadlineReached();
     updateClock();
     updateStatusBar();
-    if (G.state === 'falling' && !G.pulse && !G.lineFlash && (now - G.lastSaveAt) >= 1000) saveNow();
+    if (G.state === 'falling' && !G.pulse && !G.lineFlash && !G.settling.length && (now - G.lastSaveAt) >= 1000) saveNow();
   }
 
   function deadlineReached() {
@@ -2580,8 +2771,20 @@
     var ret = G.howtoReturn;
     G.howtoReturn = 'title';
     applyScreenClass();
-    if (ret === 'start') newRun();
-    else requestDraw();
+    if (ret === 'start') { newRun(); return; }
+    G.lastTickAt = nowMs();
+    resumePendingBuild();
+    requestDraw();
+  }
+
+  // COPY is the one source for the title body and the how-to paragraphs; the
+  // markup only holds placeholders (NOTES item 16).
+  function applyCopyToDom() {
+    if (D.titleCopy) D.titleCopy.textContent = COPY.TITLE_BODY;
+    var ps = [COPY.HOWTO_P1, COPY.HOWTO_P2, COPY.HOWTO_P3, COPY.HOWTO_P4];
+    for (var i = 0; i < ps.length; i++) {
+      if (D.howtoP && D.howtoP[i]) D.howtoP[i].textContent = ps[i];
+    }
   }
 
   function updateHowtoControls() {
@@ -2669,6 +2872,20 @@
       G.falling && G.falling.slop && !G.paused && !G.howtoOpen);
   }
 
+  /* 0..1 of the way to the answer. Whole rows come from reviewCharge; while
+   * the hold is active the part of the next row already fallen counts too, so
+   * the glow and the tone ramp smoothly instead of stepping once per row.
+   * Released charge holds its last whole-row value, as SPEC 6.4 says.
+   */
+  function reviewProgress(p) {
+    if (!p || !p.slop || !(cfg.REVIEW_THRESHOLD > 0)) return 0;
+    var c = p.reviewCharge;
+    if (!p.reviewed && reviewActive() && cfg.REVIEW_GRAVITY_MS > 0) {
+      c += Math.min(0.999, Math.max(0, G.gravityAcc) / cfg.REVIEW_GRAVITY_MS);
+    }
+    return clamp(0, c / cfg.REVIEW_THRESHOLD, 1);
+  }
+
   function startReviewHold() {
     if (G.reviewHeld) return;
     G.reviewHeld = true;
@@ -2699,10 +2916,7 @@
       G.chargeTone = true;
     }
     if (!want && G.chargeTone) endReviewTone();
-    if (want) {
-      var t = G.falling.reviewCharge / Math.max(1, cfg.REVIEW_THRESHOLD);
-      audioSetCharge(t > 1 ? 1 : t);
-    }
+    if (want) audioSetCharge(reviewProgress(G.falling));
   }
 
   // The answer arrives all at once, once, at the threshold.
@@ -3267,7 +3481,7 @@
 
   function animating() {
     var bannerLive = G.sprintBanner && !G.sprintBanner.hold;
-    return !!(G.pulse || G.reviewFlash || bannerLive || G.lineFlash || typingBusy() || statusBusy());
+    return !!(G.pulse || G.reviewFlash || G.mutateFlash || G.settling.length || bannerLive || G.lineFlash || typingBusy() || statusBusy());
   }
 
   function needsRAF() {
@@ -3281,7 +3495,9 @@
     var dt = G.lastFrame ? Math.min(100, now - G.lastFrame) : 16;
     G.lastFrame = now;
 
-    if (G.screen === 'play' && !G.paused && G.state === 'falling') updateFalling(now, dt);
+    var live = G.screen === 'play' && !G.paused && !G.howtoOpen;
+    if (live && G.state === 'falling') updateFalling(now, dt);
+    if (live) updateSettling(dt);
     syncReviewTone();
     stepTyping(now);
     draw(now);
@@ -3346,6 +3562,9 @@
     D.titleBest = byId('title-best');
     D.howtoScreen = byId('howto-screen');
     D.howtoFine = byId('howto-controls-fine');
+    D.titleCopy = byId('title-copy');
+    D.howtoP = [byId('howto-p1'), byId('howto-p2'), byId('howto-p3'), byId('howto-p4')];
+    applyCopyToDom();
     D.howtoCoarse = byId('howto-controls-coarse');
 
     D.devPanel = byId('dev-panel');

@@ -107,7 +107,7 @@
        decoded review_charge file is looped and pitched with playbackRate
        instead. dur is used only when the cue is auditioned from the dev panel. */
     review_charge: {
-      file: 'audio/review_charge.mp3', wave: 'triangle', freq: 220, freqEnd: 880,
+      file: 'audio/review_charge.mp3', wave: 'triangle', freq: 110, freqEnd: 330,
       dur: 0.30, gain: 0.12, sustain: true, loop: true
     },
 
@@ -521,7 +521,7 @@
 
   /**
    * Track the review charge: t is reviewCharge / threshold, clamped to [0, 1].
-   * Ramps the pitch from the manifest's freq up to freqEnd (220 Hz to 880 Hz by
+   * Ramps the pitch from the manifest's freq up to freqEnd (110 Hz to 330 Hz by
    * default), or the playback rate when a file is looping. Safe if not started.
    * @param {number} t charge fraction, 0 to 1
    * @returns {void}

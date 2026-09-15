@@ -112,7 +112,7 @@
   <div id="title-screen" class="screen" hidden>
     <div class="screen-inner">
       <h1 class="screen-title">sloptris</h1>
-      <p class="screen-copy">A spec and a clock. Build each piece yourself, or let the assistant generate it. Generating is instant. It usually works.</p>
+      <p id="title-copy" class="screen-copy">Either build your pieces manually or have the AI generate them. Reviewing the generated pieces takes time, but not reviewing may have consequences...</p>
       <p id="title-best" class="screen-best" hidden>best 0 shipped</p>
       <p id="title-controls" class="screen-controls">[enter] start    [?] how to play</p>
     </div>
@@ -120,10 +120,11 @@
 
   <div id="howto-screen" class="screen" hidden>
     <div class="screen-inner">
-      <p class="screen-copy">Each ticket is a shape. Build it on the workbench and wait for it, or generate it and it drops now.</p>
-      <p class="screen-copy">Generated pieces can change shape after they land. The more you generate in a row, the more it happens. Build one by hand and the streak resets.</p>
-      <p class="screen-copy">Review a falling generated piece to see what it becomes. It falls slower, you can't steer it, and the clock doesn't stop.</p>
-      <p class="screen-copy">Ship the sprint's lines before the clock hits zero or the run ends. Every sprint wants more lines in less time.</p>
+      <!-- Text comes from COPY.HOWTO_P1..P4 in game.js at startup; these are placeholders. -->
+      <p id="howto-p1" class="screen-copy">Each ticket is a shape. Build it on the workbench  or have the AI generate it.</p>
+      <p id="howto-p2" class="screen-copy">Generated pieces can change shape after they land. The more you generate in a row, the more it happens.</p>
+      <p id="howto-p3" class="screen-copy">Review a falling generated piece to see what it will become. Whatever it becomes drops into place.</p>
+      <p id="howto-p4" class="screen-copy">Complete the required number of lines before the clock hits zero to successfully complete a sprint.</p>
       <pre id="howto-controls-fine" class="screen-controls">move: arrows or hjkl    rotate: up / x / z    hard drop: space
 generate: g    review: r (hold)    clear workbench: esc    sound: m</pre>
       <pre id="howto-controls-coarse" class="screen-controls">move: drag sideways    rotate: tap    drop: drag down    slam: flick down

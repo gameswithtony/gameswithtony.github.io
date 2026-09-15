@@ -62,7 +62,12 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
 
 14. **Review threshold and the answer's look.** SPEC 6.4 sets the charge threshold at 6 rows
     (about 7 seconds at review gravity). Playtesting found that too long; `REVIEW_THRESHOLD`
-    is 3 (about 3.6 seconds), still editable in the dev panel. The pulse in 6.4 is kept, and
+    went to 3, then the owner set it to 2 (about 2.4 seconds), still editable in the dev
+    panel. SPEC 6.4 has the glow build "proportional to reviewCharge / threshold", i.e. in
+    whole-row steps, which at 2 rows is one jump to half and then the answer. The glow and
+    the charge tone now use `reviewProgress`, which adds the fraction of the next row
+    already fallen while the hold is active, so the build is continuous at any threshold;
+    a released charge still holds its last whole-row value. The pulse in 6.4 is kept, and
     two things are added on top because the pulse alone was easy to miss: when the charge
     reaches the threshold the whole well flashes the highlight and drains over
     `REVIEW_FLASH_MS` (600) while a ring runs out from the piece; and for the rest of the
@@ -99,7 +104,10 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     controls lines are unchanged. The paragraphs no longer name keys ("press G", "hold R"),
     because the same paragraphs show on touch devices where there is no G or R; they use the
     game's own verbs, generate and review, and the controls block under them maps each verb
-    to a key or a gesture.
+    to a key or a gesture. Since the owner started editing the how-to in `COPY` directly
+    (2026-09-15), `applyCopyToDom` writes `TITLE_BODY` and `HOWTO_P1..P4` into
+    `#title-copy` and `#howto-p1..4` at startup, so `COPY` is the one source and the
+    markup holds placeholders.
 
 17. **A visible way into how-to-play.** SPEC 8 reaches the how-to after the title only by
     `?` or by tapping the sprint label, and nothing on screen said so. The fine-pointer hint
@@ -122,6 +130,8 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     cue. Credits and the file-to-clip mapping are in audio/README.md, and the how-to
     screen ends with a one-line credit. No ffmpeg was available, so the MP3 was made with
     lamejs in a scratchpad script; the WAV originals are not in the repo.
+    The synthesized review_charge sweep was 220 to 880 Hz; the owner found it far too high,
+    so it is 110 to 330 Hz (A2 up a twelfth), same exponential mapping over the charge.
 
 20. **New game during play.** SPEC only starts a run from the title, the resume screen or
     the retro. Added `N` during play (fine pointer, listed in the hint row) and a `[new]`
@@ -164,6 +174,46 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     has time to review a good share early and only a couple of pieces late, and anyone who
     generates four in a row is punished by the board rather than the clock. SPEC 7's
     deadlines (3:00 to 1:00) are replaced by this table.
+
+22. **Owner's playtest values (2026-09-15).** After playing with the build timer the owner
+    set `MUTATION_TABLE` 35/45/65/75/80, `GOALS_LINES` 4/3/3/2/2, `BUILD_MS` 1600 and
+    `REVIEW_THRESHOLD` 2 directly in CONFIG. These override the model numbers in item 21;
+    the deadlines from item 21 stand. Seconds per line are now 45, 50, 43, 48, 33, so the
+    clock pressure comes from the last sprint and from slop rather than from raw line count.
+
+23. **Mutation crossfade.** SPEC 6.2 applies a mutation "in one frame" with nothing but the
+    assistant line and the `mutate` cue. The owner asked for a visible beat, darker than the
+    review flash, without a ring, and one that makes the change legible. On commit (and on
+    a board refactor) `G.mutateFlash` runs for `MUTATE_FLASH_MS` (700) with two cell lists:
+    `gone` (old shape minus new) fades out, painted in the slop look over the now-empty
+    cells; `came` (new minus old) fades in as the background lifts off them, with a halo of
+    `COLORS.darkRGB` (the accent pushed toward black, same hue) around the arriving cells,
+    drawn outside them only via an even-odd clip. Shared cells never flicker. The board
+    itself still swaps in one frame; the crossfade is drawn over it. `boardRefactor`
+    returns `{ gone, came }` across every piece it moved.
+
+24. **Changed pieces drop into place.** SPEC 6.2 says "no gravity on anything" after a
+    mutation. The owner wanted the opposite, so that a reviewed piece can be placed where
+    its coming shape will fall into a gap: `SETTLE_DELAY_MS` (700, the crossfade) after a
+    mutation or refactor, every changed piece falls as a unit one cell per `SETTLE_MS` (45)
+    until it rests on the floor, on other cells or on the falling piece (`G.settling`,
+    `updateSettling` in the frame loop, lowest piece first). This runs while the next ticket
+    is already in play. When a piece that fell comes to rest, the `lock` cue plays and full
+    rows ship. Row clearing moved out of the lock pipeline into `shipFullRows`, a serialized
+    queue, so a settling piece and a locking piece cannot double-clear the same rows; if a
+    clear drops cells into the falling piece, that piece is lifted until it fits. A settle in
+    progress is not saved (saves wait for it), so a reload mid-settle leaves the piece where
+    the last save put it. The how-to's review paragraph gains "Whatever it becomes drops
+    into place."
+
+25. **The how-to pauses a running game.** SPEC 7 says the clock never pauses except on the
+    resume screen, but the how-to covers the well, so with a run in progress it now holds
+    everything the resume screen holds: the clock (`tickClock` returns while `G.howtoOpen`),
+    the falling piece and any settling pieces (the frame loop skips them), and a build in
+    progress (its timer fires into nothing and `closeHowto` restarts it through
+    `resumePendingBuild`). Lock-pipeline beats already under way run to completion; the
+    piece they belong to has landed. On the title screen nothing is running, so nothing
+    changes there.
 
 ## Tuning
 
