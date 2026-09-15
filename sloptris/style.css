@@ -484,6 +484,10 @@ body.coarse #hint-buttons { display: flex; }
 .footer-title {
   flex: 0 0 auto;
   background: transparent;
+  touch-action: none;          /* the long-press for the dev panel owns the gesture */
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
   padding: 0 .4ch;
   color: var(--accent);
   font-size: .8125rem;
@@ -636,6 +640,9 @@ body.screen-retro .status-bar { color: var(--accent); }
   bottom: 8px;
   z-index: 20;
   width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;              /* a short phone screen scrolls the panel instead of clipping it */
   background: var(--bg);
   padding: 10px 8px 8px;
   font-size: 12px;

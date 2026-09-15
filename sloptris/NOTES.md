@@ -242,7 +242,11 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     so its touch long-press for the dev panel (SPEC 8.2) still works on every screen; the
     status text itself is hidden under those overlays. The touch sound label reads
     `[sound: on]` / `[sound: off]` so that, with sound off by default (item 27), the
-    button reads as a state and not as an instruction.
+    button reads as a state and not as an instruction. The long-press itself was fragile
+    on touch: browsers claim a held finger for the context menu or selection and send
+    `pointercancel`, which cancelled the 2 s timer. The label now has `touch-action: none`,
+    captures the pointer on `pointerdown`, prevents the context menu, and no longer cancels
+    on `pointerleave` (capture means leave does not fire until release anyway).
 
 ## Tuning
 

@@ -12,8 +12,8 @@
   var CONFIG = {
     // Mutation odds, index = min(streak, 5) - 1. Tuned up from the spec's
     // 10/20/35/50/60 and 25 after playtesting (see NOTES.md, Tuning).
-    MUTATION_TABLE: [35, 45, 65, 75, 80],
-    REFACTOR_CHANCE: 10,
+    MUTATION_TABLE: [35, 40, 45, 50, 60],
+    REFACTOR_CHANCE: 5,
     // How many times a board-aware target box may widen (CONTRACT res. 1, 12).
     TARGET_WIDEN_MAX: 2,
     // Rows a review must fall before it answers. Spec said 6; 3, then 2 after
@@ -3276,13 +3276,20 @@
     function cancelTitleTimer() {
       if (titleTimer) { clearTimeout(titleTimer); titleTimer = 0; }
     }
-    on(D.titleLabel, 'pointerdown', function () {
+    // Touch browsers turn a long press into a context menu or a selection and
+    // send pointercancel, so the label claims the pointer: capture it, refuse
+    // the context menu, and keep the timer through small finger movement.
+    on(D.titleLabel, 'pointerdown', function (e) {
       cancelTitleTimer();
+      if (e && e.preventDefault) e.preventDefault();
+      if (D.titleLabel.setPointerCapture && e && e.pointerId != null) {
+        try { D.titleLabel.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
       titleTimer = setTimeout(function () { titleTimer = 0; toggleDevPanel(); }, cfg.TITLE_LONGPRESS_MS);
     });
     on(D.titleLabel, 'pointerup', cancelTitleTimer);
-    on(D.titleLabel, 'pointerleave', cancelTitleTimer);
     on(D.titleLabel, 'pointercancel', cancelTitleTimer);
+    on(D.titleLabel, 'contextmenu', function (e) { e.preventDefault(); });
 
     on(window, 'resize', resize);
     on(window, 'orientationchange', function () { setTimeout(resize, 120); });
