@@ -9,6 +9,14 @@
  * fully playable with an empty audio/ folder. Drop a real file into audio/ with
  * the name in the manifest and it plays instead, with no code change.
  *
+ * Shipped assets (see audio/README.md for the mapping and credits): sixteen
+ * cues use CC0 Ogg Vorbis clips from Kenney's Interface Sounds and Digital
+ * Audio packs, and the music is a CC0 chiptune loop by Juhani Junkala. Four
+ * cues stay synthesized on purpose: mutate and refactor (the warble is the
+ * design), review_charge (a pitch sweep tied to the charge) and typing (a
+ * per-character tick too small to be worth a file). A browser that cannot
+ * decode Ogg Vorbis falls back to the synth for those cues automatically.
+ *
  * The AudioContext is never created at load time - only inside unlock(), which
  * the game calls from the start / resume / again gesture (SPEC 9.1).
  */
@@ -38,11 +46,11 @@
    * ------------------------------------------------------------------ */
   var CUES = {
     /* a workbench cell is toggled - short tick */
-    wb_toggle: { file: 'audio/wb_toggle.mp3', wave: 'square', freq: 1180, dur: 0.022, gain: 0.10 },
+    wb_toggle: { file: 'audio/wb_toggle.ogg', wave: 'square', freq: 1180, dur: 0.022, gain: 0.10 },
 
     /* four cells filled that do not match the ticket - low two-tone buzz */
     wb_reject: {
-      file: 'audio/wb_reject.mp3', wave: 'square', freq: 118, dur: 0.10, gain: 0.18,
+      file: 'audio/wb_reject.ogg', wave: 'square', freq: 118, dur: 0.10, gain: 0.18,
       notes: [
         { freq: 118, at: 0, dur: 0.09 },
         { freq: 88, at: 0.10, dur: 0.14 }
@@ -51,7 +59,7 @@
 
     /* a hand-built piece is accepted and spawns - rising two-note */
     build: {
-      file: 'audio/build.mp3', wave: 'triangle', freq: 440, dur: 0.08, gain: 0.17,
+      file: 'audio/build.ogg', wave: 'triangle', freq: 440, dur: 0.08, gain: 0.17,
       notes: [
         { freq: 440, at: 0, dur: 0.07 },
         { freq: 660, at: 0.075, dur: 0.11 }
@@ -59,28 +67,28 @@
     },
 
     /* a piece is generated - quick descending blip */
-    generate: { file: 'audio/generate.mp3', wave: 'square', freq: 900, freqEnd: 420, dur: 0.09, gain: 0.15 },
+    generate: { file: 'audio/generate.ogg', wave: 'square', freq: 900, freqEnd: 420, dur: 0.09, gain: 0.15 },
 
     /* the falling piece moves one cell - very short tick */
-    move: { file: 'audio/move.mp3', wave: 'square', freq: 620, dur: 0.015, gain: 0.08 },
+    move: { file: 'audio/move.ogg', wave: 'square', freq: 620, dur: 0.015, gain: 0.08 },
 
     /* the falling piece rotates - the same tick, slightly higher */
-    rotate: { file: 'audio/rotate.mp3', wave: 'square', freq: 790, dur: 0.018, gain: 0.09 },
+    rotate: { file: 'audio/rotate.ogg', wave: 'square', freq: 790, dur: 0.018, gain: 0.09 },
 
     /* each cell of soft drop - faint tick */
-    soft_drop: { file: 'audio/soft_drop.mp3', wave: 'triangle', freq: 330, dur: 0.014, gain: 0.05 },
+    soft_drop: { file: 'audio/soft_drop.ogg', wave: 'triangle', freq: 330, dur: 0.014, gain: 0.05 },
 
     /* a hard drop lands - low thud */
-    hard_drop: { file: 'audio/hard_drop.mp3', wave: 'triangle', freq: 96, freqEnd: 54, dur: 0.13, gain: 0.30 },
+    hard_drop: { file: 'audio/hard_drop.ogg', wave: 'triangle', freq: 96, freqEnd: 54, dur: 0.13, gain: 0.30 },
 
     /* any piece locks - short low click */
-    lock: { file: 'audio/lock.mp3', wave: 'square', freq: 200, freqEnd: 150, dur: 0.038, gain: 0.20 },
+    lock: { file: 'audio/lock.ogg', wave: 'square', freq: 200, freqEnd: 150, dur: 0.038, gain: 0.20 },
 
     /* one or more lines clear - rising chirp */
-    clear: { file: 'audio/clear.mp3', wave: 'triangle', freq: 520, freqEnd: 1320, dur: 0.22, gain: 0.22 },
+    clear: { file: 'audio/clear.ogg', wave: 'triangle', freq: 520, freqEnd: 1320, dur: 0.22, gain: 0.22 },
 
     /* the ... beat before a mutation - low muted tone */
-    mutate_beat: { file: 'audio/mutate_beat.mp3', wave: 'triangle', freq: 158, dur: 0.18, gain: 0.12 },
+    mutate_beat: { file: 'audio/mutate_beat.ogg', wave: 'triangle', freq: 158, dur: 0.18, gain: 0.12 },
 
     /* the cells swap - warbling glitch */
     mutate: {
@@ -104,11 +112,11 @@
     },
 
     /* the pulse fires on a stable piece - warm soft tone */
-    pulse_stable: { file: 'audio/pulse_stable.mp3', wave: 'triangle', freq: 528, dur: 0.34, gain: 0.18 },
+    pulse_stable: { file: 'audio/pulse_stable.ogg', wave: 'triangle', freq: 528, dur: 0.34, gain: 0.18 },
 
     /* the pulse fires on a mutating piece - dissonant two-tone */
     pulse_mutate: {
-      file: 'audio/pulse_mutate.mp3', wave: 'square', freq: 466, dur: 0.30, gain: 0.13,
+      file: 'audio/pulse_mutate.ogg', wave: 'square', freq: 466, dur: 0.30, gain: 0.13,
       notes: [
         { freq: 466, at: 0, dur: 0.30 },
         { freq: 330, at: 0.02, dur: 0.30 }
@@ -117,7 +125,7 @@
 
     /* a sprint transition - two-note fanfare, kept flat and quiet */
     sprint: {
-      file: 'audio/sprint.mp3', wave: 'square', freq: 392, dur: 0.12, gain: 0.13,
+      file: 'audio/sprint.ogg', wave: 'square', freq: 392, dur: 0.12, gain: 0.13,
       notes: [
         { freq: 392, at: 0, dur: 0.10 },
         { freq: 523, at: 0.11, dur: 0.16 }
@@ -126,7 +134,7 @@
 
     /* the clock reaches 0:10 - short alarm beep, twice */
     deadline_warn: {
-      file: 'audio/deadline_warn.mp3', wave: 'square', freq: 1046, dur: 0.08, gain: 0.16,
+      file: 'audio/deadline_warn.ogg', wave: 'square', freq: 1046, dur: 0.08, gain: 0.16,
       notes: [
         { freq: 1046, at: 0, dur: 0.075 },
         { freq: 1046, at: 0.12, dur: 0.075 }
@@ -139,7 +147,7 @@
 
     /* game over - descending three-note */
     topout: {
-      file: 'audio/topout.mp3', wave: 'triangle', freq: 440, dur: 0.16, gain: 0.22,
+      file: 'audio/topout.ogg', wave: 'triangle', freq: 440, dur: 0.16, gain: 0.22,
       notes: [
         { freq: 440, at: 0, dur: 0.14 },
         { freq: 330, at: 0.16, dur: 0.14 },

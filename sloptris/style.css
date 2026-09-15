@@ -118,14 +118,47 @@ pre {
 
 .hdr-btn:active { color: var(--hi); }
 
-.hdr-clock {
-  margin-left: auto;          /* the spacer before the clock */
+/* The goal and the clock are the two numbers the game is about, so they sit
+   right after the sprint label, over the well, and are the largest text on
+   screen. Nothing is pushed to the far right: on a wide screen that is too far
+   from the action. */
+.hdr-goal {
+  font-size: 16px;
+  line-height: 1;
+  padding: 3px .7ch;
   font-variant-numeric: tabular-nums;
 }
 
-#clock.warn { color: var(--warn); text-shadow: 0 0 6px rgba(230, 180, 80, .35); }
-#clock.danger { color: var(--danger); text-shadow: none; }
-#clock.hidden { visibility: hidden; }
+.hdr-goal.met { color: var(--hi); }
+
+.hdr-clock {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .04em;
+  padding: 2px .6ch;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px var(--glow), 0 0 18px var(--glow-soft);
+}
+
+#clock.warn { color: var(--warn); text-shadow: 0 0 8px rgba(240, 160, 48, .5), 0 0 18px rgba(240, 160, 48, .25); }
+#clock.danger { color: var(--danger); text-shadow: 0 0 8px rgba(217, 83, 79, .5); animation: clock-danger 1s ease-in-out infinite; }
+#clock.hidden, #goal.hidden { visibility: hidden; }
+
+/* A new sprint: the clock and goal swell and flare, then settle. */
+.hdr-clock.reset, .hdr-goal.reset { animation: hdr-reset .9s ease-out; }
+#clock.danger.reset { animation: hdr-reset .9s ease-out; }
+
+@keyframes hdr-reset {
+  0%   { color: var(--hi); transform: scale(1.35); text-shadow: 0 0 12px var(--hi), 0 0 28px var(--glow); }
+  40%  { color: var(--hi); transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes clock-danger {
+  0%, 100% { color: var(--danger); }
+  50%      { color: var(--hi); text-shadow: 0 0 10px rgba(217, 83, 79, .9), 0 0 20px rgba(217, 83, 79, .5); }
+}
 
 /* ---------------------------------------------------------------- panels */
 
@@ -652,6 +685,13 @@ body.screen-retro .status-bar { color: var(--accent); }
 
 .dev-panel input[readonly] { color: var(--muted); }
 
+.screen-credit {
+  margin: 14px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: pre;
+}
+
 /* ----------------------------------------------------------------- tight */
 
 @media (max-height: 699px) {
@@ -672,6 +712,8 @@ body.screen-retro .status-bar { color: var(--accent); }
   .screen-controls { font-size: 10px; }
   .hint-keys { font-size: 12px; }
   .status-bar { font-size: 12px; }
+  .hdr-goal { font-size: 13px; }
+  .hdr-clock { font-size: 18px; }
   /* Cap the right column on phones so the well keeps its share of the width.
      168px still holds the workbench at 36px cells (4*36 + 3*2 + 12 chrome). */
   .right-col { max-width: 168px; }
@@ -680,5 +722,8 @@ body.screen-retro .status-bar { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .wb-cell.cursor::after,
   .chat-line.typing::after,
+  #clock.danger,
+  .hdr-clock.reset,
+  .hdr-goal.reset,
   #workbench.flash { animation: none; }
 }

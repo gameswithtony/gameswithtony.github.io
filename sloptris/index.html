@@ -12,6 +12,7 @@
     <button id="sound-toggle" class="hdr-item hdr-btn" type="button">[m] sound on</button>
     <button id="title-label" class="hdr-item hdr-btn hdr-title" type="button">sloptris</button>
     <button id="sprint-label" class="hdr-item hdr-btn" type="button">sprint 1</button>
+    <span id="goal" class="hdr-item hdr-goal" aria-label="sprint goal"><span id="goal-n">0/3</span><span class="goal-word"> lines</span></span>
     <span id="clock" class="hdr-item hdr-clock" role="timer" aria-label="deadline">03:00</span>
   </header>
 
@@ -95,12 +96,13 @@
   </section>
 
   <div id="hint-row" class="hint-row">
-    <span id="hint-keys" class="hint-keys">[B] build   [G] generate   [R] review (hold)</span>
+    <span id="hint-keys" class="hint-keys">[B] build   [G] generate   [R] review (hold)   [N] new   [?] help</span>
     <div id="hint-buttons" class="btn-row hint-buttons">
       <button id="btn-generate" class="btn" type="button">[generate]</button>
       <button id="btn-clear" class="btn" type="button">[clear]</button>
       <button id="btn-again" class="btn" type="button" hidden>[again]</button>
-      <button id="btn-share" class="btn" type="button" hidden>[share]</button>
+      <button id="btn-new" class="btn" type="button">[new]</button>
+      <button id="btn-help" class="btn" type="button">[help]</button>
     </div>
   </div>
 
@@ -110,7 +112,7 @@
   <div id="title-screen" class="screen" hidden>
     <div class="screen-inner">
       <h1 class="screen-title">sloptris</h1>
-      <p class="screen-copy">There's a spec and a clock. Build the piece on the workbench, or press G and let the assistant do it. Building takes a few seconds each time. Generating takes none, and the piece usually comes out right.</p>
+      <p class="screen-copy">A spec and a clock. Build each piece yourself, or let the assistant generate it. Generating is instant. It usually works.</p>
       <p id="title-best" class="screen-best" hidden>best 0 shipped</p>
       <p id="title-controls" class="screen-controls">[enter] start    [?] how to play</p>
     </div>
@@ -118,14 +120,15 @@
 
   <div id="howto-screen" class="screen" hidden>
     <div class="screen-inner">
-      <p class="screen-copy">Each ticket is a shape. Click the cells on the workbench until they match and the piece drops. Or press G and it drops now.</p>
-      <p class="screen-copy">A generated piece can change shape after it locks. The more you generate in a row, the more likely that gets. Building one by hand resets it.</p>
-      <p class="screen-copy">Hold R while a generated piece falls to find out. It falls slower while you look, you can't move it, and the clock doesn't care. The answer comes all at once or not at all.</p>
-      <p class="screen-copy">The deadline gets shorter every sprint.</p>
+      <p class="screen-copy">Each ticket is a shape. Build it on the workbench, or generate it and it drops now.</p>
+      <p class="screen-copy">Generated pieces can change shape after they land. The more you generate in a row, the more it happens. Build one by hand and the streak resets.</p>
+      <p class="screen-copy">Review a falling generated piece to see what it becomes. It falls slower, you can't steer it, and the clock doesn't stop.</p>
+      <p class="screen-copy">Ship the sprint's lines before the clock hits zero or the run ends. Every sprint wants more lines in less time.</p>
       <pre id="howto-controls-fine" class="screen-controls">move: arrows or hjkl    rotate: up / x / z    hard drop: space
 generate: g    review: r (hold)    clear workbench: esc    sound: m</pre>
       <pre id="howto-controls-coarse" class="screen-controls">move: drag sideways    rotate: tap    drop: drag down    slam: flick down
 review: press and hold    generate and clear: buttons below</pre>
+      <p class="screen-credit">music: Juhani Junkala    sounds: Kenney    both CC0</p>
     </div>
   </div>
 </div>
@@ -162,6 +165,13 @@ review: press and hold    generate and clear: buttons below</pre>
       <input type="number" id="dev-deadline-3" min="5">
       <input type="number" id="dev-deadline-4" min="5">
       <input type="number" id="dev-deadline-5" min="5">
+    </div>
+    <div class="dev-row"><span class="dev-label">sprint goals</span>
+      <input type="number" id="dev-goal-1" min="1">
+      <input type="number" id="dev-goal-2" min="1">
+      <input type="number" id="dev-goal-3" min="1">
+      <input type="number" id="dev-goal-4" min="1">
+      <input type="number" id="dev-goal-5" min="1">
     </div>
     <div class="dev-row"><label class="dev-label" for="dev-gravity">gravity (ms)</label>
       <input type="number" id="dev-gravity" min="50" max="5000"></div>

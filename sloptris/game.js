@@ -12,21 +12,27 @@
   var CONFIG = {
     // Mutation odds, index = min(streak, 5) - 1. Tuned up from the spec's
     // 10/20/35/50/60 and 25 after playtesting (see NOTES.md, Tuning).
-    MUTATION_TABLE: [15, 25, 40, 55, 65],
+    MUTATION_TABLE: [25, 40, 55, 70, 80],
     REFACTOR_CHANCE: 10,
     // How many times a board-aware target box may widen (CONTRACT res. 1, 12).
     TARGET_WIDEN_MAX: 2,
-    REVIEW_THRESHOLD: 6,
+    // Rows a review must fall before it answers. Spec said 6; 3 after playtesting.
+    REVIEW_THRESHOLD: 3,
     REVIEW_GRAVITY_MS: 1200,
     GRAVITY_MS: 700,
     SOFT_DROP_MS: 50,
     LOCK_DELAY_MS: 300,
     DEADLINES_S: [180, 150, 120, 90, 60],
+    // Lines to ship per sprint, index = min(sprint, 5) - 1. Missing the
+    // deadline ends the run (NOTES item 15).
+    GOALS_LINES: [3, 4, 5, 5, 5],
     LINE_FLASH_MS: 150,
     MUTATE_BEAT_MS: 400,
     REFACTOR_BEAT_MS: 700,
     TYPE_CPS: 30,
     STATUS_EVENT_MS: 2000,
+    // How long a first press of N (or tap of [new]) waits for the second.
+    NEW_CONFIRM_MS: 3000,
     COLS: 10,
     ROWS: 20,
     SAVE_KEY: 'sloptris.save',
@@ -50,7 +56,11 @@
     WB_FLASH_MS: 300,
     PULSE_GROW_MS: 300,
     PULSE_FADE_MS: 500,
-    OUTLINE_TRAVEL_MS: 600
+    OUTLINE_TRAVEL_MS: 600,
+    // The whole-well flash and ring when a review completes.
+    REVIEW_FLASH_MS: 600,
+    // The in-well banner when a sprint ends, either way.
+    SPRINT_BANNER_MS: 3000
   };
 
   // Live copy the dev panel edits. `reset to defaults` copies CONFIG back in.
@@ -70,6 +80,7 @@
 
   var COLORS = {
     bg: '#0b0d0e',
+    bgRGB: [11, 13, 14],
     accent: '#e6b450',
     accentRGB: [230, 180, 80],
     hi: '#fff3d6',
@@ -79,21 +90,21 @@
   };
 
   /* =====================================================================
-   * 2. COPY  (SPEC 11, verbatim)
+   * 2. COPY  (SPEC 11, verbatim; title and how-to rewritten, NOTES item 16)
    * ===================================================================== */
 
   var COPY = {
     // 11.1 Title screen
     TITLE_NAME: 'sloptris',
-    TITLE_BODY: "There's a spec and a clock. Build the piece on the workbench, or press G and let the assistant do it. Building takes a few seconds each time. Generating takes none, and the piece usually comes out right.",
+    TITLE_BODY: 'Either build your pieces manually or have the AI generate them. Reviewing the generated pieces takes time, but not reviewing may have consequences...',
     TITLE_CONTROLS: '[enter] start    [?] how to play',
     TITLE_BEST: 'best {n} shipped',
 
     // 11.2 How to play
-    HOWTO_P1: 'Each ticket is a shape. Click the cells on the workbench until they match and the piece drops. Or press G and it drops now.',
-    HOWTO_P2: 'A generated piece can change shape after it locks. The more you generate in a row, the more likely that gets. Building one by hand resets it.',
-    HOWTO_P3: "Hold R while a generated piece falls to find out. It falls slower while you look, you can't move it, and the clock doesn't care. The answer comes all at once or not at all.",
-    HOWTO_P4: 'The deadline gets shorter every sprint.',
+    HOWTO_P1: 'Each ticket is a shape. Build it on the workbench, or generate it and it drops now.',
+    HOWTO_P2: 'Generated pieces can change shape after they land. The more you generate in a row, the more it happens.',
+    HOWTO_P3: "Review a falling generated piece to see what it will become.",
+    HOWTO_P4: "Complete the required number of lines before the clock hits zero to successfully complete a sprint.",
     HOWTO_CONTROLS_FINE: 'move: arrows or hjkl    rotate: up / x / z    hard drop: space\ngenerate: g    review: r (hold)    clear workbench: esc    sound: m',
     HOWTO_CONTROLS_COARSE: 'move: drag sideways    rotate: tap    drop: drag down    slam: flick down\nreview: press and hold    generate and clear: buttons below',
 
@@ -110,19 +121,19 @@
 
     // 11.4 Assistant lines (the only voice that sounds upbeat)
     GEN: [
-      "Sure! Here's your {shape}-piece.",
-      'Great choice. Dropping a {shape} now.',
-      'Absolutely. One {shape} piece, coming right up.',
-      "Done! I've generated the {shape}-piece you asked for."
+      "That closes the gap. Here's your {shape}-piece.",
+      "That's quietly brilliant. Here's a {shape}.",
+      'Great idea! One {shape} piece, coming right up.',
+      "Perfect! I've generated the {shape}-piece."
     ],
     MUTATED: [
       "You're absolutely right, that should have been a {new}. Fixed!",
       "I noticed the {old} wasn't optimal, so I've gone ahead and adjusted it.",
       'Quick improvement: I restructured the piece for better fit.',
-      'Small update! I refined the {old} into a {new} for consistency.'
+      'I refined the {old} into a {new} for consistency.'
     ],
     REFACTORED: "I took the liberty of refactoring the whole board for consistency. Let me know if you'd like any other changes!",
-    AUTOGEN: 'Looks like time was tight, so I went ahead and generated the {shape} for you!',
+    DEADLINE_CHAT: "Looks like we missed the deadline. I've scheduled a retro!",
     BEAT: '…',
 
     // 11.5 Status bar
@@ -133,13 +144,22 @@
     STATUS_SHIPPED_SLOP_MANY: 'shipped. {n} slop cells in those rows.',
     STATUS_MUTATED: 'piece changed after lock.',
     STATUS_REFACTOR: 'board changed.',
-    STATUS_SPRINT: 'Sprint {n} done. Sprint {next} deadline is {time}.',
-    STATUS_SPRINT_FLAT: 'Sprint {n} done. Every sprint from here is 1:00.',
-    STATUS_COPIED: 'copied.',
+    STATUS_SPRINT_DONE: 'Sprint {n} done. Sprint {next}: ship {goal} lines by {time}.',
+    // In-well banners: a sprint transition, and the held one over a missed deadline.
+    BANNER_DONE: 'SPRINT {n} DONE',
+    BANNER_NEXT: 'SPRINT {next}',
+    BANNER_OVER: 'DEADLINE MISSED',
+    BANNER_OVER_SPRINT: 'sprint {n}',
+    BANNER_OVER_LINES: '{k} of {goal} lines',
+    BANNER_GOAL: 'ship {goal} lines',
+    BANNER_GOAL_ONE: 'ship 1 line',
+    BANNER_BY: 'by {time}',
     STATUS_REVIEWING: 'reviewing.',
 
     // 11.6 Retro
     RETRO_HEAD: 'Board is full with {time} left in sprint {n}.',
+    RETRO_HEAD_DEADLINE: 'Sprint {n} deadline missed with {k} of {goal} lines shipped.',
+    RETRO_SPRINT: '{k} of {goal} lines shipped this sprint',
     RETRO_LINES: '{n} shipped',
     RETRO_GENERATED: '{n} generated',
     RETRO_REVIEWED: '{n} reviewed before they landed',
@@ -147,12 +167,8 @@
     RETRO_REFACTORS: '{n} board refactors',
     RETRO_SLOP: '{n} slop cells still on the board',
     RETRO_BUILT: '{n} built by hand',
-    RETRO_CONTROLS: '[enter] again    [s] copy share text',
+    RETRO_CONTROLS: '[enter] again',
     RETRO_SEED: 'seed {n} ({mode})',
-
-    // 11.7 Share text
-    SHARE: 'sloptris: {lines} shipped, {mutated} changed shape after I placed them.',
-    SHARE_SEED: ' seed {n}',
 
     // 11.8 Resume screen
     RESUME_LINE: 'Reloaded. The clock is stopped at {time}, sprint {n}.',
@@ -160,6 +176,9 @@
     RESUME_CONTROLS: '[enter] resume    [n] new game',
     RESUME_CONTROLS_RETRO: '[enter] see retro    [n] new game',
     RESUME_CONFIRM: 'Press n again to throw this run away.',
+    NEW_CONFIRM_KEYS: 'Press n again to throw this run away.',
+    NEW_CONFIRM_TOUCH: 'Tap again to throw this run away.',
+    BTN_NEW: '[new]',
     BTN_RESUME: '[resume]',
     BTN_NEWGAME: '[new game]',
     BTN_THROW: '[throw it away]',
@@ -169,8 +188,9 @@
     SOUND_OFF_KEY: '[m] sound off',
     SOUND_ON_TOUCH: '[sound on]',
     SOUND_OFF_TOUCH: '[sound off]',
-    HINT_KEYS: '[B] build   [G] generate   [R] review (hold)',
+    HINT_KEYS: '[B] build   [G] generate   [R] review (hold)   [N] new   [?] help',
     SPRINT_LABEL: 'sprint {n}',
+    GOAL_LABEL: '{k}/{goal}',
     TICKET_TITLE: 'TICKET #{n}'
   };
 
@@ -772,6 +792,8 @@
 
     sprint: 1,
     clockMs: CONFIG.DEADLINES_S[0] * 1000,
+    sprintLines: 0,           // lines shipped in this sprint
+    sprintGoal: CONFIG.GOALS_LINES[0],
     warned: false,
 
     bag: [],
@@ -806,6 +828,11 @@
     reviewHeld: false,
     chargeTone: false,
     pulse: null,              // { kind: 'stable'|'mutate', start }
+    reviewFlash: null,        // { start } well-wide flash when the pulse fires
+    sprintBanner: null,       // { kind, start, hold, lines: [[text, bright]] } sprint transition
+    overReason: '',           // '' while playing; 'topout' or 'deadline' on the retro
+    runId: 0,                 // bumped by newRun so a lock pipeline mid-await can bail out
+    newConfirmUntil: 0,       // nowMs() deadline for the second N press, 0 when idle
 
     // animation
     lineFlash: null,          // { rows, start }
@@ -839,6 +866,12 @@
     var idx = Math.min(sprint, cfg.DEADLINES_S.length) - 1;
     if (idx < 0) idx = 0;
     return cfg.DEADLINES_S[idx];
+  }
+
+  function goalFor(sprint) {
+    var idx = Math.min(sprint, cfg.GOALS_LINES.length) - 1;
+    if (idx < 0) idx = 0;
+    return Math.max(1, cfg.GOALS_LINES[idx] | 0);
   }
 
   function fmtMSS(ms) {
@@ -946,6 +979,9 @@
       state: (G.state === 'falling') ? 'falling' : ((G.state === 'retro') ? 'retro' : 'spec'),
       sprint: G.sprint,
       clockMs: Math.max(0, Math.round(G.clockMs)),
+      sprintLines: G.sprintLines,
+      sprintGoal: G.sprintGoal,
+      over: G.overReason,
       warned: !!G.warned,
       seed: G.seed >>> 0,
       seedMode: G.seedMode,
@@ -978,6 +1014,9 @@
     if (G.screen === 'retro') G.state = 'retro';
     G.sprint = obj.sprint || 1;
     G.clockMs = Math.max(0, obj.clockMs || 0);
+    G.sprintLines = obj.sprintLines | 0;
+    G.sprintGoal = obj.sprintGoal > 0 ? (obj.sprintGoal | 0) : goalFor(G.sprint);
+    G.overReason = (obj.over === 'deadline' || obj.over === 'topout') ? obj.over : '';
     G.warned = !!obj.warned;
     G.seed = (obj.seed || 0) >>> 0;
     G.seedMode = obj.seedMode || 'random';
@@ -1043,6 +1082,8 @@
 
     // Not saved, and never restored mid-animation.
     G.pulse = null;
+    G.reviewFlash = null;
+    G.sprintBanner = null;
     G.lineFlash = null;
     G.reviewHeld = false;
     G.typeJob = null;
@@ -1050,6 +1091,8 @@
     G.gravityAcc = 0;
     G.statusEvent = '';
     G.statusEventUntil = 0;
+    // The held banner over a missed deadline is rebuilt, not saved.
+    if (G.screen === 'retro' && G.overReason === 'deadline') G.sprintBanner = deadlineBanner();
     return G;
   }
 
@@ -1343,19 +1386,75 @@
       }
     }
 
-    // Review pulse, then the settled outline of a revealed target.
+    // Review: the well-wide flash and pulse when the answer lands, then the
+    // reviewed piece wears its answer for the rest of the fall.
+    if (fp && G.reviewFlash) drawReviewFlash(fpCells, now);
     if (fp && G.pulse) drawPulse(fp, fpCells, now);
-    if (fp && fp.reviewed && fp.willMutate && !G.pulse) {
-      strokeOutline(targetWellOutline(fp), rgba(COLORS.accentRGB, 0.4), 1.5, null, 0);
-    }
+    if (fp && fp.reviewed && !G.pulse) drawReviewed(fp, fpCells);
 
     // Dev: show hidden targets.
     if (G.showTargets && fp && fp.targetOutline) {
       strokeOutline(targetWellOutline(fp), rgba(COLORS.accentRGB, 0.3), 1, [3, 3], 0);
     }
 
+    if (G.sprintBanner) drawSprintBanner(now);
+
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
+  }
+
+  var MONO = 'ui-monospace, Menlo, Consolas, "Courier New", monospace';
+
+  /* Sprint transition: the well flashes, then a band across the upper well
+   * names the sprint that ended and what the next one wants. The piece keeps
+   * falling underneath; the band covers only the upper third. A held banner
+   * (missed deadline) skips the flash and fades and stays until a new run.
+   */
+  function drawSprintBanner(now) {
+    var b = G.sprintBanner;
+    var el = now - b.start;
+    var total = cfg.SPRINT_BANNER_MS;
+    if (!b.hold && el >= total) { G.sprintBanner = null; return; }
+    var cell = G.cell;
+    var W = COLS * cell, H = ROWS * cell;
+    var i;
+
+    var a = 1;
+    if (!b.hold) {
+      if (el < 500) {
+        var f = 1 - el / 500;
+        ctx.fillStyle = rgba(COLORS.hiRGB, 0.5 * f * f);
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (el < 150) a = el / 150;
+      else if (el > total - 400) a = (total - el) / 400;
+    }
+
+    var fs = Math.max(11, Math.round(cell * 0.82));
+    var lh = Math.round(fs * 1.45);
+    var pad = Math.round(fs * 0.9);
+    var bandH = lh * b.lines.length + pad * 2;
+    var y0 = Math.round(H * 0.36 - bandH / 2);
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = rgba(COLORS.bgRGB, 0.94);
+    ctx.fillRect(0, y0, W, bandH);
+    ctx.strokeStyle = COLORS.accent;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, y0 + 0.5, W - 1, bandH - 1);
+    ctx.font = fs + 'px ' + MONO;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = cfg.GLOW_BLUR;
+    ctx.shadowColor = rgba(COLORS.accentRGB, cfg.GLOW_ALPHA);
+    for (i = 0; i < b.lines.length; i++) {
+      var text = b.lines[i][0];
+      if (!text) continue;
+      ctx.fillStyle = b.lines[i][1] ? COLORS.hi : COLORS.accent;
+      ctx.fillText(text, W / 2, y0 + pad + lh * i + lh / 2);
+    }
+    ctx.restore();
   }
 
   function drawPulse(fp, fpCells, now) {
@@ -1400,6 +1499,49 @@
     strokeOutline(verts, COLORS.hi, 2, [head, perimeter - head], -progress * perimeter);
   }
 
+  /* The answer arriving: the whole well lights up and drains, and a ring
+   * runs out from the piece. Same highlight as the pulse, just bigger.
+   */
+  function drawReviewFlash(fpCells, now) {
+    var el = now - G.reviewFlash.start;
+    var total = cfg.REVIEW_FLASH_MS;
+    if (el >= total) { G.reviewFlash = null; return; }
+    var cell = G.cell;
+    var t = clamp(0, el / total, 1);
+    var fade = (1 - t) * (1 - t);
+    ctx.save();
+    ctx.fillStyle = rgba(COLORS.hiRGB, 0.5 * fade);
+    ctx.fillRect(0, 0, COLS * cell, ROWS * cell);
+    var bb = boundingBox(fpCells);
+    var cx = (bb.x0 + bb.x1 + 1) / 2 * cell;
+    var cy = (bb.y0 + bb.y1 + 1) / 2 * cell;
+    var r = cell * (1.5 + 6 * t);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = rgba(COLORS.hiRGB, 0.9 * (1 - t));
+    ctx.shadowBlur = cfg.GLOW_BLUR * 2;
+    ctx.shadowColor = rgba(COLORS.hiRGB, 0.6 * (1 - t));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* A reviewed piece reads as one tetromino, not four cells: the seams close,
+   * the fill brightens, and its final shape is stroked in the highlight. For a
+   * stable piece that is its own silhouette; for a mutating piece it is the
+   * target. Cells outside the target are the ones that will vanish.
+   */
+  function drawReviewed(fp, fpCells) {
+    var i;
+    ctx.save();
+    ctx.fillStyle = rgba(COLORS.hiRGB, fp.slop ? 0.4 : 0.6);
+    for (i = 0; i < fpCells.length; i++) fillCell(fpCells[i][0], fpCells[i][1], 0);
+    ctx.restore();
+    var verts = fp.willMutate ? targetWellOutline(fp) : outlineEdges(fpCells);
+    strokeOutline(verts, rgba(COLORS.hiRGB, 0.35), 5, null, 0);
+    strokeOutline(verts, COLORS.hi, 2, null, 0);
+  }
+
   function strokeOutline(verts, color, width, dash, dashOffset) {
     if (!verts || verts.length < 2) return;
     var cell = G.cell;
@@ -1441,10 +1583,9 @@
     }
     if (D.titleScreen) D.titleScreen.hidden = (G.screen !== 'title') || G.howtoOpen;
     if (D.howtoScreen) D.howtoScreen.hidden = !G.howtoOpen;
-    if (D.clock) {
-      if (G.screen === 'title') D.clock.classList.add('hidden');
-      else D.clock.classList.remove('hidden');
-    }
+    var hideHdr = (G.screen === 'title');
+    if (D.clock) D.clock.classList.toggle('hidden', hideHdr);
+    if (D.goal) D.goal.classList.toggle('hidden', hideHdr);
   }
 
   function updateClock() {
@@ -1456,6 +1597,25 @@
 
   function updateSprintLabel() {
     if (D.sprintLabel) D.sprintLabel.textContent = fill(COPY.SPRINT_LABEL, { n: G.sprint });
+  }
+
+  function updateGoalLabel() {
+    if (!D.goalN) return;
+    var text = fill(COPY.GOAL_LABEL, { k: G.sprintLines, goal: G.sprintGoal });
+    if (D.goalN.textContent !== text) D.goalN.textContent = text;
+    if (D.goal) D.goal.classList.toggle('met', G.sprintLines >= G.sprintGoal);
+  }
+
+  // Restart the header's reset animation on the clock and goal.
+  function flashHeader() {
+    var els = [D.clock, D.goal];
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!el) continue;
+      el.classList.remove('reset');
+      void el.offsetWidth;
+      el.classList.add('reset');
+    }
   }
 
   function updateTicketDOM() {
@@ -1494,7 +1654,36 @@
     if (D.btnGenerate) D.btnGenerate.hidden = retro;
     if (D.btnClear) D.btnClear.hidden = retro;
     if (D.btnAgain) D.btnAgain.hidden = !retro;
-    if (D.btnShare) D.btnShare.hidden = !retro;
+    if (D.btnNew) {
+      D.btnNew.hidden = retro;
+      D.btnNew.textContent = newConfirmPending() ? COPY.BTN_THROW : COPY.BTN_NEW;
+    }
+  }
+
+  function newConfirmPending() {
+    return G.newConfirmUntil > 0 && nowMs() < G.newConfirmUntil;
+  }
+
+  /* N (or [new]) during play. The first press asks, the second within
+   * NEW_CONFIRM_MS throws the run away. The lock pipeline is guarded by
+   * G.runId, so a new run can start in any state, mid-lock included.
+   */
+  function newGamePressed() {
+    if (G.screen !== 'play' || G.paused || G.howtoOpen) return;
+    if (newConfirmPending()) {
+      G.newConfirmUntil = 0;
+      stopReviewHold();
+      audioUnlock();
+      newRun();
+      return;
+    }
+    G.newConfirmUntil = nowMs() + cfg.NEW_CONFIRM_MS;
+    setStatusEvent(G.coarse ? COPY.NEW_CONFIRM_TOUCH : COPY.NEW_CONFIRM_KEYS);
+    G.statusEventUntil = G.newConfirmUntil;
+    updateHintRow();
+    setTimeout(function () {
+      if (!newConfirmPending()) { G.newConfirmUntil = 0; updateHintRow(); }
+    }, cfg.NEW_CONFIRM_MS + 20);
   }
 
   function updatePanelsForScreen() {
@@ -1518,6 +1707,7 @@
   function renderAll() {
     updateClock();
     updateSprintLabel();
+    updateGoalLabel();
     updateTicketDOM();
     updateWorkbenchDOM();
     updateStatusBar();
@@ -1740,11 +1930,17 @@
 
   function newRun() {
     deleteSave();
+    G.runId += 1;
+    G.newConfirmUntil = 0;
     G.seedMode = G.seedModePref;
     G.seed = resolveSeed(G.seedMode, G.fixedSeed);
     G.rng = mulberry32(G.seed);
     G.sprint = 1;
     G.clockMs = deadlineFor(1) * 1000;
+    G.sprintLines = 0;
+    G.sprintGoal = goalFor(1);
+    G.sprintBanner = null;
+    G.overReason = '';
     G.warned = false;
     G.bag = [];
     G.board = newBoard();
@@ -1760,6 +1956,7 @@
     G.typeJob = null;
     G.typeQueue = [];
     G.pulse = null;
+    G.reviewFlash = null;
     G.lineFlash = null;
     G.reviewHeld = false;
     G.statusEvent = '';
@@ -1844,7 +2041,7 @@
 
   /* --- generate ------------------------------------------------------- */
 
-  function generate(auto) {
+  function generate() {
     if (G.screen !== 'play' || G.state !== 'spec' || G.paused) return;
     clearWorkbench(false);
 
@@ -1883,7 +2080,7 @@
 
     G.counters.generated += 1;
     SFX('generate');
-    var tpl = auto ? COPY.AUTOGEN : COPY.GEN[pickIndex(COPY.GEN.length, G.rng)];
+    var tpl = COPY.GEN[pickIndex(COPY.GEN.length, G.rng)];
     chatPush(fill(tpl, { shape: G.ticket.shape }), false);
     spawnPiece(G.ticket.shape, true, willMutate, willRefactor, targetLocal, targetOutline);
   }
@@ -2041,12 +2238,14 @@
     G.state = 'locking';
     G.falling = null;
     G.pulse = null;
+    G.reviewFlash = null;
     endReviewTone();
     requestDraw();
     runLock(p);
   }
 
   async function runLock(p) {
+    var run = G.runId;
     SFX('lock');
     var cells = pieceCells(p);
     writeCells(cells, p.pieceId, p.slop, false);
@@ -2068,6 +2267,7 @@
         SFX('mutate_beat');
         requestDraw();
         await wait(cfg.MUTATE_BEAT_MS);
+        if (G.runId !== run) return;          // a new game started under us
         commitMutation(p, cells, plan);
         SFX('mutate');
         var newShape = shapeOfCells(plan) || p.shape;
@@ -2084,6 +2284,7 @@
       var beat2 = chatPush(COPY.BEAT, true);
       requestDraw();
       await wait(cfg.REFACTOR_BEAT_MS);
+      if (G.runId !== run) return;
       boardRefactor(p.pieceId);
       SFX('refactor');
       chatReplace(beat2, COPY.REFACTORED);
@@ -2099,9 +2300,12 @@
       G.lineFlash = { rows: rows, start: nowMs() };
       requestDraw();
       await wait(cfg.LINE_FLASH_MS);
+      if (G.runId !== run) return;
       G.lineFlash = null;
       clearRows(rows);
       G.counters.lines += rows.length;
+      G.sprintLines += rows.length;
+      updateGoalLabel();
       if (slopN > 0) {
         setStatusEvent(fill(
           rows.length > 1 ? COPY.STATUS_SHIPPED_SLOP_MANY : COPY.STATUS_SHIPPED_SLOP,
@@ -2111,6 +2315,7 @@
         setStatusEvent(COPY.STATUS_SHIPPED);
       }
       requestDraw();
+      if (G.screen === 'play' && G.sprintLines >= G.sprintGoal) advanceSprint();
     }
 
     if (G.screen !== 'play') return;
@@ -2124,11 +2329,19 @@
 
   /* --- top-out and retro ---------------------------------------------- */
 
-  function topOut() {
+  function topOut() { endRun('topout'); }
+
+  /* The run ends when the board is full or the clock runs out (NOTES item
+   * 15). Both land on the retro; a missed deadline also holds a banner over
+   * the well and lets the assistant have the last word.
+   */
+  function endRun(reason) {
     G.falling = null;
     G.pulse = null;
+    G.reviewFlash = null;
     G.lineFlash = null;
     G.reviewHeld = false;
+    G.overReason = reason;
     endReviewTone();
     flushTyping();
     G.screen = 'retro';
@@ -2136,6 +2349,12 @@
     SFX('topout');
     audioStopMusic();
     writeBest(G.counters.lines);
+    if (reason === 'deadline') {
+      G.sprintBanner = deadlineBanner();
+      chatPush(COPY.DEADLINE_CHAT, true);   // instant: no frame loop runs on the retro
+    } else {
+      G.sprintBanner = null;
+    }
     renderRetro();
     updatePanelsForScreen();
     applyScreenClass();
@@ -2144,9 +2363,28 @@
     requestDraw();
   }
 
+  function deadlineBanner() {
+    return {
+      kind: 'over',
+      start: nowMs(),
+      hold: true,
+      lines: [
+        [COPY.BANNER_OVER, true],
+        ['', false],
+        [fill(COPY.BANNER_OVER_SPRINT, { n: G.sprint }), false],
+        [fill(COPY.BANNER_OVER_LINES, { k: G.sprintLines, goal: G.sprintGoal }), false]
+      ]
+    };
+  }
+
   function retroStatsText() {
     var lines = [];
-    lines.push(fill(COPY.RETRO_HEAD, { time: fmtMSS(G.clockMs), n: G.sprint }));
+    if (G.overReason === 'deadline') {
+      lines.push(fill(COPY.RETRO_HEAD_DEADLINE, { n: G.sprint, k: G.sprintLines, goal: G.sprintGoal }));
+    } else {
+      lines.push(fill(COPY.RETRO_HEAD, { time: fmtMSS(G.clockMs), n: G.sprint }));
+      lines.push(fill(COPY.RETRO_SPRINT, { k: G.sprintLines, goal: G.sprintGoal }));
+    }
     lines.push('');
     lines.push(fill(COPY.RETRO_LINES, { n: G.counters.lines }));
     lines.push(fill(COPY.RETRO_GENERATED, { n: G.counters.generated }));
@@ -2170,12 +2408,7 @@
     if (D.retroStats) D.retroStats.textContent = retroStatsText();
   }
 
-  function shareText() {
-    var s = fill(COPY.SHARE, { lines: G.counters.lines, mutated: G.counters.mutated });
-    if (G.devOpen) s += fill(COPY.SHARE_SEED, { n: G.seed });
-    return s;
-  }
-
+  // Clipboard helpers are only used by the dev panel's seed copy button.
   function fallbackCopy(text) {
     try {
       var ta = document.createElement('textarea');
@@ -2200,23 +2433,6 @@
     fallbackCopy(text);
   }
 
-  function copyShare() {
-    copyToClipboard(shareText());
-    setStatusEvent(COPY.STATUS_COPIED);
-  }
-
-  function doShare() {
-    var text = shareText();
-    if (navigator.share) {
-      try {
-        navigator.share({ text: text }).catch(function () { /* dismissed */ });
-        return;
-      } catch (e) { /* fall through */ }
-    }
-    copyToClipboard(text);
-    setStatusEvent(COPY.STATUS_COPIED);
-  }
-
   /* --- clock and sprints (SPEC 7) ------------------------------------- */
 
   function tickClock() {
@@ -2237,27 +2453,44 @@
   }
 
   function deadlineReached() {
-    if (G.state === 'spec') {
-      clearWorkbench(false);
-      generate(true);
-    }
     if (G.screen !== 'play') return;
+    G.clockMs = 0;
+    updateClock();
+    endRun('deadline');
+  }
 
+  /* The goal is met, which happens mid-lock right after a line clear: the
+   * next sprint starts now with a fresh clock. Lines cleared past the goal
+   * count toward the next one (NOTES item 15).
+   */
+  function advanceSprint() {
     var ended = G.sprint;
+    var surplus = Math.max(0, G.sprintLines - G.sprintGoal);
+
     G.sprint += 1;
     G.clockMs = deadlineFor(G.sprint) * 1000;
     G.warned = false;
+    G.sprintGoal = goalFor(G.sprint);
+    G.sprintLines = Math.min(surplus, G.sprintGoal - 1);
+
     SFX('sprint');
+    updateClock();
     updateSprintLabel();
-    if (ended >= 4) {
-      setStatusEvent(fill(COPY.STATUS_SPRINT_FLAT, { n: ended }));
-    } else {
-      setStatusEvent(fill(COPY.STATUS_SPRINT, {
-        n: ended,
-        next: ended + 1,
-        time: fmtMSS(deadlineFor(ended + 1) * 1000)
-      }));
-    }
+    updateGoalLabel();
+    flashHeader();
+
+    var vars = { n: ended, next: G.sprint, goal: G.sprintGoal, time: fmtMSS(G.clockMs) };
+    setStatusEvent(fill(COPY.STATUS_SPRINT_DONE, vars));
+    G.statusEventUntil = nowMs() + Math.max(cfg.STATUS_EVENT_MS, cfg.SPRINT_BANNER_MS);
+
+    var lines = [];
+    lines.push([fill(COPY.BANNER_DONE, vars), true]);
+    lines.push(['', false]);
+    lines.push([fill(COPY.BANNER_NEXT, vars), true]);
+    lines.push([G.sprintGoal === 1 ? COPY.BANNER_GOAL_ONE : fill(COPY.BANNER_GOAL, vars), false]);
+    lines.push([fill(COPY.BANNER_BY, vars), false]);
+    G.sprintBanner = { kind: 'done', start: nowMs(), hold: false, lines: lines };
+    requestDraw();
     saveNow();
   }
 
@@ -2431,6 +2664,7 @@
     G.counters.reviewed += 1;
     endReviewTone();
     G.pulse = { kind: p.willMutate ? 'mutate' : 'stable', start: now };
+    G.reviewFlash = { start: now };
     SFX(p.willMutate ? 'pulse_mutate' : 'pulse_stable');
     requestDraw();
   }
@@ -2513,9 +2747,10 @@
 
     if (G.screen === 'retro') {
       if (k === 'Enter') { e.preventDefault(); againFromRetro(); return; }
-      if (lk === 's') { e.preventDefault(); copyShare(); return; }
       return;
     }
+
+    if (lk === 'n') { e.preventDefault(); if (!e.repeat) newGamePressed(); return; }
 
     // Review holds everything else off.
     if (lk === 'r') {
@@ -2542,7 +2777,7 @@
         if (!e.repeat) toggleWorkbenchCell(G.wbCursor.x, G.wbCursor.y);
         return;
       }
-      if (lk === 'g') { e.preventDefault(); if (!e.repeat) generate(false); return; }
+      if (lk === 'g') { e.preventDefault(); if (!e.repeat) generate(); return; }
       if (lk === 'b') { e.preventDefault(); if (!e.repeat) flashWorkbench(); return; }
       return;
     }
@@ -2750,10 +2985,15 @@
       toggleWorkbenchCell(x, y);
     });
 
-    on(D.btnGenerate, 'click', function (e) { e.preventDefault(); audioResume(); generate(false); });
+    on(D.btnGenerate, 'click', function (e) { e.preventDefault(); audioResume(); generate(); });
     on(D.btnClear, 'click', function (e) { e.preventDefault(); audioResume(); clearWorkbench(true); saveNow(); });
     on(D.btnAgain, 'click', function (e) { e.preventDefault(); againFromRetro(); });
-    on(D.btnShare, 'click', function (e) { e.preventDefault(); doShare(); });
+    on(D.btnNew, 'click', function (e) { e.preventDefault(); audioResume(); newGamePressed(); });
+    on(D.btnHelp, 'click', function (e) {
+      e.preventDefault();
+      audioResume();
+      if (G.howtoOpen) closeHowto(); else openHowto(G.screen === 'title' ? 'title' : 'play');
+    });
     on(D.btnResume, 'click', function (e) { e.preventDefault(); resumeRun(); });
     on(D.btnNewgame, 'click', function (e) { e.preventDefault(); resumeNewGamePressed(); });
     on(D.soundToggle, 'click', function (e) { e.preventDefault(); audioResume(); toggleSound(); });
@@ -2832,6 +3072,7 @@
     for (var i = 0; i < 5; i++) {
       setValue(D.devMut[i], cfg.MUTATION_TABLE[i]);
       setValue(D.devDeadline[i], cfg.DEADLINES_S[i]);
+      setValue(D.devGoal[i], cfg.GOALS_LINES[i]);
     }
     setValue(D.devRefactor, cfg.REFACTOR_CHANCE);
     setValue(D.devReviewThreshold, cfg.REVIEW_THRESHOLD);
@@ -2881,6 +3122,7 @@
     for (i = 0; i < 5; i++) {
       bindNumber(D.devMut[i], makeIndexSetter('MUTATION_TABLE', i));
       bindNumber(D.devDeadline[i], makeIndexSetter('DEADLINES_S', i));
+      bindNumber(D.devGoal[i], makeIndexSetter('GOALS_LINES', i));
     }
     bindNumber(D.devRefactor, function (v) { cfg.REFACTOR_CHANCE = v; });
     bindNumber(D.devReviewThreshold, function (v) { cfg.REVIEW_THRESHOLD = v; });
@@ -2972,7 +3214,8 @@
    * ===================================================================== */
 
   function animating() {
-    return !!(G.pulse || G.lineFlash || typingBusy() || statusBusy());
+    var bannerLive = G.sprintBanner && !G.sprintBanner.hold;
+    return !!(G.pulse || G.reviewFlash || bannerLive || G.lineFlash || typingBusy() || statusBusy());
   }
 
   function needsRAF() {
@@ -3015,6 +3258,8 @@
     D.titleLabel = byId('title-label');
     D.sprintLabel = byId('sprint-label');
     D.clock = byId('clock');
+    D.goal = byId('goal');
+    D.goalN = byId('goal-n');
 
     D.canvas = byId('well');
     D.rightCol = byId('right-col');
@@ -3041,7 +3286,8 @@
     D.btnGenerate = byId('btn-generate');
     D.btnClear = byId('btn-clear');
     D.btnAgain = byId('btn-again');
-    D.btnShare = byId('btn-share');
+    D.btnNew = byId('btn-new');
+    D.btnHelp = byId('btn-help');
     D.statusBar = byId('status-bar');
 
     D.titleScreen = byId('title-screen');
@@ -3061,6 +3307,7 @@
     D.devReviewThreshold = byId('dev-review-threshold');
     D.devReviewGravity = byId('dev-review-gravity');
     D.devDeadline = [byId('dev-deadline-1'), byId('dev-deadline-2'), byId('dev-deadline-3'), byId('dev-deadline-4'), byId('dev-deadline-5')];
+    D.devGoal = [byId('dev-goal-1'), byId('dev-goal-2'), byId('dev-goal-3'), byId('dev-goal-4'), byId('dev-goal-5')];
     D.devGravity = byId('dev-gravity');
     D.devForceMutation = byId('dev-force-mutation');
     D.devForceRefactor = byId('dev-force-refactor');
@@ -3233,7 +3480,6 @@
     lockPipeline: lockPipeline,
     topOut: topOut,
     retroStatsText: retroStatsText,
-    shareText: shareText,
     setDevOpen: setDevOpen,
     resize: resize,
     draw: draw

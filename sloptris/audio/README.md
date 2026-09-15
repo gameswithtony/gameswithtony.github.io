@@ -1,37 +1,47 @@
 # sloptris audio assets
 
-Drop files here using the exact names below. They are read by the cue manifest at
-the top of `../audio.js`. No code change is needed when a file appears.
+Files in this folder are read by the cue manifest at the top of `../audio.js`. Every cue
+has a synthesized fallback: when a file is missing or fails to decode, the fallback plays
+and the game stays fully playable. The one exception is `loop.mp3`: music has no fallback,
+and a missing `loop.mp3` simply means no music.
 
-Every file is optional. When one is missing or fails to decode, that cue plays a
-short synthesized fallback instead, so the game is fully playable with this
-folder empty. The one exception is `loop.mp3`: music has no fallback, and a
-missing `loop.mp3` simply means no music.
+A page opened straight from disk with `file://` cannot usually read these files, so serve
+the folder over http to hear real assets. The synthesized fallbacks work either way.
 
-A page opened straight from disk with `file://` cannot usually read these files,
-so serve the folder over http (Live Server or any static server) to hear real
-assets. The synthesized fallbacks work either way.
+## Credits
 
-Expected files, one per cue:
+All shipped assets are CC0 (public domain dedication). Credit is not required by the
+license; it is given here because it is the decent thing to do.
 
-    wb_toggle.mp3      wb_toggle
-    wb_reject.mp3      wb_reject
-    build.mp3          build
-    generate.mp3       generate
-    move.mp3           move
-    rotate.mp3         rotate
-    soft_drop.mp3      soft_drop
-    hard_drop.mp3      hard_drop
-    lock.mp3           lock
-    clear.mp3          clear
-    mutate_beat.mp3    mutate_beat
-    mutate.mp3         mutate
-    refactor.mp3       refactor
-    review_charge.mp3  review_charge (looped, pitched by playback rate)
-    pulse_stable.mp3   pulse_stable
-    pulse_mutate.mp3   pulse_mutate
-    sprint.mp3         sprint
-    deadline_warn.mp3  deadline_warn
-    typing.mp3         typing (very quiet; can be disabled in the manifest)
-    topout.mp3         topout
-    loop.mp3           music (looped, no fallback)
+- Sound effects: [Kenney](https://kenney.nl), from the *Interface Sounds* and *Digital
+  Audio* packs. CC0. https://kenney.nl/assets/interface-sounds and
+  https://kenney.nl/assets/digital-audio
+- Music: *Level 1* from *5 Chiptunes (Action)* by Juhani Junkala (SubspaceAudio). CC0.
+  https://opengameart.org/content/5-chiptunes-action. Downmixed to mono and encoded to
+  MP3 at 96 kbps from the author's WAV; nothing else changed.
+
+## Files
+
+| file | cue | source clip |
+|---|---|---|
+| wb_toggle.ogg | wb_toggle | Kenney Interface Sounds, tick_001 |
+| wb_reject.ogg | wb_reject | Kenney Interface Sounds, error_004 |
+| build.ogg | build | Kenney Interface Sounds, confirmation_001 |
+| generate.ogg | generate | Kenney Digital Audio, phaserUp5 |
+| move.ogg | move | Kenney Interface Sounds, click_003 |
+| rotate.ogg | rotate | Kenney Interface Sounds, tick_002 |
+| soft_drop.ogg | soft_drop | Kenney Interface Sounds, click_002 |
+| hard_drop.ogg | hard_drop | Kenney Interface Sounds, drop_001 |
+| lock.ogg | lock | Kenney Interface Sounds, back_001 |
+| clear.ogg | clear | Kenney Digital Audio, powerUp2 |
+| mutate_beat.ogg | mutate_beat | Kenney Digital Audio, lowDown |
+| pulse_stable.ogg | pulse_stable | Kenney Interface Sounds, confirmation_003 |
+| pulse_mutate.ogg | pulse_mutate | Kenney Interface Sounds, question_002 |
+| sprint.ogg | sprint | Kenney Digital Audio, threeTone1 |
+| deadline_warn.ogg | deadline_warn | Kenney Interface Sounds, error_007 |
+| topout.ogg | topout | Kenney Digital Audio, lowThreeTone |
+| loop.mp3 | music (looped) | Juhani Junkala, Level 1 |
+
+Cues with no file, synthesized on purpose: `mutate`, `refactor` (the warble is the
+design), `review_charge` (a sustained tone pitched by the charge), `typing` (one tiny
+tick per character). To replace one, drop a file at the path named in the manifest.
