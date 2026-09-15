@@ -202,8 +202,8 @@
     // Header / hints
     SOUND_ON_KEY: '[m] sound on',
     SOUND_OFF_KEY: '[m] sound off',
-    SOUND_ON_TOUCH: '[sound on]',
-    SOUND_OFF_TOUCH: '[sound off]',
+    SOUND_ON_TOUCH: '[sound: on]',
+    SOUND_OFF_TOUCH: '[sound: off]',
     HINT_KEYS: '[B] build   [G] generate   [R] review (hold)   [N] new   [?] help',
     SPRINT_LABEL: 'sprint {n}',
     GOAL_LABEL: '{k}/{goal}',

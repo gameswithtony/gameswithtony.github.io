@@ -236,6 +236,14 @@ decide something the spec leaves open or gets wrong. Code comments that mention 
     `sloptris.sound` key is removed on load. The header shows `[m] sound off` until the
     player turns it on, and the choice lasts for that page load only.
 
+28. **Name in the footer.** SPEC 2's header held sound, name, sprint and clock; with the goal
+    readout added (item 15) it overflowed on phones. The name moved out of the header into
+    a footer row at the right end of the status line, above the title and how-to overlays
+    so its touch long-press for the dev panel (SPEC 8.2) still works on every screen; the
+    status text itself is hidden under those overlays. The touch sound label reads
+    `[sound: on]` / `[sound: off]` so that, with sound off by default (item 27), the
+    button reads as a state and not as an instruction.
+
 ## Tuning
 
 Defaults in `CONFIG` differ from the numbers in SPEC 6.1 after playtesting. The owner found

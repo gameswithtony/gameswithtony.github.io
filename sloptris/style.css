@@ -467,8 +467,34 @@ body.coarse #hint-buttons { display: flex; }
 
 /* ------------------------------------------------------------ status bar */
 
-.status-bar {
+/* The footer row holds the status line and the game's name. It stays above
+   the title and how-to overlays (z-index) so the name, and its long-press for
+   the dev panel on touch, is reachable everywhere. */
+.footer-row {
+  position: relative;
+  z-index: 11;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.footer-title {
+  flex: 0 0 auto;
+  background: transparent;
+  padding: 0 .4ch;
+  color: var(--accent);
+  font-size: .8125rem;
+  line-height: 20px;
+  text-shadow: 0 0 6px var(--glow);
+  white-space: nowrap;
+}
+
+.status-bar {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 20px;
   line-height: 20px;
   color: var(--muted);
@@ -597,6 +623,8 @@ body.screen-howto .hint-row { visibility: hidden; }
 body.screen-resume .assistant-panel,
 body.screen-resume .hint-row,
 body.screen-resume .status-bar { opacity: .35; }
+body.screen-title .status-bar,
+body.screen-howto .status-bar { visibility: hidden; }
 
 body.screen-retro .status-bar { color: var(--accent); }
 
