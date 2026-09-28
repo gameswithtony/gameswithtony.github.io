@@ -1531,13 +1531,14 @@ createApp({
         technologies: _.clone(Technologies),
         techTableau: [],
         fourFallenHouses: [],
+        showOtherTechs: [], // per player index, toggles techs not in the tableau
         invaderState: new PlayerState(1, -1, '', true, _.cloneDeep(Fleets), [], false, 0, false, false, 0, 0),
         defenderState: new PlayerState(2, -1, '', false, _.cloneDeep(Fleets), [], false, 0, false, false, 0, 0),
         results: [],
         showResults: false,
         expandAll: true,
         computedUpdater: 1,
-        version: "1.92"
+        version: "1.93"
     } },
     watch: {
         numberOfPlayers(val) {
@@ -1834,10 +1835,19 @@ createApp({
         },
         addTech: function (playerIndex, tech, unusedTechIndex) {
             this.players[playerIndex].techs.push(_.clone(tech));
-            this.players[playerIndex].unusedTechs.splice(unusedTechIndex, 1);
+            if (unusedTechIndex >= 0) { // -1 when adding from other techs
+                this.players[playerIndex].unusedTechs.splice(unusedTechIndex, 1);
+            }
             this.players[playerIndex].techs = _.sortBy(this.players[playerIndex].techs, 'name');
             this.saveGameState();
             this.showResults = false;
+        },
+        otherTechs: function (playerIndex) {
+            // techs removed from unusedTechs because they're not in the scenario tableau
+            let player = this.players[playerIndex];
+            return _.filter(Technologies, function(t) {
+                return !_.find(player.techs, function(pt) { return pt.id === t.id }) && !_.find(player.unusedTechs, function(ut) { return ut.id === t.id });
+            });
         },
         playerHasTech: function (index, tech) {
             return !_.find(this.players[index].techs, function(t) { return t.id === tech.id });

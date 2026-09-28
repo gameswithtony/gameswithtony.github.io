@@ -234,6 +234,12 @@
             color: #CCCC00;
         }
 
+        .other-techs-toggle {
+            align-self: center;
+            font-size: 0.9rem;
+            color: lightblue;
+        }
+
         .tableau-explanation {
             margin-block-start: 0.5rem;
             margin-block-end: 1rem;
@@ -588,6 +594,10 @@
                 </section>
                 <section class="tech-list">
                     <p class="tech" v-for="(tech, techIndex) in player.unusedTechs" :key="tech.id" v-on:click="addTech(playerIndex, tech, techIndex)">{{ tech.name }}</p>
+                    <a href="#" class="other-techs-toggle" v-if="otherTechs(playerIndex).length > 0" v-on:click.prevent="showOtherTechs[playerIndex] = !showOtherTechs[playerIndex]">{{ showOtherTechs[playerIndex] ? '-' : '+' }} {{ langStrs[appLang]["otherTechs"] }}</a>
+                    <template v-if="showOtherTechs[playerIndex]">
+                        <p class="tech" v-for="tech in otherTechs(playerIndex)" :key="tech.id" v-on:click="addTech(playerIndex, tech, -1)">{{ tech.name }}</p>
+                    </template>
                 </section>
             </section>
             <section v-if="chosenScenario">
