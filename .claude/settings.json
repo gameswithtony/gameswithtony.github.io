@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m http.server 8765 --bind 127.0.0.1)",
+      "Bash(\"C:/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --remote-debugging-port=9333 --user-data-dir=\"C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/chrome-profile\" --window-size=900,1400 --no-first-run --no-default-browser-check about:blank)",
+      "Bash(node C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-snapshot.mjs C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-before.json)",
+      "Bash(node -e ' *)",
+      "Bash(node C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-snapshot.mjs C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-after.json)",
+      "Bash(git -C \"C:/Users/alice/Documents/GitHub/gameswithtony.github.io\" diff)"
+    ]
+  }
+}

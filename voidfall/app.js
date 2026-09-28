@@ -1538,7 +1538,7 @@ createApp({
         showResults: false,
         expandAll: true,
         computedUpdater: 1,
-        version: "1.93"
+        version: "1.94"
     } },
     watch: {
         numberOfPlayers(val) {
@@ -2556,8 +2556,10 @@ createApp({
 
                         let invaderAbsorption, absInvDescription;
                         [invaderAbsorption, absInvDescription] = invader.absorption(false);
+                        // the side hitting second needs at least 1 initiative left after taking damage (e.g. defender left with only Sentries)
+                        const defenderInitiativeLeft = defender.initiative();
                         let defenderDamage, dmgDefDescription;
-                        [defenderDamage, dmgDefDescription] = initiative.defenderInitiative == 0 ? [0, null] : defender.damage(false, salvoNumber === 1);
+                        [defenderDamage, dmgDefDescription] = defenderInitiativeLeft == 0 ? [0, null] : defender.damage(false, salvoNumber === 1);
                         let defenderDamageToApply =  Math.max(0, defenderDamage - invaderAbsorption);
                         let damageCombinations = invader.calculateDamageCombinations(defenderDamageToApply);
                         tempInvaderTotalSalvoAbsorption = invader.totalSalvoAbsorption;
@@ -2599,7 +2601,7 @@ createApp({
                                         results.push(result);
                                     }
                                 } else {
-                                    let resultDetail = new ResultDetail(initiative.invaderInitiative, initiative.defenderInitiative, 0, defenderDamage, invaderAbsorption, 0,  initiative.defenderInitiative == 0 ? langStrings[lang]['defenderNoSalvoDmg'] + ' ' : `${resultDesc}${langStrings[lang]['invaderAbsorbedAllDmg']} `);
+                                    let resultDetail = new ResultDetail(initiative.invaderInitiative, initiative.defenderInitiative, 0, defenderDamage, invaderAbsorption, 0,  defenderInitiativeLeft == 0 ? langStrings[lang]['defenderNoSalvoDmg'] + ' ' : `${resultDesc}${langStrings[lang]['invaderAbsorbedAllDmg']} `);
 
                                     newSteps2.push(new ResultStep(STEP_TYPE.Salvo, salvoNumber, resultDetail, langStrings[lang]['defenderHitsSecond'], _.cloneDeep(invader), _.cloneDeep(defender)));
                                 }
