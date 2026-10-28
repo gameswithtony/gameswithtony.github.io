@@ -29,8 +29,9 @@ The repository is organized as a collection of separate web applications, each i
 ### Marvel Champions (MC)
 - **Location**: `/mc/`
 - **Purpose**: Digital token replacement for hit points, threat, and counters
-- **Key files**: `converter/` directory with JSON data for all card packs
-- **Features**: Card data conversion, state tracking, multiple pack support
+- **Key files**: `data.js` (generated card lists), `converter/build.js` (generator), `converter/overrides.js` (hand corrections)
+- **Updating cards**: run `node mc/converter/build.js`. It pulls https://github.com/zzorba/marvelsdb-json-data into `mc/converter/data/` (gitignored), rewrites `data.js`, and prints what changed plus anything new it doesn't understand ("Needs a decision"). Never edit `data.js` by hand; fix things in `overrides.js` or the rules in `build.js`.
+- **Saved games**: each tracked character is a full copy in localStorage, so card data changes don't break games in progress.
 
 ### Kanban EV
 - **Location**: `/kanbanev/`

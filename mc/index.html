@@ -64,14 +64,17 @@
                     <a class="hit-point-buttons--big" href="#" v-on:click="character.updateHitPoints(5, $event)">+ 5</a>
                 </section>
             </section>
-            <p class="status-card status-card--stunned" v-if="character.type == 2 && !character.isCounterCard && character.isStunned && !showToggleButtons">Stunned</p>
-            <p class="status-card status-card--confused" v-if="character.type == 2 && !character.isCounterCard && character.isConfused && !showToggleButtons">Confused</p>
-            <p class="status-card status-card--tough" v-if="character.type == 2 && !character.isCounterCard && character.isTough && !showToggleButtons">Tough</p>
+            <p class="status-card status-card--stunned" v-if="character.type == 2 && !character.isCounterCard && character.isStunned && !showToggleButtons">Stunned<span v-if="character.maxstunned > 1">&nbsp;{{ character.stunnedcount }}</span></p>
+            <p class="status-card status-card--confused" v-if="character.type == 2 && !character.isCounterCard && character.isConfused && !showToggleButtons">Confused<span v-if="character.maxconfused > 1">&nbsp;{{ character.confusedcount }}</span></p>
+            <p class="status-card status-card--tough" v-if="character.type == 2 && !character.isCounterCard && character.isTough && !showToggleButtons">Tough<span v-if="character.maxtough > 1">&nbsp;{{ character.toughcount }}</span></p>
             <section class="options" v-if="showToggleButtons && character.type == 2 && !character.isCounterCard">
                 <section class="toggle-buttons">
-                    <p class="status-card status-card-toggle status-card--stunned" v-bind:class="{ statuscardon: character.isStunned }" v-on:click="character.toggleStatus(0, $event)">Stunned</p>
-                    <p class="status-card status-card-toggle status-card--confused" v-bind:class="{ statuscardon: character.isConfused }" v-on:click="character.toggleStatus(1, $event)">Confused</p>
-                    <p class="status-card status-card-toggle status-card--tough" v-bind:class="{ statuscardon: character.isTough }" v-on:click="character.toggleStatus(2, $event)">Tough</p>
+                    <p class="status-card status-card-toggle status-card--stunned" v-if="!(character.maxstunned > 1)" v-bind:class="{ statuscardon: character.isStunned }" v-on:click="character.toggleStatus(0, $event)">Stunned</p>
+                    <p class="status-card status-card-toggle status-card--stunned" v-else v-bind:class="{ statuscardon: character.isStunned }" v-on:click="character.stunnedcount > 0 || character.changeStatusCount('stunned', 1, $event)"><a class="status-step" href="#" v-if="character.stunnedcount > 0" v-on:click.stop="character.changeStatusCount('stunned', -1, $event)">&minus;</a>Stunned<span v-if="character.stunnedcount > 0">&nbsp;{{ character.stunnedcount }}</span><a class="status-step" href="#" v-if="character.stunnedcount > 0 && character.stunnedcount < character.maxstunned" v-on:click.stop="character.changeStatusCount('stunned', 1, $event)">+</a></p>
+                    <p class="status-card status-card-toggle status-card--confused" v-if="!(character.maxconfused > 1)" v-bind:class="{ statuscardon: character.isConfused }" v-on:click="character.toggleStatus(1, $event)">Confused</p>
+                    <p class="status-card status-card-toggle status-card--confused" v-else v-bind:class="{ statuscardon: character.isConfused }" v-on:click="character.confusedcount > 0 || character.changeStatusCount('confused', 1, $event)"><a class="status-step" href="#" v-if="character.confusedcount > 0" v-on:click.stop="character.changeStatusCount('confused', -1, $event)">&minus;</a>Confused<span v-if="character.confusedcount > 0">&nbsp;{{ character.confusedcount }}</span><a class="status-step" href="#" v-if="character.confusedcount > 0 && character.confusedcount < character.maxconfused" v-on:click.stop="character.changeStatusCount('confused', 1, $event)">+</a></p>
+                    <p class="status-card status-card-toggle status-card--tough" v-if="!(character.maxtough > 1)" v-bind:class="{ statuscardon: character.isTough }" v-on:click="character.toggleStatus(2, $event)">Tough</p>
+                    <p class="status-card status-card-toggle status-card--tough" v-else v-bind:class="{ statuscardon: character.isTough }" v-on:click="character.toughcount > 0 || character.changeStatusCount('tough', 1, $event)"><a class="status-step" href="#" v-if="character.toughcount > 0" v-on:click.stop="character.changeStatusCount('tough', -1, $event)">&minus;</a>Tough<span v-if="character.toughcount > 0">&nbsp;{{ character.toughcount }}</span><a class="status-step" href="#" v-if="character.toughcount > 0 && character.toughcount < character.maxtough" v-on:click.stop="character.changeStatusCount('tough', 1, $event)">+</a></p>
                 </section>
                 <section class="max-buttons">
                     <p class="max-button" v-on:click="character.hideMe($event)">H</p>
@@ -116,7 +119,7 @@
             <a href="mc_digitaltracker.pdf" target="_blank">Help</a>
             <a href="#" v-if="characters.length > 0" v-on:click="newgame($event)">New Game</a>
             <br />
-            <span class="version">version {{ version }}</span>
+            <span class="version">version {{ version }} &middot; cards {{ carddatadate }}</span>
         </section>
 
         <section class="button-container" v-if="pageState === 0">
@@ -142,9 +145,12 @@
                 <label v-if="character.hasThreatCounter && character.type == 2">&nbsp;&nbsp;Value: <input type="number" inputmode="numeric" pattern="[0-9]*" class="character-threatcounter" v-model="character.threatcounter" /></label>
                 <br />
                 <div class="character-edit-buttons">
-                    <label v-if="character.type == 2"><input type="checkbox" v-model="character.isStunned" />Stunned</label>
-                    <label v-if="character.type == 2"><input type="checkbox" v-model="character.isConfused" />Confused</label>
-                    <label v-if="character.type == 2"><input type="checkbox" v-model="character.isTough" />Tough</label>
+                    <label v-if="character.type == 2 && !(character.maxstunned > 1)"><input type="checkbox" v-model="character.isStunned" />Stunned</label>
+                    <label v-if="character.type == 2 && character.maxstunned > 1">Stunned <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="character-statuscount" v-model="character.stunnedcount" /></label>
+                    <label v-if="character.type == 2 && !(character.maxconfused > 1)"><input type="checkbox" v-model="character.isConfused" />Confused</label>
+                    <label v-if="character.type == 2 && character.maxconfused > 1">Confused <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="character-statuscount" v-model="character.confusedcount" /></label>
+                    <label v-if="character.type == 2 && !(character.maxtough > 1)"><input type="checkbox" v-model="character.isTough" />Tough</label>
+                    <label v-if="character.type == 2 && character.maxtough > 1">Tough <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="character-statuscount" v-model="character.toughcount" /></label>
                     <br v-if="character.type == 2" />
                     <label><input type="checkbox" v-model="character.hide" :ref="'hide' + index" />Hide</label><span v-if="character.type == 2">&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" v-on:click="moveup(index, $event)" style="margin-left: 0;">Move &uparrow;</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" v-on:click="movedown(index, $event)" style="margin-left: 0;">Move &downarrow;</a></span>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" v-on:click="remove(index, $event)" style="margin-left: 0;">Remove</a>
                 </div>

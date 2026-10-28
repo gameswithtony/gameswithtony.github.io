@@ -89,6 +89,29 @@ const toggleStatus = function (type, event) {
     app.$forceUpdate();
 }
 
+// for characters that can hold several of one status card (Luke Cage's tough cards, steady enemies)
+const changeStatusCount = function (status, diff, event) {
+    let count = new Number(this[status + 'count'] || 0) + diff;
+    count = Math.max(0, Math.min(this['max' + status], count));
+    this[status + 'count'] = count;
+    this['is' + _.capitalize(status)] = count > 0;
+
+    app.saveGameState();
+    event.preventDefault();
+    app.$forceUpdate();
+}
+
+const STATUSES = ['stunned', 'confused', 'tough'];
+
+function copyStatusLimits(entry, character) {
+    STATUSES.forEach(function (status) {
+        if (entry['max' + status] > 1) {
+            character['max' + status] = entry['max' + status];
+            character[status + 'count'] = 0;
+        }
+    });
+}
+
 function createCharacter(id, name, hitpoints, type) {
     return {
         id: id,
@@ -109,6 +132,7 @@ function createCharacter(id, name, hitpoints, type) {
         updateCounter: updateCounter,
         updateThreatCounter: updateThreatCounter,
         toggleStatus: toggleStatus,
+        changeStatusCount: changeStatusCount,
         hideMe: hideMe,
         showMe: showMe
     };
@@ -142,7 +166,8 @@ var app = new Vue({
         filterModule: "",
         filterAspect: "",
         computedUpdater: 1,
-        version: "1.35"
+        version: "1.36",
+        carddatadate: typeof carddatadate !== 'undefined' ? carddatadate : ''   // a cached older data.js won't have it
     },
     mounted: function() {
         this.computedUpdater++;
@@ -190,12 +215,22 @@ var app = new Vue({
                 this.filterAspect = gameState.filterAspect;
             }
 
+            // card data updates can rename modules and aspects
+            if (!_.some(this.modules, { name: this.filterModule })) {
+                this.filterModule = "";
+            }
+
+            if (!_.some(this.aspects, { name: this.filterAspect })) {
+                this.filterAspect = "";
+            }
+
             for(let i=0; i < this.characters.length; i++) {
                 this.characters[i].updateHitPoints = updateHitPoints;
                 this.characters[i].updateMaxHitPoints = updateMaxHitPoints;
                 this.characters[i].updateCounter = updateCounter;
                 this.characters[i].updateThreatCounter = updateThreatCounter;
                 this.characters[i].toggleStatus = toggleStatus;
+                this.characters[i].changeStatusCount = changeStatusCount;
                 this.characters[i].hideMe = hideMe;
                 this.characters[i].showMe = showMe;
                 
@@ -266,6 +301,14 @@ var app = new Vue({
 
             return _.union(charactersAddedNames, charactersSelectedNames);
         },
+        allSelectedOwnerNames: function () {
+            // an aspect can bring encounter cards with it ('Pool brings the Dreadpool set)
+            if (this.filterAspect == '') {
+                return this.allSelectedMainCharacterNames;
+            }
+
+            return _.union(this.allSelectedMainCharacterNames, [ this.filterAspect ]);
+        },
         filteredMainSchemes: function () {
             let self = this;
             if (!this.autoFilterSideSchemesAndMinions) {
@@ -291,12 +334,17 @@ var app = new Vue({
 
             let filtered = _.filter(this.side_schemes, function (s) {
                 let moduleMatch = true;
+                let aspectMatch = true;
 
                 if (self.filterModule != '') {
                     moduleMatch = (_.intersection(s.belongsto, [ self.filterModule ])).length > 0;
                 }
 
-                return (s.belongstotype === 'module' && moduleMatch) || (_.intersection(s.belongsto, self.allSelectedMainCharacterNames)).length > 0;
+                if (self.filterAspect != '') {
+                    aspectMatch = (_.intersection(s.belongsto, [ self.filterAspect ])).length > 0;
+                }
+
+                return (s.belongstotype === 'aspect' && (aspectMatch || s.belongsto[0] === 'Basic')) || (s.belongstotype === 'module' && moduleMatch) || (_.intersection(s.belongsto, self.allSelectedOwnerNames)).length > 0;
             });
             return filtered;
         },
@@ -314,7 +362,7 @@ var app = new Vue({
                 }
 
                 let belongstoisarray = _.isArray(m.belongstotype);
-                return ((m.belongstotype === 'module' || (belongstoisarray && m.belongstotype[0] === 'module')) && moduleMatch) || (_.intersection(m.belongsto, self.allSelectedMainCharacterNames)).length > 0;
+                return ((m.belongstotype === 'module' || (belongstoisarray && m.belongstotype[0] === 'module')) && moduleMatch) || (_.intersection(m.belongsto, self.allSelectedOwnerNames)).length > 0;
             });
             return filtered;
         },
@@ -342,7 +390,7 @@ var app = new Vue({
                     aspectMatch = (_.intersection(c.belongsto, [ self.filterAspect ])).length > 0;
                 }
 
-                return (c.belongstotype === 'aspect' && (aspectMatch || c.belongsto[0] === 'Basic')) || (c.belongstotype === 'module' && moduleMatch) || (_.intersection(c.belongsto, self.allSelectedMainCharacterNames)).length > 0;
+                return (c.belongstotype === 'aspect' && (aspectMatch || c.belongsto[0] === 'Basic')) || (c.belongstotype === 'module' && moduleMatch) || (_.intersection(c.belongsto, self.allSelectedOwnerNames)).length > 0;
             });
             return filtered;
         },
@@ -359,6 +407,16 @@ var app = new Vue({
                 if (this.characters[i].hitpoints > this.characters[i].maxhitpoints) {
                     this.characters[i].hitpoints = this.characters[i].maxhitpoints;
                 }
+
+                // status card counts typed on the edit page
+                let character = this.characters[i];
+                STATUSES.forEach(function (status) {
+                    if (character['max' + status] > 1) {
+                        let count = Math.max(0, Math.min(character['max' + status], Number(character[status + 'count']) || 0));
+                        character[status + 'count'] = count;
+                        character['is' + _.capitalize(status)] = count > 0;
+                    }
+                });
 
                 // check if new max hit points are larger
                 let currentid = this.characters[i].id;
@@ -423,6 +481,7 @@ var app = new Vue({
                         newcharacter.threatcounter = 0;
                     }
 
+                    copyStatusLimits(this.heroes[i], newcharacter);
                     newcharacter.isHero = true;
                     newcharacter.isGoodGuy = true;
                     this.characters.push(newcharacter);
@@ -439,6 +498,7 @@ var app = new Vue({
                     }
 
                     let newcharacter = createCharacter(2000+i, this.villains[i].name, villainhitpoints, TYPE.Character);
+                    copyStatusLimits(this.villains[i], newcharacter);
                     newcharacter.isVillain = true;
                     newcharacter.isBadGuy = true;
                     this.characters.push(newcharacter);
@@ -498,6 +558,7 @@ var app = new Vue({
                         newcharacter.counter = this.allies[i].counter;
                     }
 
+                    copyStatusLimits(this.allies[i], newcharacter);
                     newcharacter.isAlly = true;
                     newcharacter.isGoodGuy = true;
                     this.characters.push(newcharacter);
@@ -515,6 +576,7 @@ var app = new Vue({
                     }
 
                     let newcharacter = createCharacter(6000+i, this.minions[i].name, minionhitpoints, TYPE.Character);
+                    copyStatusLimits(this.minions[i], newcharacter);
                     newcharacter.isMinion = true;
                     newcharacter.isBadGuy = true;
 
@@ -552,7 +614,7 @@ var app = new Vue({
             let basethreat = 0;
 
             if (scheme.threat && scheme.type === 'main_scheme') {
-                threat = scheme.threat * this.numberOfPlayers;
+                threat = scheme.threatfixed ? scheme.threat : scheme.threat * this.numberOfPlayers;
             }
 
             if (scheme.type === 'side_scheme') {
