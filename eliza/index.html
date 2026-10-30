@@ -379,7 +379,13 @@
                 <div v-if="sheet" class="sheet" role="dialog" v-bind:aria-label="sheetTitle" v-on:keydown.esc="sheet = null">
                     <div class="sheet__head">
                         <h2 class="sheet__title" tabindex="-1" ref="sheetTitle">{{ sheetTitle }}</h2>
-                        <button class="sheet__close" v-on:click="sheet = null">Close</button>
+                        <div class="sheet__tools">
+                            <template v-if="sheet === 'board'">
+                                <button class="sheet__zoom" v-on:click="zoomMap(-1)" v-bind:disabled="mapZoomIndex === 0" aria-label="Zoom out" title="Zoom out">&minus;</button>
+                                <button class="sheet__zoom" v-on:click="zoomMap(1)" v-bind:disabled="mapZoomIndex === mapZooms.length - 1" aria-label="Zoom in" title="Zoom in">+</button>
+                            </template>
+                            <button class="sheet__close" v-on:click="sheet = null">Close</button>
+                        </div>
                     </div>
                     <div class="sheet__body">
                         <template v-if="sheet === 'ledger'">
@@ -413,8 +419,7 @@
                         </div>
                         </template>
                         <template v-if="sheet === 'board'">
-                    <p class="phone-panel__tools"><a href="#" v-on:click.prevent="bigMap = !bigMap">{{ bigMap ? 'Smaller map' : 'Larger map' }}</a></p>
-                    <board-map :g="g" :highlight="mapSel" :big="bigMap" :net="isHumanTurn && !aiTurn ? networkOf(cur) : []" v-on:select="mapSel = (mapSel === $event ? null : $event)"></board-map>
+                    <board-map :g="g" :highlight="mapSel" :zoom="mapZooms[mapZoomIndex]" :net="isHumanTurn && !aiTurn ? networkOf(cur) : []" v-on:select="mapSel = (mapSel === $event ? null : $event)"></board-map>
                     <p class="phone-panel__legend">Tap a location for details.<span v-if="isHumanTurn && !aiTurn"> Underlined names are in your network.</span></p>
                     <section class="map-key" aria-labelledby="map-key-title">
                         <h3 id="map-key-title" class="map-key__title">Map key</h3>
@@ -494,7 +499,7 @@
             <section class="report-a-bug">
                 <a href="#" v-on:click.prevent="isGameStateOpen ? (isGameStateOpen = false) : getGameState()" v-bind:aria-expanded="isGameStateOpen ? 'true' : 'false'">report a bug</a>
                 <section v-if="isGameStateOpen">
-                    <p>To report a bug, <a href="https://discord.gg/7CHwh6TSsa">join my Discord</a>. Please copy/paste the below error <em>into a text file or google doc</em> and then attach it to a message to me. The error is usually too long to copy into a direct message.</p>
+                    <p>To report a bug, <a href="https://discord.gg/7CHwh6TSsa">join my Discord</a>. Copy the text below <em>into a text file</em> and attach it to a message to me (it's too long to paste into a message). It contains the whole game so far, so I can replay exactly what happened.</p>
                     <textarea ref="gamestate" rows="10">{{ gameState }}</textarea>
                     <br /><a href="#" v-on:click.prevent="copyGameState()">Copy to clipboard</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" v-on:click.prevent="isGameStateOpen = false">Close</a>
                 </section>

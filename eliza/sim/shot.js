@@ -82,6 +82,7 @@ try {
         await sleep(300); await shot('03-sheet-' + k, false);
         await evaluate("(() => { const b = document.querySelector('.sheet__body'); if (b) b.scrollTop = b.scrollHeight; })()");
         await sleep(200); await shot('03-sheet-' + k + '-end', false);
+        if (k === 'board') { await evaluate("(() => { const a = window.elizaApp; a.zoomMap(1); a.zoomMap(1); const b = document.querySelector('.sheet__body'); if (b) b.scrollTop = 0; })()"); await sleep(300); await shot('03-sheet-board-zoom', false); await evaluate("window.elizaApp.mapZoomIndex = 0"); }
         await evaluate(`(async () => { window.elizaApp.sheet = null; })()`);
     }
     await evaluate(`(async () => { const a = window.elizaApp; a.startAction('build'); a.chooseIndustry(a.buildIndustries()[0]); })()`);

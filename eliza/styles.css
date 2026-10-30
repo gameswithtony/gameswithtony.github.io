@@ -361,6 +361,9 @@ input[type="text"], select {
 }
 .sheet__head { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.4rem 0.4rem 0.9rem; border-bottom: 1px solid var(--rule); }
 .sheet__title { margin: 0; font-size: 1.1rem; }
+.sheet__tools { display: flex; align-items: center; gap: 0.4rem; }
+.sheet__zoom { width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--control); background: var(--field); color: var(--prussian); font-size: 1.35rem; font-weight: 700; line-height: 1; cursor: pointer; }
+.sheet__zoom:disabled { opacity: 0.4; cursor: default; }
 .sheet__close { min-height: 40px; padding: 0 0.9rem; border-radius: 6px; border: 1px solid var(--control); background: var(--field); color: var(--prussian); font-weight: 700; cursor: pointer; }
 .sheet__body { overflow-y: auto; padding: 0.6rem 0.9rem 0.9rem; overscroll-behavior: contain; }
 .sheet__body .ledger { margin-bottom: 0.6rem; }
@@ -370,7 +373,6 @@ body { padding-bottom: 190px; }
 .phone-panel { margin: 0.4rem 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 0.75rem; }
 .phone-panel summary { font-family: var(--display); font-weight: 700; color: var(--prussian); cursor: pointer; min-height: var(--tap); display: flex; align-items: center; gap: 0.5rem; }
 .phone-panel__count { font-family: var(--body); font-weight: 400; font-size: 0.85rem; color: var(--muted); }
-.phone-panel__tools { margin: 0 0 0.4rem; font-size: 0.9rem; }
 .phone-panel__legend { font-size: 0.8rem; color: var(--muted); margin: 0.5rem 0; }
 .phone-detail { background: var(--highlight); padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; }
 .phone-detail p { margin: 0.2rem 0; }

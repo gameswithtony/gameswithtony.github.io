@@ -23,12 +23,25 @@
 </body>
 <script>
     function loadData() {
-        let gameStateEncoded = document.getElementById("gamestateencoded").value;
-        let json = atob(gameStateEncoded);
-        // version 2 saves have "v":2 and live under their own key
-        let key = JSON.parse(json).v === 2 ? "elizagamestate2" : "elizagamestate";
-        localStorage.setItem(key, LZString.compress(json));
-        alert("Game State Loaded");
+        let text = document.getElementById("gamestateencoded").value.trim();
+        if (!confirm("This replaces the game saved in this browser. Continue?")) return;
+        let json;
+        try {
+            if (text.indexOf("ELIZA2:") === 0) {
+                // version 2 bug report: LZ-compressed, base64
+                json = LZString.decompressFromBase64(text.slice(7));
+            } else {
+                // older reports: plain base64 of the saved JSON
+                json = decodeURIComponent(escape(atob(text)));
+            }
+            let data = JSON.parse(json);
+            // version 2 saves have "v":2 and live under their own key
+            let key = data.v === 2 ? "elizagamestate2" : "elizagamestate";
+            localStorage.setItem(key, LZString.compress(json));
+            alert("Game State Loaded");
+        } catch (e) {
+            alert("That doesn't look like a saved game: " + e.message);
+        }
     }
 </script>
 </html>

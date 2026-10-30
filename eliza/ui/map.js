@@ -18,8 +18,7 @@ const SQ = 46;
 
 export const MAP_CSS = `
 .board-map-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
-.board-map-wrap.big .board-map { width: 200%; }
-.board-map { width: 100%; height: auto; display: block; background: var(--map-bg, #E3E9E6); }
+.board-map { width: var(--map-zoom, 100%); max-width: none; height: auto; display: block; background: var(--map-bg, #E3E9E6); }
 .board-map .sp-empty { fill: var(--map-space, #FBFCFA); stroke: var(--map-line, #15181B); stroke-width: 2px; }
 .board-map .sp-tile { stroke: var(--map-line, #15181B); }
 .board-map .sp-band { fill: #15181B; }
@@ -68,8 +67,10 @@ export function mapSVG(g, highlight = null, net = []) {
                     return;
                 }
                 const color = COLOR_HEX[g.players[t.o].color] || '#999';
-                out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="${SQ}" rx="5" fill="${color}" class="sp-tile" stroke-width="${t.flip ? 4 : 2}"/>`);
-                if (t.flip) out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="12" rx="4" class="sp-band"/>`);
+                // fill, then the flipped band as the tile's own top edge (rounded top, square bottom), then the outline
+                out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="${SQ}" rx="5" fill="${color}"/>`);
+                if (t.flip) out.push(`<path d="M${sx} ${sy + 12}V${sy + 5}Q${sx} ${sy} ${sx + 5} ${sy}H${sx + SQ - 5}Q${sx + SQ} ${sy} ${sx + SQ} ${sy + 5}V${sy + 12}Z" class="sp-band"/>`);
+                out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="${SQ}" rx="5" fill="none" class="sp-tile" stroke-width="${t.flip ? 4 : 2}"/>`);
                 out.push(`<text x="${sx + SQ / 2}" y="${sy + 31}" text-anchor="middle" class="map-tile">${IND_ABBR[t.ind]} ${ROMAN[t.lvl]}</text>`);
                 if (t.res) {
                     const kind = t.ind === IND.CoalMine ? 'coal' : t.ind === IND.IronWorks ? 'iron' : 'beer';
@@ -90,7 +91,7 @@ if (typeof window !== 'undefined' && window.Vue) {
     style.textContent = MAP_CSS;
     document.head.appendChild(style);
     window.Vue.component('board-map', {
-        props: ['g', 'highlight', 'big', 'net'],
+        props: ['g', 'highlight', 'zoom', 'net'],
         computed: { svg() { return mapSVG(this.g, this.highlight, this.net || []); } },
         methods: {
             tap(e) {
@@ -98,6 +99,6 @@ if (typeof window !== 'undefined' && window.Vue) {
                 if (el) this.$emit('select', +el.getAttribute('data-loc'));
             },
         },
-        template: `<div class="board-map-wrap" :class="{ big: big }" v-html="svg" v-on:click="tap"></div>`,
+        template: `<div class="board-map-wrap" :style="{ '--map-zoom': (zoom || 1) * 100 + '%' }" v-html="svg" v-on:click="tap"></div>`,
     });
 }

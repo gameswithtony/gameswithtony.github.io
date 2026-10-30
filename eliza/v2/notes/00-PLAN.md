@@ -172,3 +172,11 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   button disabled). Persona blurbs reworded (Balanced: "Adapts to the cards and the board. No fixed plan.";
   Ironmaster: "Supplies everyone's coal and iron, then invests the profits."); blurb sits under the persona select
   with aria-describedby. sim/shot.js --seats human,human. Test: all-human games 2-4p, both modes.
+- 2026-10-29: Bug reports. "report a bug" now saves first, then shows 'ELIZA2:' + LZString.compressToBase64(save JSON)
+  (~10 KB for a mid-game; was ~27 KB plain base64, and btoa crashed on non-Latin-1 names like emoji). The save now
+  includes appVersion and the error text if the error screen was shown. loadgame.html accepts ELIZA2 reports and
+  old plain-base64 reports (v1 and early v2), asks before overwriting the browser's saved game.
+  Read a report without the app: `node sim/inspect.js report.txt [--history 40] [--ai]` (summary, error, standings,
+  last moves, undo count; --ai re-runs the AI's choice for the current turn).
+  Map: flipped band is now the tile's own top edge (path with rounded top corners); Board sheet header has
+  zoom -/+ (1x, 1.5x, 2x, 3x) instead of the "Larger map" link.

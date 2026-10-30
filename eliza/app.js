@@ -60,7 +60,8 @@ const app = new Vue({
         mapSel: null,
         theme: document.documentElement.getAttribute('data-theme') || 'light',
         sheet: null,        // phone mode: open information sheet (ledger | hand | board | mat)
-        bigMap: false,
+        mapZooms: [1, 1.5, 2, 3],
+        mapZoomIndex: 0,
         mapKey: IND_ABBR.map((abbr, i) => ({ abbr, name: IND_NAMES[i] })),
     },
     watch: {
@@ -283,6 +284,7 @@ const app = new Vue({
                 } catch (e) {
                     this.thinking = false;
                     this.error = (e && e.stack) || String(e);
+                    this.save();
                 }
             }, 30);
         },
@@ -311,11 +313,15 @@ const app = new Vue({
         },
         save() {
             if (!this.g) return;
-            const d = { v: 2, g: this.g, screen: this.screen, aiTurn: this.aiTurn, endLines: this.endLines, setup: this.setup, undoStack: this.undoStack.slice(-10) };
+            const d = { v: 2, appVersion: APP_VERSION, g: this.g, screen: this.screen, aiTurn: this.aiTurn, endLines: this.endLines, setup: this.setup, undoStack: this.undoStack.slice(-10), error: this.error || null };
             try { localStorage.setItem(SAVE_KEY, LZString.compress(JSON.stringify(d))); } catch (e) { /* storage full: keep playing */ }
         },
+        /** Bug report text: the saved game (with undo history, the error if any, app version), compressed to plain text. */
         getGameState() {
-            this.gameState = btoa(LZString.decompress(localStorage.getItem(SAVE_KEY)) || '');
+            this.save();
+            const saved = localStorage.getItem(SAVE_KEY);
+            const json = saved ? LZString.decompress(saved) : '';
+            this.gameState = json ? 'ELIZA2:' + LZString.compressToBase64(json) : 'No game in progress.';
             this.isGameStateOpen = true;
             return this.gameState;
         },
@@ -716,6 +722,9 @@ const app = new Vue({
             this.theme = this.theme === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', this.theme);
             try { localStorage.setItem('elizatheme', this.theme); } catch (e) { /* not saved; still applies */ }
+        },
+        zoomMap(step) {
+            this.mapZoomIndex = Math.max(0, Math.min(this.mapZooms.length - 1, this.mapZoomIndex + step));
         },
         toggleSheet(k) {
             this.sheet = this.sheet === k ? null : k;
