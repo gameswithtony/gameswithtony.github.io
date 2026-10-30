@@ -1,0 +1,42 @@
+
+# tune start 2026-10-30T00:43:45.287Z players=2 games=120
+0: moneyRate.0 0.33 -> 0.38  margin -1.9  win 46%  
+1: beerBase.1 0.25 -> 0.33  margin -0.9  win 49%  
+2: shortfallHorizon 4 -> 3  margin 0.0  win 50%  
+3: coalRate.0 0.55 -> 0.4  margin 3.0  win 57%  ACCEPT
+4: interest.5 0.7 -> 0.55  margin 0.0  win 44%  
+5: orderW 1 -> 1.4  margin -4.0  win 45%  
+6: pSellReady 0.9 -> 0.85  margin 0.1  win 52%  
+7: interest.4 0.5 -> 0.65  margin -0.9  win 52%  
+8: beerBase.0 0.03 -> 0  margin -3.4  win 41%  
+9: interest.3 0.6 -> 0.45  margin 1.2  win 53%  
+10: moneyRate.1 0.3 -> 0.25  margin 1.4  win 53%  
+11: coalRate.0 0.4 -> 0.55  margin 0.8  win 53%  
+12: spendPerAction 12 -> 9  margin 6.1  win 62%  ACCEPT
+13: pRouteNoBeer 0.45 -> 0.53  margin 0.1  win 52%  
+14: ironRate.1 0.6 -> 0.75  margin 0.8  win 51%  
+15: matW 0.55 -> 0.65  margin -10.3  win 37%  
+16: orderW 1 -> 1.4  margin -1.8  win 44%  
+17: interest.2 0.8 -> 0.95  margin 0.0  win 49%  
+18: pByLinks.1 0.6 -> 0.52  margin -0.8  win 49%  
+19: interest.3 0.6 -> 0.45  margin -1.0  win 48%  
+20: ironRate.1 0.6 -> 0.45  margin -0.5  win 46%  
+21: spendPerAction 9 -> 6  margin 4.6  win 60%  ACCEPT
+22: coalRate.0 0.4 -> 0.25  margin -1.8  win 43%  
+23: poorBoost 0.4 -> 0.25  margin 2.7  win 56%  ACCEPT
+24: ironRate.0 0.7 -> 0.85  margin -0.6  win 52%  
+25: linkBias 0 -> -0.05  margin -0.4  win 44%  
+26: coalRate.1 1.1 -> 0.9  margin -0.4  win 48%  
+27: incomeDiscount 0.8 -> 0.7  margin -1.7  win 44%  
+28: pSellReady 0.9 -> 0.95  margin 0.4  win 50%  
+29: interest.3 0.6 -> 0.75  margin -0.4  win 47%  
+30: beerBase.0 0.03 -> 0  margin -3.2  win 43%  
+31: orderW 1 -> 1.4  margin -3.0  win 42%  
+32: pSellReady 0.9 -> 0.95  margin -1.4  win 47%  
+33: pRouteNoBeer 0.45 -> 0.37  margin -0.2  win 49%  
+34: linkBias 0 -> 0.05  margin 0.3  win 52%  
+35: interest.0 1 -> 1.15  margin -1.8  win 48%  
+36: poorBoost 0.25 -> 0.1  margin -1.1  win 46%  
+37: pSellReady 0.9 -> 0.95  margin 1.9  win 52%  
+38: poorBoost 0.25 -> 0.4  margin -3.0  win 42%  
+39: moneyRate.1 0.3 -> 0.25  margin 1.5  win 57%  ACCEPT

@@ -24,7 +24,10 @@
 <script>
     function loadData() {
         let gameStateEncoded = document.getElementById("gamestateencoded").value;
-        localStorage.setItem("elizagamestate", LZString.compress(atob(gameStateEncoded)));
+        let json = atob(gameStateEncoded);
+        // version 2 saves have "v":2 and live under their own key
+        let key = JSON.parse(json).v === 2 ? "elizagamestate2" : "elizagamestate";
+        localStorage.setItem(key, LZString.compress(json));
         alert("Game State Loaded");
     }
 </script>
