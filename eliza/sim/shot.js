@@ -78,7 +78,7 @@ try {
     })()`);
     await sleep(600); await shot('03-turn', false);
     for (const k of ['ledger', 'hand', 'board', 'mat']) {
-        await evaluate("(async () => { const a = window.elizaApp; if (a.phoneTabs.some(x => x.k === '" + k + "')) a.toggleSheet('" + k + "'); })()");
+        await evaluate("(async () => { const a = window.elizaApp; if (a.infoTabs.some(x => x.k === '" + k + "')) a.toggleSheet('" + k + "'); })()");
         await sleep(300); await shot('03-sheet-' + k, false);
         await evaluate("(() => { const b = document.querySelector('.sheet__body'); if (b) b.scrollTop = b.scrollHeight; })()");
         await sleep(200); await shot('03-sheet-' + k + '-end', false);

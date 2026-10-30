@@ -195,6 +195,10 @@ h3 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
 .player-icon-gray path { fill: #B7BEC5; }
 .player-icon-red path { fill: #E06A2C; }
 
+/* ---- setup ---- */
+.merchant-list { background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.75rem 1rem 0.75rem 2rem; }
+.merchant-list li + li { margin-top: 0.25rem; }
+
 /* ---- prompts ---- */
 .action-header {
     font-weight: 700;
@@ -294,6 +298,7 @@ input[type="text"], select {
 .boardstate h2 { font-size: 1rem; text-align: left; }
 .boardstate__instructions { margin: 0; color: var(--muted); }
 .boardstate__marketspaces { font-weight: 700; padding: 0.8rem 1rem; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }
+.boardstate__marketspaces--players { background: var(--highlight); }
 .boardstate__locations { list-style: none; text-align: left; padding-left: 0; }
 .boardstate__location { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; }
 .boardstate__locationname { font-weight: 700; margin: 0; color: var(--prussian); }

@@ -76,7 +76,7 @@
             </div>
             <br />
             <p v-if="startProblem" class="important text-centered" id="start-problem" role="status">{{ startProblem }}</p>
-            <button class="button" v-on:click="startGame" v-bind:disabled="!!startProblem" v-bind:aria-describedby="startProblem ? 'start-problem' : null">Proceed to Setup</button>
+            <button class="button" v-on:click="startGame" v-bind:disabled="!!startProblem" v-bind:aria-describedby="startProblem ? 'start-problem' : null">{{ setup.mode === 'phone' ? 'Start Game' : 'Proceed to Setup' }}</button>
             <br /><br />
             <h3>Important Notes</h3>
             <ul style="padding: 0 1rem;">
@@ -119,19 +119,15 @@
             <!-- ---------------------------------------------------- setup -->
             <section v-if="screen === 'setup' && !error">
                 <h1>Game Setup</h1>
-                <p>1) Set up the board and each player's mat as normal for a {{ g.n }}-player game.</p>
-                <p>2) Set up the following merchant tiles, with their beer, as normal.</p>
-                <ul style="background-color: #efefef; padding: 1rem 2rem;">
+                <p>1) Set up a normal {{ g.n }}-player game, with these changes:</p>
+                <p>2) Use these merchant tiles:</p>
+                <ul class="merchant-list">
                     <li v-for="m in g.merch" :key="m.slot">{{ locName(m.loc) }}: {{ merchantText(m) }}</li>
                 </ul>
-                <p style="font-style: italic;">NOTE: These merchant tiles have been chosen randomly. If you don't like the setup try starting a new game and you'll get a new random setup!</p>
-                <template v-if="g.mode === 'physical'">
-                    <p>3) Build the deck for a normal {{ g.n }}-player game ({{ g.n === 2 ? 40 : g.n === 3 ? 54 : 64 }} cards) and shuffle it.
-                        <span v-for="pl in g.players" v-if="pl.kind === 'ai'">Deal {{ aiShare }} cards face down back into the box for {{ pl.name }}. </span>
-                        {{ g.players.filter(p => p.kind === 'human').length > 1 ? 'Each player' : 'You' }} then deal{{ g.players.filter(p => p.kind === 'human').length > 1 ? 's' : '' }} 8 cards, plus 1 face down to start a discard pile, as normal. The rest is the draw deck.</p>
-                    <p>4) Give each AI its industry tiles and links. You may set up a player mat for each AI, but the app tracks them for you ('Game State').</p>
-                </template>
-                <p>{{ g.mode === 'physical' ? 5 : 3 }}) Turn order for the first round:
+                <p style="font-style: italic;">These were chosen at random. Start a new game for a different setup.</p>
+                <p v-if="g.players.some(p => p.kind === 'ai')">3) After shuffling the deck, deal <span v-for="(pl, i) in g.players.filter(p => p.kind === 'ai')">{{ i ? ' and ' : '' }}{{ aiShare }} cards face down back into the box for {{ pl.name }}</span>.</p>
+                <p>{{ g.players.some(p => p.kind === 'ai') ? 4 : 3 }}) The app tracks everyone's money, income and VP<span v-if="g.players.some(p => p.kind === 'ai')">, so the AIs need no coins or markers</span>.</p>
+                <p>{{ g.players.some(p => p.kind === 'ai') ? 5 : 4 }}) First-round turn order:
                     <span v-for="(pl, i) in playersInOrder">{{ pl.name }}<span v-if="i < playersInOrder.length - 1"> &rarr; </span></span>
                 </p>
                 <p>When you are done with setup, click 'Start Game' to begin!</p>
@@ -378,9 +374,9 @@
             </section>
 
             <!-- ---------------------------------------------------- next button -->
-            <section class="button-container" v-if="!error && (screen === 'setup' || showNext || phoneTabs.length)" v-bind:class="{ 'button-container--tabs': phoneTabs.length }">
+            <section class="button-container" v-if="!error && (screen === 'setup' || showNext || infoTabs.length)" v-bind:class="{ 'button-container--tabs': infoTabs.length }">
                 <!-- phone mode: information sheets (open from the tabs below) -->
-                <div v-if="isPhone && sheet" class="sheet" role="dialog" v-bind:aria-label="sheetTitle" v-on:keydown.esc="sheet = null">
+                <div v-if="sheet" class="sheet" role="dialog" v-bind:aria-label="sheetTitle" v-on:keydown.esc="sheet = null">
                     <div class="sheet__head">
                         <h2 class="sheet__title" tabindex="-1" ref="sheetTitle">{{ sheetTitle }}</h2>
                         <button class="sheet__close" v-on:click="sheet = null">Close</button>
@@ -454,15 +450,15 @@
                 </div>
                 <button class="button" v-if="screen === 'setup'" v-on:click="beginPlay()">Start Game</button>
                 <button class="button" :disabled="thinking" v-if="showNext" v-on:click="next()">{{ thinking ? 'Please wait...' : 'Next >>' }}</button>
-                <nav v-if="phoneTabs.length" class="tabs" aria-label="Game information">
-                    <button v-for="tab in phoneTabs" :key="tab.k" class="tab" v-bind:class="{ 'tab--open': sheet === tab.k }" v-bind:aria-pressed="sheet === tab.k ? 'true' : 'false'" v-on:click="toggleSheet(tab.k)">{{ tab.label }}<span v-if="tab.count !== undefined" class="tab__count">{{ tab.count }}</span></button>
+                <nav v-if="infoTabs.length" class="tabs" aria-label="Game information">
+                    <button v-for="tab in infoTabs" :key="tab.k" class="tab" v-bind:class="{ 'tab--open': sheet === tab.k }" v-bind:aria-pressed="sheet === tab.k ? 'true' : 'false'" v-on:click="toggleSheet(tab.k)">{{ tab.label }}<span v-if="tab.count !== undefined" class="tab__count">{{ tab.count }}</span></button>
                 </nav>
             </section>
 
             <!-- ---------------------------------------------------- board state -->
             <section class="boardstate" v-if="showBoardState">
                 <a href="#" class="boardstate_close" v-on:click.prevent="toggleShowBoardState">[ Close Game State ]</a>
-                <p class="boardstate__marketspaces" style="background-color: lightcyan;">
+                <p class="boardstate__marketspaces boardstate__marketspaces--players">
                     <span v-for="(pl, i) in g.players" :key="pl.id">{{ pl.name }}: {{ pl.vp }} VP, &pound;{{ pl.money }}, income {{ incomeOf(pl.id) }}<span v-if="i < g.players.length - 1">&nbsp;|&nbsp;</span></span>
                 </p>
                 <p class="boardstate__marketspaces">

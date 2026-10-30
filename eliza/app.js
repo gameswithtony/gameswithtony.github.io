@@ -64,7 +64,7 @@ const app = new Vue({
         mapKey: IND_ABBR.map((abbr, i) => ({ abbr, name: IND_NAMES[i] })),
     },
     watch: {
-        phoneTabs(tabs) { if (this.sheet && !tabs.some(x => x.k === this.sheet)) this.sheet = null; },
+        infoTabs(tabs) { if (this.sheet && !tabs.some(x => x.k === this.sheet)) this.sheet = null; },
     },
     mounted() {
         try {
@@ -105,10 +105,14 @@ const app = new Vue({
         playersInOrder() { return this.g ? this.g.order.map(p => this.g.players[p]) : []; },
         eraName() { return this.g && this.g.era === ERA.Rail ? 'Rail' : 'Canal'; },
         historyEntries() { return this.g ? history(this.g) : []; },
-        /** Phone mode footer tabs. Hand and mat only on the current human's own turn (pass-and-play privacy). */
-        phoneTabs() {
-            if (!this.isPhone || this.error || this.screen === 'setup' || this.screen === 'handoff') return [];
+        /**
+         * Footer information tabs. Both modes get Ledger and Board (in a physical game the Board is a way to check the
+         * app against the table); phone mode adds Hand and Mat, only on the current human's own turn.
+         */
+        infoTabs() {
+            if (!this.g || this.error || this.screen === 'setup' || this.screen === 'handoff') return [];
             const tabs = [{ k: 'ledger', label: 'Ledger' }];
+            if (!this.isPhone) { tabs.push({ k: 'board', label: 'Board' }); return tabs; }
             const mine = this.screen === 'turn' && this.isHumanTurn && !this.aiTurn;
             if (mine) tabs.push({ k: 'hand', label: 'Hand', count: (this.curPlayer.hand || []).length });
             tabs.push({ k: 'board', label: 'Board' });
@@ -142,9 +146,8 @@ const app = new Vue({
         locName(id) { return LOCATIONS[id].name; },
         money(n) { return '£' + n; },
         merchantText(m) {
-            if (!m.accepts.length) return 'Blank merchant (buys nothing)';
-            if (m.accepts.length === 3) return 'Buys Manufactured Goods, Cotton and Pottery';
-            return 'Buys ' + m.accepts.map(i => IND_NAMES[i]).join(', ');
+            if (!m.accepts.length) return 'Blank';
+            return m.accepts.slice().sort((a, b) => a - b).map(i => IND_NAMES[i]).join(', ');
         },
 
         // ------------------------------------------------------------------ setup
@@ -176,9 +179,11 @@ const app = new Vue({
             const seats = this.setup.seats.map(s => ({ ...s, name: (s.name || '').trim() || (s.kind === 'ai' ? 'AI' : 'Player') }));
             const g = newGame({ players: seats, mode: this.setup.mode });
             this.g = freeze(g);
-            this.screen = 'setup';
             this.undoStack = [];
+            if (g.mode === 'phone') { this.beginPlay(); return; } // nothing to set up without a board
+            this.screen = 'setup';
             this.save();
+            this.$nextTick(() => window.scrollTo(0, 0));
         },
         beginPlay() {
             this.screen = 'turn';
@@ -190,6 +195,7 @@ const app = new Vue({
             this.showBoardState = false; this.showHistory = false; this.error = null;
             this.setup = { mode: 'physical', seats: defaultSeats() };
             localStorage.removeItem(SAVE_KEY);
+            this.$nextTick(() => window.scrollTo(0, 0));
         },
 
         // ------------------------------------------------------------------ flow
@@ -331,6 +337,7 @@ const app = new Vue({
             if (t === 'loan' || t === 'scout' || t === 'pass') d.stage = 'confirm';
             this.draft = d;
             if (d.stage === 'confirm') this.prepareConfirm();
+            this.$nextTick(() => window.scrollTo(0, 0));
         },
         back() {
             this.message = null;
@@ -346,6 +353,7 @@ const app = new Vue({
             Object.assign(d, patch, { stage });
             this.message = null;
             this.draft = { ...d };
+            this.$nextTick(() => window.scrollTo(0, 0));
         },
 
         // ---- build
@@ -725,6 +733,7 @@ const app = new Vue({
         eraLine() {
             const left = this.g.rounds - this.g.round, cards = this.g.deck.length;
             const rounds = left === 0 ? `Last round of the ${this.eraName} era` : `${left} round${left === 1 ? '' : 's'} left in the ${this.eraName} era after this one`;
+            if (!this.isPhone) return rounds; // physical mode: the deck is real cards the app can't count
             return `${rounds} · ${cards} card${cards === 1 ? '' : 's'} in the deck`;
         },
         /** Market spaces from cheapest to dearest, each {price, full}. */
