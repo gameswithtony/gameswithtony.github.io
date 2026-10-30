@@ -6,7 +6,15 @@
       "Bash(node C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-snapshot.mjs C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-before.json)",
       "Bash(node -e ' *)",
       "Bash(node C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-snapshot.mjs C:/Users/alice/AppData/Local/Temp/claude/c--Users-alice-Documents-GitHub-gameswithtony-github-io/e2428d59-6245-45a7-b19d-4688f959294a/scratchpad/combat-after.json)",
-      "Bash(git -C \"C:/Users/alice/Documents/GitHub/gameswithtony.github.io\" diff)"
+      "Bash(git -C \"C:/Users/alice/Documents/GitHub/gameswithtony.github.io\" diff)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__claude_ai_Asana__get_task",
+      "mcp__Claude_Browser__preview_screenshot",
+      "mcp__claude-in-chrome__read_console_messages",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__Claude_Preview__preview_console_logs",
+      "mcp__chrome-devtools__list_pages"
     ]
   }
 }

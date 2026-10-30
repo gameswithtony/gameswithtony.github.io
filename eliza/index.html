@@ -10,426 +10,502 @@
     <meta http-equiv="pragma" content="no-cache" />
     <link rel="shortcut icon" href="images/favicon.ico">
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.12/dist/vue.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.20/lodash.min.js"></script>
     <script src="lz-string.min.js"></script>
     <link rel="preconnect" href="https://fonts.gstatic.com">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Zilla+Slab:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script>
+        // apply the saved theme (or the phone's setting) before first paint
+        (function () {
+            try {
+                var t = localStorage.getItem('elizatheme');
+                if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', t);
+            } catch (e) { /* storage blocked: stay light */ }
+        })();
+    </script>
     <title>Eliza - Brass: Birmingham Solo Mode</title>
 </head>
 <body>
     <main id="eliza">
+        <!-- ============================================================ START -->
         <section v-if="!gameHasStarted" class="playerArea">
-            <h1 class="starttitle text-centered">
-                Eliza and Eleanor
-            </h1>
+            <div class="theme-corner"><button class="theme-toggle" v-on:click="toggleTheme()" v-bind:aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" v-bind:title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"><svg v-if="theme !== 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+            <h1 class="starttitle text-centered">Eliza and Eleanor</h1>
             <h2 class="startsubtitle text-centered">
                 Brass: Birmingham Solo Mode
                 <span class="text-tiny"><br />version {{ appVersion }}</span>
             </h2>
-            <p class="startmessage">
-                Select your player color
+            <p v-if="hasV1Game" class="action-desc">
+                You have a game in progress from the previous version. <a href="v1/index.html">Continue it in version 1</a>.
             </p>
-            <ul class="player-color-options text-centered">
-                <!--
-                <li class="player-color-option gray" v-on:click="setPlayerColor(0)"
-                    v-bind:class="{ playerColorOptionSelected: humanPlayer.color === 0 }">G</li>
-                -->
-                <li class="player-color-option blue" v-on:click="setPlayerColor(1)"
-                    v-bind:class="{ playerColorOptionSelected: humanPlayer.color === 1 }">Purple</li>
-                
-                <li class="player-color-option red" v-on:click="setPlayerColor(2)"
-                    v-bind:class="{ playerColorOptionSelected: humanPlayer.color === 2 }">Red</li>
-                <!--
-                <li class="player-color-option yellow" v-on:click="setPlayerColor(3)"
-                    v-bind:class="{ playerColorOptionSelected: humanPlayer.color === 3 }">Y</li>
-                    -->
-            </ul>
+            <p class="startmessage">How are you playing?</p>
             <ul class="player-color-options playerColorOptionTrack numberOfPlayers text-centered">
-                <li class="player-color-option"><input type="radio" name="numberOfPlayers" id="2" value="2" v-model="numberOfPlayers" /> <label for="2">2-player</label></li>
-                <li class="player-color-option"><input type="radio" name="numberOfPlayers" id="3" value="3" v-model="numberOfPlayers" /> <label for="3">3-player</label></li>
+                <li class="player-color-option"><input type="radio" id="mode-physical" value="physical" v-model="setup.mode" /> <label for="mode-physical">On a physical board</label></li>
+                <li class="player-color-option"><input type="radio" id="mode-phone" value="phone" v-model="setup.mode" /> <label for="mode-phone">On this phone only (no board)</label></li>
+            </ul>
+            <p class="startmessage">Players</p>
+            <ul class="cards">
+                <li v-for="(seat, i) in setup.seats" :key="i" class="card">
+                    <p class="card__name">
+                        <span v-if="seat.kind === 'human'">Player: </span><span v-else>AI: </span>
+                        <input type="text" v-model="seat.name" maxlength="16" style="width: 9rem;" />
+                        <a href="#" v-if="setup.seats.length > 1" v-on:click.prevent="removeSeat(i)" v-bind:aria-label="'Remove ' + (seat.name || (seat.kind === 'ai' ? 'this AI' : 'this player'))">remove</a>
+                    </p>
+                    <div class="card__area">
+                        <ul class="player-color-options">
+                            <li v-for="c in colors" :key="c" class="player-color-option" v-bind:class="[c === 'purple' ? 'blue' : c, { playerColorOptionSelected: seat.color === c }]" v-on:click="setSeatColor(i, c)">{{ c }}</li>
+                        </ul>
+                    </div>
+                    <div class="card__area persona" v-if="seat.kind === 'ai'">
+                        <label class="persona__label" v-bind:for="'persona-' + i">Persona</label>
+                        <div class="persona__field">
+                            <select v-bind:id="'persona-' + i" v-bind:aria-describedby="'persona-desc-' + i" v-model="seat.persona">
+                                <option v-for="p in personas" :key="p.key" :value="p.key">{{ p.name }}</option>
+                            </select>
+                            <p class="persona__blurb" v-bind:id="'persona-desc-' + i">{{ personas.find(p => p.key === seat.persona).blurb }}</p>
+                        </div>
+                    </div>
+                </li>
             </ul>
             <div class="text-centered">
-                Eliza Deck Type:
-                <select v-model="eliza.deckType">
-                    <option value="0">Balanced</option>
-                    <option value="1">Market-Driven (Beta)</option>
-                </select>
-            </div>
-            <div class="text-centered" v-if="numberOfPlayers === '3'">
-                Eleanor Deck Type:
-                <select v-model="eleanor.deckType">
-                    <option value="0">Balanced</option>
-                    <option value="1">Market-Driven (Beta)</option>
-                </select>
+                <a href="#" v-if="setup.seats.length < 4" v-on:click.prevent="addSeat('human')">+ Add a player</a>
+                <span v-if="setup.seats.length < 4 && nAIs < 2">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                <a href="#" v-if="setup.seats.length < 4 && nAIs < 2" v-on:click.prevent="addSeat('ai')">+ Add an AI</a>
+                <p class="text-tiny">{{ setup.seats.length }}-player game<span v-if="nAIs === 0 && nHumans > 1">, pass-and-play with no AI</span></p>
             </div>
             <br />
-            <button class="button" v-on:click="startGame">Proceed to Setup</button>
+            <p v-if="startProblem" class="important text-centered" id="start-problem" role="status">{{ startProblem }}</p>
+            <button class="button" v-on:click="startGame" v-bind:disabled="!!startProblem" v-bind:aria-describedby="startProblem ? 'start-problem' : null">{{ setup.mode === 'phone' ? 'Start Game' : 'Proceed to Setup' }}</button>
             <br /><br />
             <h3>Important Notes</h3>
             <ul style="padding: 0 1rem;">
                 <li class="action-desc">
+                    The AIs play by exactly the same rules as you: the same cards, money, income, coal, iron and beer. They have no special rules.
+                </li>
+                <li class="action-desc">
                     The app will refer to spaces in locations by number, for example "Coalbrookdale (Space 2)". The spaces are numbered from left-to-right, top-to-bottom. See the below reference:
                     <br />
-                    <img src="images/Birmingham_Spaces.png" style="width: 350px;" />
+                    <img src="images/Birmingham_Spaces.png" style="width: 350px;" alt="Space numbering reference" />
                 </li>
                 <li class="action-desc">
-                    The app will explain how to setup the game. You will tell the app what you are doing, and the app will tell you what the solo opponents do. We recommend telling the app what you're doing as you do it.
+                    The app keeps track of everyone's money and income, including yours. Tell it what you do, and it will tell you how much money you have.
                 </li>
                 <li class="action-desc">
-                    If you think the app is making a mistake, use the 'View Board State' link at the top of the app to compare your physical board with the app's.
+                    If you think the app is making a mistake, use the 'Game State' link at the top of the app to compare your physical board with the app's. 'History' shows every move so far.
                 </li>
                 <li class="action-desc">
-                    If you load the app in your device's browser the app will work and save if you turn on airplane mode (some may want to do this to avoid interruption). You will need to an internet connection to refresh the page however. 
-                </li>
-                <li class="action-desc">
-                    <strong>GAMEPLAY DIFFERENCES:</strong>
-                    <ul style="padding: 0 1rem;">
-                        <li class="action-desc">The AIs take one of 3 actions: <ol>
-                            <li>"Build and Network" (as a single action).</li>
-                            <li>Sell.</li>
-                            <li>Two free network actions (if an AI tries to sell and cannot).</li>
-                        </ol>
-                        They also earn extra VP under certain circumstances (the app will tell you).</li>
-                        <li class="action-desc">For coal consumption, the AIs always behave as if they are connected to the coal market (they must be actually connected to move coal into the market).</li>
-                        <li class="action-desc">
-                        The AIs do not require beer to sell, but they will consume it if they can.
-                        </li>
-                        <li class="action-desc">The AIs can't overbuild.</li>
-                        <li class="action-desc">Removing industry tiles to pay for negative income is not currently supported.</li>
-                        <li class="action-desc">Strategy note: If the AIs have not sold any tiles in an era, then during the last 3 rounds of the era (8,9,10 for a 2-player game or 7,8,9 for a 3-player game) the AI is <em>guaranteed</em> to sell in one of those rounds if it can.</li>
-                    </ul>
-                      
+                    If you load the app in your device's browser the app will work and save if you turn on airplane mode. You will need an internet connection to refresh the page however.
                 </li>
             </ul>
         </section>
-        <section class="playerArea" v-if="gameHasStarted">
-            <section class="start-new text-centered">
-                <a href="#" v-on:click="newGame()">New Game</a>&nbsp;&nbsp;&nbsp;<span v-if="undoState">|&nbsp;&nbsp;&nbsp;<a href="#" v-on:click="undo()">Undo</a>&nbsp;&nbsp;&nbsp;</span>|&nbsp;&nbsp;&nbsp;<a href="#" v-on:click="toggleShowBoardState">View Board State</a>
-            </section>
-            <section v-if="currentGameStep === 0">
-                <h1>Game Setup</h1>
 
-                <p>1) Setup your player board and the game board as normal.</p>
-                <p>2) Setup the following merchant tiles along with their beer as normal. </p>
-                <ul style="background-color: #efefef; padding: 1rem 2rem;">
-                    <li v-for="location in findAllMerchantsWithTiles()" :key="location.id">
-                        {{ location.name }}
-                        
-                        <ul>
-                            <li v-for="space in location.spaces" :key="space.id">
-                                <p v-if="space.tile">{{ boardIndustryTileToStringWithResources(location.id, space.tile.id, false) }}</p>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-                <p style="font-style: italic;">NOTE: These merchant tiles have been chosen randomly. If you don't like the setup try starting a new game and you'll get a new random setup!</p>
-                <p>3) Setup a deck for a normal {{ numberOfPlayers }}-player game. <span v-if="numberOfPlayers == '2'">Take <em>half</em> of the cards (20 cards)</span><span v-if="numberOfPlayers == '3'">Take <em>one third</em> of the cards (18 cards)</span>, and leave the rest out of the game for now. Deal yourself 8 cards, then deal one card to start your discard pile, then place the remaining <span v-if="numberOfPlayers == '2'">11</span><span v-if="numberOfPlayers == '3'">9</span> cards on the board.</p>
-                <p>4) Place Eliza's tiles (use Light Grayish Blue tiles) next to the board. You may setup a player board for her if you wish, but it is not necessary. Eliza does not use Level 1 industries nor Level 2 manufactured goods nor Level 2 pottery. These are all considered already developed.</p>
-                <p v-if="numberOfPlayers == '3'">5) Place Eleanor's tiles (use Yellow tiles) next to the board. You may setup a player board for her if you wish, but it is not necessary. Eleanor does not use Level 1 industries nor Level 2 manufactured goods nor Level 2 pottery. These are all considered already developed.</p>
-                <p>When you are done with setup, click 'Next' to begin the game!</p>
-            </section>
+        <!-- ============================================================ GAME -->
+        <section class="playerArea" v-if="gameHasStarted">
+            <nav class="start-new" aria-label="Game">
+                <a href="#" v-on:click.prevent="newGame()">New Game</a>
+                <a href="#" v-if="undoStack.length" v-on:click.prevent="undo()">Undo</a>
+                <a href="#" v-on:click.prevent="toggleShowBoardState">Game State</a>
+                <a href="#" v-on:click.prevent="toggleShowHistory">History</a>
+                <button class="theme-toggle" v-on:click="toggleTheme()" v-bind:aria-label="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'" v-bind:title="theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"><svg v-if="theme !== 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+            </nav>
+
             <section v-if="error" class="error">
                 <h2>THERE WAS AN ERROR</h2>
-                <p>It would be greatly appreciated if you could report the below error here: <a href="https://boardgamegeek.com/thread/2644263/article/37833655" target="_blank">BoardGameGeek Thread</a>.</p>
-                <p class="error-text">
-                    {{ error }}
-                </p>
+                <p>It would be greatly appreciated if you could report the below error using the 'report a bug' link at the bottom of the page.</p>
+                <p class="error-text">{{ error }}</p>
             </section>
-            <section v-if="currentGameStep === 1 && !error">
-                <section class="player-header">
-                    <svg class="player-icon" v-bind:class="currentPlayerColorClass()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><g id="Layer_2" data-name="Layer 2"><g><path class="cls-1" d="M400,0C179.44,0,0,179.44,0,400S179.44,800,400,800,800,620.56,800,400,620.56,0,400,0Zm0,727.27a325.43,325.43,0,0,1-134.13-28.76l31-32.94L445.11,656l190.1-121.21L610.8,501.69l-152.53,52L339.48,558l-1.28-19.71,96.62-11,2.53-36.71L260.2,489.44,150.61,611.66A325.74,325.74,0,0,1,72.73,400C72.73,219.54,219.54,72.73,400,72.73S727.27,219.54,727.27,400,580.46,727.27,400,727.27Z"/><path class="cls-2" d="M460.9,354.16a37.48,37.48,0,0,1-37.44,37.44,37.92,37.92,0,0,1-6.25-.51c-5.94-1.5-10.12-3.19-17.37-7.67a100.89,100.89,0,0,0-20.18-9.59,127.71,127.71,0,0,0,8-58.28h63.78V275.07H376.72c-.46-1-.93-2-1.42-3-1.24-2.52-6.31-11.21-8.76-17-.2-.54-.4-1.09-.6-1.67a68.06,68.06,0,0,1-3.64-21,44.28,44.28,0,0,1,88.56,0H515a108.38,108.38,0,0,0-216.76,0,131.54,131.54,0,0,0,7.43,42.64H275v40.48h47.9a63.23,63.23,0,0,1-.77,28.15,62.59,62.59,0,0,1-42.52,44.68l18.75,61.3a126.33,126.33,0,0,0,20.19-8.16h0s4.16-2,5.48-2.79c8.56-5,18.19-7.65,28-6a38.8,38.8,0,0,1,16.16,6.61,94.51,94.51,0,0,0,13.56,7.43h0A101.54,101.54,0,0,0,525,354.16Z"/></g></g></svg>
+
+            <!-- ---------------------------------------------------- setup -->
+            <section v-if="screen === 'setup' && !error">
+                <h1>Game Setup</h1>
+                <p>1) Set up a normal {{ g.n }}-player game, with these changes:</p>
+                <p>2) Use these merchant tiles:</p>
+                <ul class="merchant-list">
+                    <li v-for="m in g.merch" :key="m.slot">{{ locName(m.loc) }}: {{ merchantText(m) }}</li>
+                </ul>
+                <p style="font-style: italic;">These were chosen at random. Start a new game for a different setup.</p>
+                <p v-if="g.players.some(p => p.kind === 'ai')">3) After shuffling the deck, deal <span v-for="(pl, i) in g.players.filter(p => p.kind === 'ai')">{{ i ? ' and ' : '' }}{{ aiShare }} cards face down back into the box for {{ pl.name }}</span>.</p>
+                <p>{{ g.players.some(p => p.kind === 'ai') ? 4 : 3 }}) The app tracks everyone's money, income and VP<span v-if="g.players.some(p => p.kind === 'ai')">, so the AIs need no coins or markers</span>.</p>
+                <p>{{ g.players.some(p => p.kind === 'ai') ? 5 : 4 }}) First-round turn order:
+                    <span v-for="(pl, i) in playersInOrder">{{ pl.name }}<span v-if="i < playersInOrder.length - 1"> &rarr; </span></span>
+                </p>
+                <p>When you are done with setup, click 'Start Game' to begin!</p>
+            </section>
+
+            <!-- ---------------------------------------------------- hand-off (phone pass-and-play) -->
+            <section v-if="screen === 'handoff' && !error">
+                <p class="action-header">Pass the phone to {{ curPlayer.name }}<br /><span class="action-message">Click 'Next' when only {{ curPlayer.name }} can see the screen.</span></p>
+            </section>
+
+
+            <!-- ---------------------------------------------------- whose turn (plate) -->
+            <template v-if="screen === 'turn' && !error">
+                <section class="player-header" v-if="aiTurn" v-bind:class="'plate-' + (g.players[aiTurn.p].color || 'gray')">
+                    <svg class="player-icon" v-bind:class="colorClass(aiTurn.p)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><g id="Layer_2" data-name="Layer 2"><g><path class="cls-1" d="M400,0C179.44,0,0,179.44,0,400S179.44,800,400,800,800,620.56,800,400,620.56,0,400,0Zm0,727.27a325.43,325.43,0,0,1-134.13-28.76l31-32.94L445.11,656l190.1-121.21L610.8,501.69l-152.53,52L339.48,558l-1.28-19.71,96.62-11,2.53-36.71L260.2,489.44,150.61,611.66A325.74,325.74,0,0,1,72.73,400C72.73,219.54,219.54,72.73,400,72.73S727.27,219.54,727.27,400,580.46,727.27,400,727.27Z"/><path class="cls-2" d="M460.9,354.16a37.48,37.48,0,0,1-37.44,37.44,37.92,37.92,0,0,1-6.25-.51c-5.94-1.5-10.12-3.19-17.37-7.67a100.89,100.89,0,0,0-20.18-9.59,127.71,127.71,0,0,0,8-58.28h63.78V275.07H376.72c-.46-1-.93-2-1.42-3-1.24-2.52-6.31-11.21-8.76-17-.2-.54-.4-1.09-.6-1.67a68.06,68.06,0,0,1-3.64-21,44.28,44.28,0,0,1,88.56,0H515a108.38,108.38,0,0,0-216.76,0,131.54,131.54,0,0,0,7.43,42.64H275v40.48h47.9a63.23,63.23,0,0,1-.77,28.15,62.59,62.59,0,0,1-42.52,44.68l18.75,61.3a126.33,126.33,0,0,0,20.19-8.16h0s4.16-2,5.48-2.79c8.56-5,18.19-7.65,28-6a38.8,38.8,0,0,1,16.16,6.61,94.51,94.51,0,0,0,13.56,7.43h0A101.54,101.54,0,0,0,525,354.16Z"/></g></g></svg>
                     <section class="player-name">
-                        <h2 class="section-title" v-if="currentPlayerType === 0 && humanPlayer.currentTurnIndex === 0">Your <em>First</em> Action</h2>
-                        <h2 class="section-title" v-if="currentPlayerType === 0 && humanPlayer.currentTurnIndex === 1">Your <em>Second</em> Action</h2>
-                        <h2 class="section-title" v-if="currentPlayerType === 1 || currentPlayerType === 2">{{ currentPlayer.name }}'s Action</h2>
-                        <p class="section-detail">
-                            {{ eraToString() }} Era: Round <span class="current-round">{{ currentRound }}</span>
-                        </p>
-                        <p class="text-tiny">
-                            <span v-for="(player, index) in playersInOrder">
-                                <span v-bind:class="{ bold: player.player_type === currentPlayerType }">{{ player.name }}: &pound;{{ playerAmountSpent(player) }}<span v-if="index != numberOfPlayers - 1">&nbsp;&nbsp;/&nbsp;&nbsp;</span></span>
-                            </span>
+                        <h2 class="section-title">{{ playerName(aiTurn.p) }}'s Turn</h2>
+                        <p class="section-detail">{{ eraName }} Era: Round <span class="current-round">{{ g.round }}</span></p>
+                        <p class="text-tiny" v-if="!isPhone">
+                            <span v-for="(pl, index) in playersInOrder"><span v-bind:class="{ bold: pl.id === aiTurn.p }">{{ pl.name }}: &pound;{{ pl.spent }} spent</span><span v-if="index < playersInOrder.length - 1">&nbsp;&nbsp;/&nbsp;&nbsp;</span></span>
                         </p>
                     </section>
                 </section>
-                <section v-if="currentPlayerType === 0">
-                    <section v-if="!humanPlayer.actionStep">
-                        <ul class="cards">
-                            <li class="card card--clickable" v-on:click="setHumanAction('00')">
-                                <p class="card__name">Build</p>
-                            </li>
-                            <li class="card card--clickable" v-if="humanPlayer.totalUsedNetworkTiles < 14" v-on:click="setHumanAction('10')">
-                                <p class="card__name"><span v-if="currentEra === 1">Single </span>Network</p>
-                            </li>
-                            <li class="card card--clickable" v-if="currentEra === 1 && humanPlayer.totalUsedNetworkTiles < 14" v-on:click="setHumanAction('50')">
-                                <p class="card__name">Double Network</p>
-                            </li>
-                            <li class="card card--clickable" v-on:click="setHumanAction('20')">
-                                <p class="card__name">Sell</p>
-                            </li>
-                            <li class="card card--clickable" v-on:click="setHumanAction('30')">
-                                <p class="card__name">Develop</p>
-                            </li>
-                            <li class="card card--clickable" v-on:click="setHumanAction('40')">
-                                <p class="card__name">Scout, Loan, Pass</p>
-                            </li>
-                        </ul>
-                    </section>
-                    <section v-if="humanPlayer.actionStep === '00'">
-                        <a href="#" v-on:click="prevSetHumanAction()">< Go Back</a>
-                        <p class="action-header">What industry are you building?</p> 
-                        <ul class="cards">
-                            <li v-for="tile in findAllNextTilesFromPlayerBoard(0)" class="card card--clickable" v-on:click="setHumanBuildIndustryType(tile.industrytype, tile.id)">
-                                <p class="card__name">{{ tileToString(tile) }}</p>
-                            </li>
-                        </ul>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '01'">
-                        <a href="#" v-on:click="prevHumanBuildIndustryType">< Go Back</a>
-                        <p class="action-header">Where are you building your {{ tileToString(humanPlayer.nextAction.actiondata.buildtile) }}?</p> 
-                        <ul class="cards">
-                            <li v-for="loc in validHumanBuildLocationsForIndustryType" :key="loc.id" class="card card--clickable" v-on:click="setHumanBuildLocationAndSpace(loc.locationid, loc.spaceid)">
-                                <p class="card__name">{{ loc.name }} (Space {{ loc.spaceid }}) <span v-if="loc.isOverbuild"> [Overbuild]</span></p>
-                            </li>
-                        </ul>
-                        <p v-if="validHumanBuildLocationsForIndustryType.length === 0">This tile cannot be built currently.</p>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '03' || humanPlayer.actionStep === '13' || humanPlayer.actionStep === '22' || humanPlayer.actionStep === '32' || humanPlayer.actionStep === '55'">
-                        <a href="#" v-on:click="prevHumanAction()">< Go Back</a>
-                        <p class="action-header" v-if="currentRound > 1 && humanPlayer.currentTurnIndex === 0">Confirm Your Action<br /><span class="action-message">Click 'Next' to confirm.</span></p>
-                        <p class="action-header" v-if="(currentRound === 1) || (currentRound > 1 && humanPlayer.currentTurnIndex === 1)">Complete Your Turn<br /><span class="action-message">Click 'Next' to confirm your <span v-if="currentRound > 1 && humanPlayer.currentTurnIndex === 1">second </span> action and complete your turn.</span></p>
-                        <ul>
-                            <li class="action-desc" v-for="action in getHumanActionDescription()">
-                                {{ action.actionDesc }}
-                            </li>
-                        </ul>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '10' || humanPlayer.actionStep === '50' || humanPlayer.actionStep === '52'">
-                        <a href="#" v-on:click="prevSetHumanAction()">< Go Back</a>
-                        <p class="action-header"><span v-if="humanPlayer.actionStep === '50'">1st link: </span><span v-if="humanPlayer.actionStep === '52'">2nd link: </span>Where are you networking from?</p> 
-                        <ul class="cards">
-                            <li class="card card--clickable" v-for="location in validHumanNetworkLocations()" :key="location.id" v-on:click="setNetworkLocationFrom(location.id)">
-                                <p class="card__name">{{ location.name }}</p>
-                            </li>
-                        </ul>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '11' || humanPlayer.actionStep === '51' || humanPlayer.actionStep === '53'">
-                        <a href="#" v-on:click="prevNetworkLocationFrom()">< Go Back</a>
-                        <p class="action-header"><span v-if="humanPlayer.actionStep === '51'">1st link: </span><span v-if="humanPlayer.actionStep === '53'">2nd link: </span>Where are you networking to?</p>
-                        <p v-if="humanPlayer.nextAction.actiondata.networkfromlocationid === 22">
-                            NOTE: When networking from the Southern Farm Brewery, it does not matter if you choose Kidderminster or Worcester. Connections will be made between all 3 locations.
+                <section class="player-header" v-if="!aiTurn" v-bind:class="'plate-' + (curPlayer.color || 'gray')">
+                    <svg class="player-icon" v-bind:class="colorClass(cur)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><g id="Layer_2" data-name="Layer 2"><g><path class="cls-1" d="M400,0C179.44,0,0,179.44,0,400S179.44,800,400,800,800,620.56,800,400,620.56,0,400,0Zm0,727.27a325.43,325.43,0,0,1-134.13-28.76l31-32.94L445.11,656l190.1-121.21L610.8,501.69l-152.53,52L339.48,558l-1.28-19.71,96.62-11,2.53-36.71L260.2,489.44,150.61,611.66A325.74,325.74,0,0,1,72.73,400C72.73,219.54,219.54,72.73,400,72.73S727.27,219.54,727.27,400,580.46,727.27,400,727.27Z"/><path class="cls-2" d="M460.9,354.16a37.48,37.48,0,0,1-37.44,37.44,37.92,37.92,0,0,1-6.25-.51c-5.94-1.5-10.12-3.19-17.37-7.67a100.89,100.89,0,0,0-20.18-9.59,127.71,127.71,0,0,0,8-58.28h63.78V275.07H376.72c-.46-1-.93-2-1.42-3-1.24-2.52-6.31-11.21-8.76-17-.2-.54-.4-1.09-.6-1.67a68.06,68.06,0,0,1-3.64-21,44.28,44.28,0,0,1,88.56,0H515a108.38,108.38,0,0,0-216.76,0,131.54,131.54,0,0,0,7.43,42.64H275v40.48h47.9a63.23,63.23,0,0,1-.77,28.15,62.59,62.59,0,0,1-42.52,44.68l18.75,61.3a126.33,126.33,0,0,0,20.19-8.16h0s4.16-2,5.48-2.79c8.56-5,18.19-7.65,28-6a38.8,38.8,0,0,1,16.16,6.61,94.51,94.51,0,0,0,13.56,7.43h0A101.54,101.54,0,0,0,525,354.16Z"/></g></g></svg>
+                    <section class="player-name">
+                        <h2 class="section-title">{{ possessive(cur) }} <em>{{ g.firstTurnOfEra ? 'Only' : actionIndex === 0 ? 'First' : 'Second' }}</em> Action</h2>
+                        <p class="section-detail">{{ eraName }} Era: Round <span class="current-round">{{ g.round }}</span></p>
+                        <p class="text-tiny" v-if="!isPhone">
+                            <span v-for="(pl, index) in playersInOrder"><span v-bind:class="{ bold: pl.id === cur }">{{ pl.name }}: &pound;{{ pl.spent }} spent</span><span v-if="index < playersInOrder.length - 1">&nbsp;&nbsp;/&nbsp;&nbsp;</span></span>
                         </p>
-                        <ul class="cards">
-                            <li class="card card--clickable" v-for="location in findAdjacentIndustryLocationsForHumanNetwork()" :key="location.id" v-on:click="setNetworkLocationTo(location.id)">
-                                <p class="card__name">{{ location.name }}</p>
-                            </li>
-                        </ul>
+                        <p class="text-tiny"><strong>{{ curPlayer.name === 'You' ? 'You have' : curPlayer.name + ' has' }} &pound;{{ curPlayer.money }}</strong> &nbsp;|&nbsp; income {{ incomeOf(cur) }} &nbsp;|&nbsp; {{ curPlayer.vp }} VP &nbsp;|&nbsp; {{ curPlayer.links }} links left</p>
                     </section>
+                </section>
 
-                    <section v-if="humanPlayer.actionStep === '20'">
-                        <a href="#" v-on:click="prevSetHumanAction()">< Go Back</a>
-                        <p class="action-header">Which industries are you selling?</p> 
-                        <ul class="cards">
-                            <li class="card card--clickable card--no-padding" v-for="industrytile in this.humanPlayer.nextAction.actiondata.sellabletiles">
+            </template>
+
+            <!-- ---------------------------------------------------- turn -->
+            <section v-if="screen === 'turn' && !error">
+                <!-- AI turn -->
+                <section v-if="aiTurn">
+                    <p class="action-header" v-if="thinking">{{ playerName(aiTurn.p) }} is thinking...</p>
+                    <template v-for="(act, ai) in aiTurn.actions">
+                        <p class="action-header">{{ aiTurn.actions.length > 1 ? (ai === 0 ? 'First action: ' : 'Second action: ') : '' }}{{ act.title }}</p>
+                        <ul class="simple-list">
+                            <li class="action-desc" v-for="(line, li) in act.lines" :key="ai + '-' + li">
                                 <label style="display: flex; padding: 0.5rem;">
-                                    <input type="checkbox" v-model="industrytile.selected" />&nbsp;
-                                    <span style="margin-left: 0.5rem;">{{ tileToString(industrytile.tile) }} on<br />{{ industrytile.name }} (Space {{ industrytile.spaceid + 1 }})</span>
+                                    <input type="checkbox" class="checkbox-strike" />&nbsp;
+                                    <span style="margin-left: 0.5rem;">{{ line }}</span>
                                 </label>
                             </li>
                         </ul>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '30' || humanPlayer.actionStep === '23'">
-                        <a href="#" v-on:click="prevDevelopAction()">< Go Back</a>
-                        <p v-if="humanPlayer.actionStep === '30'" class="action-header">Which industries are you developing (choose up to two)?<br /><span class="action-message">Below are the top 2 tiles of each type of developable industry on your board.</span></p>
-                        <p v-if="humanPlayer.actionStep === '23'" class="action-header">Gloucester Merchant Beer Bonus (Develop)<br /><span class="action-message">Choose industries to develop.</span></p>
-                        <section v-for="industry in this.humanPlayer.nextAction.actiondata.developabletiles">
-                            <span class="highlight-text">{{ industry.industrytypename }}</span>
-                            <ul class="cards">
-                                <li class="card card--clickable card--no-padding" v-for="tile in industry.tiles">
-                                    <label style="display: flex; padding: 0.5rem;">
-                                        <input type="checkbox" v-model="tile.selected" />&nbsp;
-                                        <span style="margin-left: 0.5rem;">{{ tileToString(tile.developabletile) }}</span>
-                                    </label>
-                                </li>
-                            </ul>
-                        </section>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '02' || humanPlayer.actionStep === '12' || humanPlayer.actionStep === '21' || humanPlayer.actionStep === '31' || humanPlayer.actionStep === '54'">
-                        <a href="#" v-on:click="setPrevConsume()">< Go Back</a>
-                        <p class="action-message"><span v-if="humanPlayer.nextAction.action === 0">Building your {{ tileToString(humanPlayer.nextAction.actiondata.buildtile) }} in {{ humanPlayer.nextAction.actiondata.buildlocationname }} costs &pound;{{ humanPlayer.nextAction.actiondata.buildtile.poundsCost }}.</span></p>
-                        <section class="consume-section" v-if="humanPlayer.nextAction.actiondata.consumelocations && humanPlayer.nextAction.actiondata.consumelocations.coal">
-                            <p class="action-header">Your {{ humanActionStringMap[humanPlayer.nextAction.action] }} action consumes <span class="important">{{ humanPlayer.nextAction.actiondata.consumelocations.coal.coalNeeded }} Coal</span>.<br /><span class="small">Indicate below how much coal you are taking from each location.<template v-if="humanPlayer.actionStep === '54'"> (Remember that you must be able to consume one coal from each link placed.)</template></span></p>
-                            <ul class="cards">
-                                <li v-for="location in humanPlayer.nextAction.actiondata.consumelocations.coal.coalLocations" class="card">
-                                    <p class="card__name">{{ location.name }} <span v-if="location.spaceid != -1">(Space {{ location.spaceid }})</span></p>
-                                    <div class="card__area">
-                                        <label v-for="resource in location.resourceArray">
-                                            <input type="radio" v-bind:value="resource"
-                                            v-bind:name="location.id"
-                                            v-model="location.chosenCoal" /><span>{{ resource }}</span>
-                                        </label>
-                                    </div>
-                                </li>
-                            </ul>
-                        </section>
-                        <section class="consume-section" v-if="humanPlayer.nextAction.actiondata.consumelocations && humanPlayer.nextAction.actiondata.consumelocations.iron">
-                            <p class="action-header">Your {{ humanActionStringMap[humanPlayer.nextAction.action] }} action consumes <span class="important">{{ humanPlayer.nextAction.actiondata.consumelocations.iron.ironNeeded }} Iron</span>.<br /><span class="small">Indicate below how much iron you are taking from each location.</span></p>
-                            <ul class="cards">
-                                <li v-for="location in humanPlayer.nextAction.actiondata.consumelocations.iron.ironLocations" class="card">
-                                    <p class="card__name">{{ location.name }} <span v-if="location.spaceid != -1">(Space {{ location.spaceid }})</span></p>
-                                    <div class="card__area">
-                                        <label v-for="resource in location.resourceArray">
-                                            <input type="radio" v-bind:value="resource"
-                                            v-bind:name="location.id"
-                                            v-model="location.chosenIron" /><span>{{ resource }}</span>
-                                        </label>
-                                    </div>
-                                </li>
-                            </ul>
-                        </section>
-                        <section class="consume-section" v-if="humanPlayer.nextAction.actiondata.consumelocations && humanPlayer.nextAction.actiondata.consumelocations.beer">
-                            <p class="action-header">Your {{ humanActionStringMap[humanPlayer.nextAction.action] }} action consumes <span class="important">{{ humanPlayer.nextAction.actiondata.consumelocations.beer.beerNeeded }} Beer</span>.<br /><span class="small">Indicate below how much beer you are taking from each location.</span></p>
-                            <ul class="cards">
-                                <li v-for="location in humanPlayer.nextAction.actiondata.consumelocations.beer.beerLocations" class="card">
-                                    <p class="card__name">{{ location.name }} <span v-if="location.spaceid != -1">(Space {{ location.spaceid }})</span></p>
-                                    <div class="card__area">
-                                        <label v-for="resource in location.resourceArray">
-                                            <input type="radio" v-bind:value="resource"
-                                            v-bind:name="location.id"
-                                            v-model="location.chosenBeer" /><span>{{ resource }}</span>
-                                        </label>
-                                    </div>
-                                </li>
-                            </ul>
-                        </section>
-                    </section>
-
-                    <section v-if="humanPlayer.actionStep === '40'">
-                        <a href="#" v-on:click="prevSetHumanAction()">< Go Back</a>
-                        <p class="action-header">You do not need to enter anything into the app for Scout, Loan, or Pass.</p> 
-                        <p>Click 'Next' when you have finished your Scout, Loan, or Pass action.</p>
-                    </section>
+                    </template>
                 </section>
 
-                <section v-if="currentPlayerType === 1 || currentPlayerType === 2">
-                    <p class="action-header">{{ currentPlayer.name }} does the following:</p>
-                    <ul class="simple-list">
-                        <li class="action-desc" v-for="action in getAIActionDescription()" :key="action.id">
-                            <label style="display: flex; padding: 0.5rem;">
-                                <input type="checkbox" class="checkbox-strike" />&nbsp;
-                                <span style="margin-left: 0.5rem;">
-                            {{ action.actionDesc }}</span> </label>
-                        </li>
-                    </ul>
+                <!-- Human turn -->
+                <section v-if="!aiTurn && isHumanTurn">
+                    <p v-if="message" class="important">{{ message }}</p>
+
+                    <section v-if="!draft">
+                        <ul class="cards">
+                            <li class="card card--clickable" v-on:click="startAction('build')"><p class="card__name">Build</p><p v-if="isPhone" class="card__hint">{{ actionHint('build') }}</p></li>
+                            <li class="card card--clickable" v-if="curPlayer.links > 0" v-on:click="startAction('network')"><p class="card__name"><span v-if="g.era === 1">Single </span>Network</p><p v-if="isPhone" class="card__hint">{{ actionHint('network') }}</p></li>
+                            <li class="card card--clickable" v-if="g.era === 1 && curPlayer.links > 1" v-on:click="startAction('double')"><p class="card__name">Double Network</p><p v-if="isPhone" class="card__hint">{{ actionHint('double') }}</p></li>
+                            <li class="card card--clickable" v-on:click="startAction('sell')"><p class="card__name">Sell</p><p v-if="isPhone" class="card__hint">{{ actionHint('sell') }}</p></li>
+                            <li class="card card--clickable" v-on:click="startAction('develop')"><p class="card__name">Develop</p><p v-if="isPhone" class="card__hint">{{ actionHint('develop') }}</p></li>
+                            <li class="card card--clickable" v-on:click="startAction('loan')"><p class="card__name">Loan</p><p v-if="isPhone" class="card__hint">{{ actionHint('loan') }}</p></li>
+                            <li class="card card--clickable" v-on:click="startAction('scout')"><p class="card__name">Scout</p><p v-if="isPhone" class="card__hint">{{ actionHint('scout') }}</p></li>
+                            <li class="card card--clickable" v-on:click="startAction('pass')"><p class="card__name">Pass</p><p v-if="isPhone" class="card__hint">{{ actionHint('pass') }}</p></li>
+                        </ul>
+                    </section>
+
+                    <section v-if="draft">
+                        <a href="#" v-on:click.prevent="back()">&lt; Go Back</a>
+
+                        <!-- build -->
+                        <template v-if="draft.stage === 'industry'">
+                            <p class="action-header">What industry are you building?</p>
+                            <ul class="cards">
+                                <li v-for="o in buildIndustries()" :key="o.ind" class="card card--clickable" v-on:click="chooseIndustry(o)"><p class="card__name">{{ o.label }}</p></li>
+                            </ul>
+                        </template>
+                        <template v-if="draft.stage === 'space'">
+                            <p class="action-header">Where are you building your {{ tileName(draft.ind, draft.lvl) }}?</p>
+                            <ul class="cards">
+                                <li v-for="o in buildSpaces()" :key="o.sp" class="card card--clickable" v-on:click="chooseSpace(o)">
+                                    <p class="card__name">{{ o.label }}<span v-if="o.overbuild"> [Overbuild {{ possessive(o.victim) }} tile]</span><span v-if="!o.affordable"> ({{ o.blocked }})</span></p>
+                                </li>
+                            </ul>
+                            <p v-if="buildSpaces().length === 0">This tile cannot be built currently.</p>
+                        </template>
+                        <template v-if="draft.stage === 'resources' || draft.stage === 'devres'">
+                            <p class="action-message" v-if="draft.t === 'build'">Building your {{ tileName(draft.ind, draft.lvl) }} in {{ spaceName(draft.sp) }}.</p>
+                            <section class="consume-section" v-if="draft.coalEdit && draft.coalEdit.need > 0">
+                                <p class="action-header">This consumes <span class="important">{{ draft.coalEdit.need }} Coal</span>.<br /><span class="small">Indicate how much coal you are taking from each source.</span></p>
+                                <ul class="cards">
+                                    <li v-for="row in draft.coalEdit.rows" :key="row.sp" class="card">
+                                        <p class="card__name">{{ row.label }}</p>
+                                        <div class="card__area"><label v-for="n in row.options" :key="n"><input type="radio" :value="n" :name="'coal' + row.sp" v-model="row.chosen" /><span>{{ n }}</span></label></div>
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="consume-section" v-if="draft.ironEdit && draft.ironEdit.need > 0">
+                                <p class="action-header">This consumes <span class="important">{{ draft.ironEdit.need }} Iron</span>.<br /><span class="small">Indicate how much iron you are taking from each source.</span></p>
+                                <ul class="cards">
+                                    <li v-for="row in draft.ironEdit.rows" :key="row.sp" class="card">
+                                        <p class="card__name">{{ row.label }}</p>
+                                        <div class="card__area"><label v-for="n in row.options" :key="n"><input type="radio" :value="n" :name="'iron' + row.sp" v-model="row.chosen" /><span>{{ n }}</span></label></div>
+                                    </li>
+                                </ul>
+                            </section>
+                            <button class="button" v-on:click="draft.stage === 'devres' ? (checkResources() && toCardOrConfirm()) : resourcesDone()">Continue</button>
+                        </template>
+
+                        <!-- network -->
+                        <template v-if="draft.stage === 'from'">
+                            <p class="action-header"><span v-if="draft.t === 'double'">{{ draft.links.length === 0 ? '1st' : '2nd' }} link: </span>Where are you networking from?</p>
+                            <ul class="cards">
+                                <li class="card card--clickable" v-for="o in networkFromOptions()" :key="o.id" v-on:click="chooseFrom(o.id)"><p class="card__name">{{ o.label }}</p></li>
+                            </ul>
+                        </template>
+                        <template v-if="draft.stage === 'to'">
+                            <p class="action-header"><span v-if="draft.t === 'double'">{{ draft.links.length === 0 ? '1st' : '2nd' }} link: </span>Where are you networking to?</p>
+                            <ul class="cards">
+                                <li class="card card--clickable" v-for="o in networkToOptions()" :key="o.link" v-on:click="chooseTo(o)"><p class="card__name">{{ o.label }}</p></li>
+                            </ul>
+                        </template>
+                        <template v-if="draft.stage === 'netres'">
+                            <section class="consume-section" v-for="(ed, i) in draft.coalEdits" :key="i" v-if="ed.choice">
+                                <p class="action-header">Link {{ i + 1 }} consumes <span class="important">1 Coal</span>.<br /><span class="small">Where are you taking it from?</span></p>
+                                <ul class="cards">
+                                    <li v-for="row in ed.rows" :key="row.sp" class="card">
+                                        <p class="card__name">{{ row.label }}</p>
+                                        <div class="card__area"><label v-for="n in row.options" :key="n"><input type="radio" :value="n" :name="'ncoal' + i + '-' + row.sp" v-model="row.chosen" /><span>{{ n }}</span></label></div>
+                                    </li>
+                                </ul>
+                            </section>
+                            <section class="consume-section" v-if="draft.beerEdit && draft.beerEdit.rows.length > 1">
+                                <p class="action-header">The double link consumes <span class="important">1 Beer</span>.<br /><span class="small">Which brewery are you taking it from?</span></p>
+                                <ul class="cards">
+                                    <li v-for="row in draft.beerEdit.rows" :key="row.sp" class="card">
+                                        <label style="display: flex; padding: 0.5rem;"><input type="radio" :value="row.sp" name="dbeer" v-model="draft.beerEdit.chosen" />&nbsp;<span style="margin-left: 0.5rem;">{{ row.label }}</span></label>
+                                    </li>
+                                </ul>
+                            </section>
+                            <button class="button" v-on:click="netResourcesDone()">Continue</button>
+                        </template>
+
+                        <!-- sell -->
+                        <template v-if="draft.stage === 'tiles'">
+                            <p class="action-header">Which industries are you selling?</p>
+                            <ul class="cards">
+                                <li class="card card--clickable card--no-padding" v-for="t in draft.tiles" :key="t.sp">
+                                    <label style="display: flex; padding: 0.5rem;"><input type="checkbox" v-model="t.selected" />&nbsp;<span style="margin-left: 0.5rem;">{{ tileName(g.spaces[t.sp].ind, g.spaces[t.sp].lvl) }} on<br />{{ spaceName(t.sp) }}</span></label>
+                                </li>
+                            </ul>
+                            <p v-if="draft.tiles.length === 0">You have no industries connected to a merchant that buys them.</p>
+                            <button class="button" v-if="draft.tiles.length" v-on:click="sellTilesDone()">Continue</button>
+                        </template>
+                        <template v-if="draft.stage === 'selldetail'">
+                            <section class="consume-section" v-for="(sale, i) in draft.sales" :key="sale.sp">
+                                <p class="action-header">{{ tileName(g.spaces[sale.sp].ind, g.spaces[sale.sp].lvl) }} in {{ spaceName(sale.sp) }}<br /><span class="small">Needs {{ sale.need }} beer.</span></p>
+                                <p v-if="merchantOptions(sale.sp).length > 1">Selling to:
+                                    <select v-model="sale.mi" v-on:change="sale.beer = []; draft = Object.assign({}, draft)"><option v-for="o in merchantOptions(sale.sp)" :key="o.mi" :value="o.mi">{{ o.label }}</option></select>
+                                </p>
+                                <p v-else>Selling to {{ merchantOptions(sale.sp)[0] && merchantOptions(sale.sp)[0].label }}</p>
+                                <ul class="cards" v-if="sale.need > 0">
+                                    <li v-for="row in beerOptions(sale)" :key="row.key" class="card card--clickable card--no-padding">
+                                        <label style="display: flex; padding: 0.5rem;"><input type="checkbox" :checked="beerChosen(sale, row)" v-on:change="toggleBeer(sale, row)" />&nbsp;<span style="margin-left: 0.5rem;">{{ row.label }}</span></label>
+                                    </li>
+                                </ul>
+                            </section>
+                            <button class="button" v-on:click="sellDetailDone()">Continue</button>
+                        </template>
+                        <template v-if="draft.stage === 'freedev'">
+                            <p class="action-header">Gloucester Merchant Beer Bonus (Develop)<br /><span class="action-message">Choose up to {{ draft.freeDevCount }} tile(s) to develop for free.</span></p>
+                            <section v-for="grp in draft.freePicks" :key="grp.ind">
+                                <span class="highlight-text">{{ grp.name }}</span>
+                                <ul class="cards"><li class="card card--clickable card--no-padding" v-for="t in grp.tiles" :key="t.lvl"><label style="display: flex; padding: 0.5rem;"><input type="checkbox" v-model="t.selected" />&nbsp;<span style="margin-left: 0.5rem;">{{ t.label }}</span></label></li></ul>
+                            </section>
+                            <button class="button" v-on:click="freeDevDone()">Continue</button>
+                        </template>
+
+                        <!-- develop -->
+                        <template v-if="draft.stage === 'develop'">
+                            <p class="action-header">Which industries are you developing (choose up to two)?<br /><span class="action-message">Below are the top 2 tiles of each type of developable industry on your mat.</span></p>
+                            <section v-for="grp in draft.picks" :key="grp.ind">
+                                <span class="highlight-text">{{ grp.name }}</span>
+                                <ul class="cards"><li class="card card--clickable card--no-padding" v-for="t in grp.tiles" :key="t.lvl"><label style="display: flex; padding: 0.5rem;"><input type="checkbox" v-model="t.selected" />&nbsp;<span style="margin-left: 0.5rem;">{{ t.label }}</span></label></li></ul>
+                            </section>
+                            <button class="button" v-on:click="developDone()">Continue</button>
+                        </template>
+
+                        <!-- card (phone mode) -->
+                        <template v-if="draft.stage === 'card'">
+                            <p class="action-header">Which card are you discarding?<span v-if="draft.t === 'scout'"><br /><span class="action-message">Scouting discards 3 cards ({{ (draft.chosenCards || []).length }} chosen).</span></span></p>
+                            <ul class="cards">
+                                <li v-for="(o, i) in cardOptions()" :key="i" class="card card--clickable" v-on:click="chooseCard(o.card)"><p class="card__name">{{ o.label }}</p></li>
+                            </ul>
+                        </template>
+
+                        <!-- confirm -->
+                        <template v-if="draft.stage === 'confirm'">
+                            <p class="action-header">{{ actionIndex === 0 && !g.firstTurnOfEra ? 'Confirm Your Action' : 'Complete Your Turn' }}<br /><span class="action-message">Click 'Next' to confirm.</span></p>
+                            <ul>
+                                <li class="action-desc" v-for="(line, i) in draft.preview" :key="i">{{ line }}</li>
+                                <li class="action-desc" v-if="draft.ok"><strong>{{ curPlayer.name === 'You' ? 'You will have' : curPlayer.name + ' will have' }} &pound;{{ draft.previewMoney }}</strong>, income {{ draft.previewIncome }}.</li>
+                            </ul>
+                        </template>
+                    </section>
                 </section>
             </section>
-            <section v-if="currentGameStep === 2 && !error">
-                <p class="action-header">ROUND {{ currentRound }}<br /><span class="action-message">Click 'Next' to continue.</span></p>
+
+
+            <!-- ---------------------------------------------------- end of round / era / game -->
+            <section v-if="screen === 'roundEnd' && !error">
+                <p class="action-header">ROUND {{ g.round }}<br /><span class="action-message">Click 'Next' to continue.</span></p>
                 <ul>
-                    <li class="action-desc">
-                        Turn order has been calculated:
-                        <p class="text-tiny">
-                            <span v-for="(player, index) in playersInOrder">
-                                {{ player.name }} (&pound;{{ player.amountSpentThisRound ? player.amountSpentThisRound : 0 }})<span v-if="index != numberOfPlayers - 1">&nbsp;&nbsp;->&nbsp;&nbsp;</span>
-                            </span>
-                        </p>
-                    </li>
-                    <li class="action-desc">
-                        Remember to receive (or pay) your income.
-                    </li>
+                    <li class="action-desc" v-for="(line, i) in endLines" :key="i">{{ line }}</li>
+                    <li class="action-desc" v-for="pl in g.players" v-if="pl.kind === 'human'" :key="'m' + pl.id"><strong>{{ pl.name === 'You' ? 'You now have' : pl.name + ' now has' }} &pound;{{ pl.money }}</strong> (income {{ incomeOf(pl.id) }}).</li>
                 </ul>
             </section>
-            <section v-if="currentGameStep === 3 && !error">
-                <p class="action-header">Rail Era Begins<br /><span class="action-message">Current score and setup instructions below. Click 'Next' to continue.</span></p>
-                <section class="score" v-if="isCalculatingScore">
-                    <p>Please wait, calculating score...</p>
-                </section>
-                <section class="score" v-if="!isCalculatingScore">
-                    <p v-for="player in getPlayersWithScores()" v-bind:class="{ winning: player.isWinning }">
-                        {{ player.name }}: {{ player.totalVP }} VPs<br />
-                        <span class="text-tiny">VPs from Industries: {{ player.canalTileVP }}&nbsp;&nbsp;|&nbsp;&nbsp;VPs from Links: {{ player.canalLinkVP }}</span>
-                    </p>
+            <section v-if="screen === 'eraEnd' && !error">
+                <p class="action-header">Rail Era Begins<br /><span class="action-message">Scores and setup instructions below. Click 'Next' to continue.</span></p>
+                <section class="score">
+                    <p v-for="pl in g.players" :key="pl.id">{{ pl.name }}: {{ pl.vp }} VPs<br /><span class="text-tiny">VPs from Industries: {{ pl.score.canalTiles }}&nbsp;&nbsp;|&nbsp;&nbsp;VPs from Links: {{ pl.score.canalLinks }}</span></p>
                 </section>
                 <ul>
-                    <li class="action-desc">
-                        Setup the Rail Era as normal (remove link tiles and level 1 industries and reset merchant beer). 
-                    </li>
-                    <li class="action-desc">
-                        Reshuffle your discard pile along with the cards you set aside during setup. <span v-if="numberOfPlayers == '2'">Again, take <em>half</em> of the cards (20 cards)</span><span v-if="numberOfPlayers == '3'">Again, take <em>one third</em> of the cards (18 cards)</span> to form your deck for this round.
-                    </li>
-                    <li class="action-desc">
-                        Deal yourself 8 cards, and place the remaining <span v-if="numberOfPlayers == '2'">12</span><span v-if="numberOfPlayers == '3'">10</span> cards on the board. Since you get two actions in the first round of the Rail Era, you <em>don't</em> deal an extra card to start your discard pile. Your discard pile is initially empty.
-                    </li>
-                    <li class="action-desc">
-                        Remember to receive (or pay) your income.
-                    </li>
+                    <li class="action-desc" v-for="(line, i) in endLines" :key="i">{{ line }}</li>
+                    <li class="action-desc">Set up the Rail Era as normal: remove all link tiles and level 1 industries, and reset the merchant beer.</li>
+                    <li class="action-desc" v-if="g.mode === 'physical'">Shuffle all the cards together (discard piles, the draw deck, and the cards set aside for the AIs). <span v-for="pl in g.players" v-if="pl.kind === 'ai'">Deal {{ aiShare }} cards face down into the box for {{ pl.name }}. </span>Then deal 8 cards to each player. There is no face-down discard card in the Rail Era.</li>
+                    <li class="action-desc" v-for="pl in g.players" v-if="pl.kind === 'human'" :key="'m' + pl.id"><strong>{{ pl.name === 'You' ? 'You now have' : pl.name + ' now has' }} &pound;{{ pl.money }}</strong> (income {{ incomeOf(pl.id) }}).</li>
                 </ul>
             </section>
-            <section v-if="currentGameStep === 4 && !error">
+            <section v-if="screen === 'final' && !error">
                 <p class="action-header">Final Score<br /><span class="action-message">Hope you enjoyed the game!</span></p>
-                <section class="score" v-if="isCalculatingScore">
-                    <p>Please wait, calculating score...</p>
-                </section>
-                <section class="score" v-if="!isCalculatingScore">
-                    <p v-for="player in getPlayersWithScores()" v-bind:class="{ winning: player.isWinning }">
-                        {{ player.name }}: {{ player.totalVP }} VPs<br />
-                        <span class="text-tiny">VPs from Industries: {{ player.railTileVP }}&nbsp;&nbsp;|&nbsp;&nbsp;VPs from Links: {{ player.railLinkVP }}</span>
+                <section class="score">
+                    <p v-for="r in finalRanking()" :key="r.p" v-bind:class="{ winning: r.place === 1 }">
+                        {{ r.place }}. {{ r.name }}: {{ r.vp }} VPs<br />
+                        <span class="text-tiny">Canal: industries {{ r.score.canalTiles }}, links {{ r.score.canalLinks }}&nbsp;&nbsp;|&nbsp;&nbsp;Rail: industries {{ r.score.railTiles }}, links {{ r.score.railLinks }}<span v-if="r.score.bonus">&nbsp;&nbsp;|&nbsp;&nbsp;Merchant bonuses {{ r.score.bonus }}</span><br />Income {{ incomeOf(r.p) }}, &pound;{{ r.money }}</span>
                     </p>
                 </section>
+                <ul><li class="action-desc" v-for="(line, i) in endLines" :key="i">{{ line }}</li></ul>
             </section>
-            <section class="button-container" v-if="showNextButton() && !error">
-                <button class="button" v-if="currentGameStep === 0" v-on:click="next()">Start Game</button>
-                <button class="button" :disabled="isAIThinking" v-if="currentGameStep === 1 || currentGameStep === 2 || currentGameStep === 3" v-on:click="next()">{{ nextButtonText }}</button>
+
+            <!-- ---------------------------------------------------- next button -->
+            <section class="button-container" v-if="!error && (screen === 'setup' || showNext || infoTabs.length)" v-bind:class="{ 'button-container--tabs': infoTabs.length }">
+                <!-- phone mode: information sheets (open from the tabs below) -->
+                <div v-if="sheet" class="sheet" role="dialog" v-bind:aria-label="sheetTitle" v-on:keydown.esc="sheet = null">
+                    <div class="sheet__head">
+                        <h2 class="sheet__title" tabindex="-1" ref="sheetTitle">{{ sheetTitle }}</h2>
+                        <div class="sheet__tools">
+                            <template v-if="sheet === 'board'">
+                                <button class="sheet__zoom" v-on:click="zoomMap(-1)" v-bind:disabled="mapZoomIndex === 0" aria-label="Zoom out" title="Zoom out">&minus;</button>
+                                <button class="sheet__zoom" v-on:click="zoomMap(1)" v-bind:disabled="mapZoomIndex === mapZooms.length - 1" aria-label="Zoom in" title="Zoom in">+</button>
+                            </template>
+                            <button class="sheet__close" v-on:click="sheet = null">Close</button>
+                        </div>
+                    </div>
+                    <div class="sheet__body">
+                        <template v-if="sheet === 'ledger'">
+                <table class="ledger">
+                    <caption><span class="visually-hidden">Ledger. </span><span class="ledger__time">{{ eraLine() }}</span></caption>
+                    <thead>
+                        <tr><th scope="col">Player</th><th scope="col">Money</th><th scope="col">Income</th><th scope="col">VP</th><th scope="col"><abbr title="Money spent this round. Least spent goes first next round.">Spent</abbr></th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in ledgerRows()" :key="r.p" v-bind:class="{ 'ledger--current': r.current }" v-bind:aria-current="r.current ? 'true' : null">
+                            <th scope="row"><span class="ledger__swatch" v-bind:class="'swatch-' + (g.players[r.p].color || 'gray')" aria-hidden="true"></span>{{ r.name }}</th>
+                            <td>&pound;{{ r.money }}</td><td>{{ r.income }}</td><td>{{ r.vp }}</td><td>&pound;{{ r.spent }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="markets">
+                    <div class="market market--coal">
+                        <p class="market__label">Coal <strong>&pound;{{ nextPrice('coal') }}</strong> <span class="market__count">{{ g.coal }} of 14 left</span></p>
+                        <ol class="market__pips" aria-hidden="true"><li v-for="(pip, i) in marketPips('coal')" :key="i" v-bind:class="{ full: pip.full }"><span v-if="i % 2 === 0">{{ pip.price }}</span></li></ol>
+                    </div>
+                    <div class="market market--iron">
+                        <p class="market__label">Iron <strong>&pound;{{ nextPrice('iron') }}</strong> <span class="market__count">{{ g.iron }} of 10 left</span></p>
+                        <ol class="market__pips" aria-hidden="true"><li v-for="(pip, i) in marketPips('iron')" :key="i" v-bind:class="{ full: pip.full }"><span v-if="i % 2 === 0">{{ pip.price }}</span></li></ol>
+                    </div>
+                </div>
+                        </template>
+                        <template v-if="sheet === 'hand'">
+                            <div v-for="grp in handGroups(cur)" :key="grp.k" class="hand-group">
+                            <p class="hand-group__label">{{ grp.label }}</p>
+                            <ul class="hand-group__cards"><li v-for="c in grp.cards" :key="c.name" class="hand-card" v-bind:class="'hand-card--' + grp.k">{{ c.name }}<span v-if="c.count > 1" class="hand-card__count"> &times;{{ c.count }}</span></li></ul>
+                        </div>
+                        </template>
+                        <template v-if="sheet === 'board'">
+                    <board-map :g="g" :highlight="mapSel" :zoom="mapZooms[mapZoomIndex]" :net="isHumanTurn && !aiTurn ? networkOf(cur) : []" v-on:select="mapSel = (mapSel === $event ? null : $event)"></board-map>
+                    <p class="phone-panel__legend">Tap a location for details.<span v-if="isHumanTurn && !aiTurn"> Underlined names are in your network.</span></p>
+                    <section class="map-key" aria-labelledby="map-key-title">
+                        <h3 id="map-key-title" class="map-key__title">Map key</h3>
+                        <ul class="map-key__list">
+                            <li v-for="k in mapKey" :key="k.abbr"><span class="map-key__sq" aria-hidden="true">{{ k.abbr }}</span><span class="visually-hidden">{{ k.abbr }}: </span>{{ k.name }}</li>
+                            <li><span class="map-key__sq map-key__sq--flip" aria-hidden="true"></span>Flipped tile</li>
+                        </ul>
+                        <ul class="map-key__list">
+                            <li><svg class="map-key__line" viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" stroke-width="6" stroke="var(--prussian)" stroke-linecap="round"/></svg>Built link</li>
+                            <li><svg class="map-key__line" viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" stroke-width="2.5" stroke="var(--muted)" stroke-dasharray="7 5"/></svg>Canal only</li>
+                            <li><svg class="map-key__line" viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" stroke-width="2.5" stroke="var(--muted)" stroke-dasharray="2 4"/></svg>Rail only</li>
+                            <li><svg class="map-key__line" viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" stroke-width="2.5" stroke="var(--muted)" opacity="0.35"/></svg>Not buildable this era</li>
+                        </ul>
+                    </section>
+                    <div v-if="selectedLocation()" class="phone-detail" aria-live="polite">
+                        <p class="phone-detail__name">{{ selectedLocation().name }}</p>
+                        <p v-for="(line, i) in selectedLocation().tiles" :key="'t' + i">{{ line }}</p>
+                        <p v-for="(line, i) in selectedLocation().links" :key="'l' + i">{{ line }}</p>
+                    </div>
+                        </template>
+                        <template v-if="sheet === 'mat'">
+                            <table class="mat">
+                                <thead><tr><th scope="col">Next tile</th><th scope="col">Cost</th><th scope="col">VP</th><th scope="col"><abbr title="Income gained when it flips">Inc</abbr></th><th scope="col">Left</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="r in matTable(cur)" :key="r.ind">
+                                        <th scope="row">{{ r.name }} {{ r.level }}<span class="mat__sub">{{ r.beer }}</span><span v-if="r.note" class="mat__note">{{ r.note }}</span></th>
+                                        <td>{{ r.cost }}</td><td>{{ r.vp }}</td><td>{{ r.inc }}</td><td>{{ r.left }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </div>
+                <button class="button" v-if="screen === 'setup'" v-on:click="beginPlay()">Start Game</button>
+                <button class="button" :disabled="thinking" v-if="showNext" v-on:click="next()">{{ thinking ? 'Please wait...' : 'Next >>' }}</button>
+                <nav v-if="infoTabs.length" class="tabs" aria-label="Game information">
+                    <button v-for="tab in infoTabs" :key="tab.k" class="tab" v-bind:class="{ 'tab--open': sheet === tab.k }" v-bind:aria-pressed="sheet === tab.k ? 'true' : 'false'" v-on:click="toggleSheet(tab.k)">{{ tab.label }}<span v-if="tab.count !== undefined" class="tab__count">{{ tab.count }}</span></button>
+                </nav>
             </section>
+
+            <!-- ---------------------------------------------------- board state -->
             <section class="boardstate" v-if="showBoardState">
-                <a href="#" class="boardstate_close" v-on:click="toggleShowBoardState">[ Close Board State ]</a>
-                <p class="boardstate__marketspaces" style="background-color: lightcyan;">
-                    You: {{ humanPlayer.totalVP }}VPs&nbsp;|&nbsp;
-                    Eliza: {{ eliza.totalVP }}VPs
-                    <span v-if="numberOfPlayers == 3">
-                    &nbsp;|&nbsp;Eleanor: {{ eleanor.totalVP }}VPs
-                    </span>
+                <a href="#" class="boardstate_close" v-on:click.prevent="toggleShowBoardState">[ Close Game State ]</a>
+                <p class="boardstate__marketspaces boardstate__marketspaces--players">
+                    <span v-for="(pl, i) in g.players" :key="pl.id">{{ pl.name }}: {{ pl.vp }} VP, &pound;{{ pl.money }}, income {{ incomeOf(pl.id) }}<span v-if="i < g.players.length - 1">&nbsp;|&nbsp;</span></span>
                 </p>
                 <p class="boardstate__marketspaces">
-                    Empty Coal Spaces in Market: {{ totalEmptyMarketCoalSpaces }}<br />
-                    Empty Iron Spaces in Market: {{ totalEmptyMarketIronSpaces }}
+                    Coal in Market: {{ g.coal }} of 14 (empty spaces: {{ 14 - g.coal }})<br />
+                    Iron in Market: {{ g.iron }} of 10 (empty spaces: {{ 10 - g.iron }})
                 </p>
-                <p class="boardstate__instructions">"X: " - a space with an industry tile</p>
+                <p class="boardstate__instructions">"N: " - a space with an industry tile</p>
                 <p class="boardstate__instructions">"-->" - a link tile</p>
                 <ul class="boardstate__locations">
-                    <li class="boardstate__location" v-for="location in board.locations">
-                        <p class="boardstate__locationname">{{ location.name }}</p>
-                        <ul class="boardstate__industrytiles">
-                            <li v-for="space in findSpacesWithTiles(location.spaces)">
-                                <p v-if="space.tile"><span v-if="!space.tile.isMerchantTile">{{ space.id + 1 }}:&nbsp;&nbsp;{{ colorString(space.tile.color) }} | </span>{{ boardIndustryTileToStringWithResources(location.id, space.tile.id, true) }}</p>
-                            </li>
-                        </ul>
-                        <ul class="boardstate__adjacentlocations">
-                            <li v-for="adjacentLocation in reportAdjacentLocations(location.id)">
-                                <p class="boardstate__adjacentlocation">--> {{ adjacentLocation.name }} ({{ adjacentLocation.colorString }})</p>
-                            </li>
-                        </ul>
+                    <li class="boardstate__location" v-for="loc in boardLocations()" :key="loc.id">
+                        <p class="boardstate__locationname">{{ loc.name }}</p>
+                        <ul class="boardstate__industrytiles"><li v-for="(t, i) in loc.tiles" :key="i"><p>{{ t }}</p></li></ul>
+                        <ul class="boardstate__adjacentlocations"><li v-for="(l, i) in loc.links" :key="i"><p class="boardstate__adjacentlocation">{{ l }}</p></li></ul>
+                    </li>
+                </ul>
+                <template v-for="pl in g.players">
+                    <p class="boardstate__locationname" :key="'mat' + pl.id">{{ pl.name }}'s player mat</p>
+                    <ul class="boardstate__industrytiles" :key="'matl' + pl.id"><li v-for="(line, i) in playerMatSummary(pl.id)" :key="i"><p>{{ line }}</p></li></ul>
+                </template>
+            </section>
+
+            <!-- ---------------------------------------------------- history -->
+            <section class="boardstate" v-if="showHistory">
+                <a href="#" class="boardstate_close" v-on:click.prevent="toggleShowHistory">[ Close History ]</a>
+                <ul class="boardstate__locations">
+                    <li class="boardstate__location" v-for="(h, i) in historyEntries" :key="i">
+                        <p class="boardstate__locationname" v-if="h.player !== null">{{ h.era === 1 ? 'Rail' : 'Canal' }} {{ h.round }}: {{ playerName(h.player) }}, {{ h.action }} (spent &pound;{{ h.spent }}, has &pound;{{ h.money }})</p>
+                        <ul class="boardstate__industrytiles"><li v-for="(line, j) in h.lines" :key="j"><p>{{ line }}</p></li></ul>
                     </li>
                 </ul>
             </section>
+
             <section class="report-a-bug">
-                <a href="#" v-on:click="getGameState()">report a bug</a>
+                <a href="#" v-on:click.prevent="isGameStateOpen ? (isGameStateOpen = false) : getGameState()" v-bind:aria-expanded="isGameStateOpen ? 'true' : 'false'">report a bug</a>
                 <section v-if="isGameStateOpen">
-                    <p>To report a bug, <a href="https://discord.gg/7CHwh6TSsa">join my Discord</a>. Please copy/paste the below error <em>into a text file or google doc</em> and then attach it to a message to me. The error is usually too long to copy into a direct message.</p>
-                    <textarea ref="gamestate" rows=10>{{ getGameState() }}</textarea>
-                    <br /><a href="#" v-on:click="copyGameState()">Copy to clipboard</a>
+                    <p>To report a bug, <a href="https://discord.gg/7CHwh6TSsa">join my Discord</a>. Copy the text below <em>into a text file</em> and attach it to a message to me (it's too long to paste into a message). It contains the whole game so far, so I can replay exactly what happened.</p>
+                    <textarea ref="gamestate" rows="10">{{ gameState }}</textarea>
+                    <br /><a href="#" v-on:click.prevent="copyGameState()">Copy to clipboard</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" v-on:click.prevent="isGameStateOpen = false">Close</a>
                 </section>
             </section>
         </section>
     </main>
 </body>
-<script src="data.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </html>

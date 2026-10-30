@@ -1,0 +1,16 @@
+
+# tune start 2026-10-30T01:33:21.975Z players=2,3 games=200
+0: incomeDiscount 0.8->0.9, spendPerAction 6->9  margin -3.7  win 32% (even 42%)
+1: pRouteNoBeer 0.45->0.37  margin -0.1  win 44% (even 42%)
+2: poorBoost 0.25->0.1, shortfallRate 1->0.75  margin 1.5  win 45% (even 42%)
+3: interest.4 0.5->0.65, moneyRate.1 0.25->0.2  margin 0.2  win 42% (even 42%)
+4: pByLinks.1 0.6->0.68  margin 0.9  win 46% (even 42%)
+5: interest.0 1->1.15, pRailLater 0.55->0.47  margin -1.8  win 37% (even 42%)
+6: shortfallHorizon 4->3  margin 0.1  win 42% (even 42%)
+7: beerBase.0 0.03->0  margin -1.9  win 38% (even 42%)
+8: pRouteNoBeer 0.45->0.37  margin 0.4  win 43% (even 42%)
+9: moneyRate.0 0.33->0.28  margin 1.7  win 47% (even 42%)  confirm margin -0.4 win 37%  rejected on confirm
+10: interest.0 1->1.15, interest.5 0.7->0.85  margin -10.0  win 32% (even 42%)
+11: interest.4 0.5->0.65  margin -0.8  win 38% (even 42%)
+12: interest.2 0.8->0.95  margin -0.9  win 41% (even 42%)
+13: spendPerAction 6->9, beerBase.0 0.03->0  margin -5.5  win 33% (even 42%)
