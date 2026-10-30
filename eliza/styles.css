@@ -144,11 +144,11 @@ h3 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
 }
 .numberOfPlayers input { width: 1.2rem; height: 1.2rem; accent-color: var(--prussian); }
 
-/* player colours (game pieces) */
-.yellow { fill: #E2B93B; background-color: #E2B93B; color: var(--ink); }
+/* player colours (game pieces): fixed in both themes, so their text colour is fixed too */
+.yellow { fill: #E2B93B; background-color: #E2B93B; color: #15181B; }
 .blue   { fill: #7B5EA7; background-color: #7B5EA7; }
-.gray   { fill: #7E8790; background-color: #7E8790; color: var(--ink); }
-.red    { fill: #E06A2C; background-color: #E06A2C; color: var(--ink); }
+.gray   { fill: #7E8790; background-color: #7E8790; color: #15181B; }
+.red    { fill: #E06A2C; background-color: #E06A2C; color: #15181B; }
 
 /* ---- top links + theme switch ---- */
 .start-new { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.25rem 0.8rem; font-size: 0.9rem; padding: 0.4rem 0; }
