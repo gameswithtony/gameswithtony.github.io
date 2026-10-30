@@ -9,6 +9,7 @@ import { join } from 'node:path';
 const a = process.argv.slice(2), get = (k, d) => { const i = a.indexOf('--' + k); return i >= 0 ? a[i + 1] : d; };
 const out = get('out', join(tmpdir(), 'eliza-shots')), mode = get('mode', 'phone'), rounds = +get('rounds', 3);
 const W = +get('width', 390), H = +get('height', 844), theme = get('theme', 'light');
+const seats = get('seats', ''); // e.g. human,human or ai (comma list)
 mkdirSync(out, { recursive: true });
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const port = 9300 + Math.floor(Math.random() * 500);
@@ -48,9 +49,19 @@ try {
     await send('Page.navigate', { url: 'http://127.0.0.1:8765/eliza/index.html' }); await sleep(2000);
     await shot('01-start', false);
     await evaluate(`(async () => {
-        const a = window.elizaApp; a.setup.mode = '${mode}'; a.startGame();
+        const a = window.elizaApp; a.setup.mode = '${mode}';
+        const kinds = '${seats}'.split(',').filter(Boolean);
+        if (kinds.length) {
+            const cols = ['purple', 'red', 'yellow', 'gray'], names = ['You', 'Player 2', 'Player 3', 'Player 4'], ais = ['Eliza', 'Eleanor'];
+            let h = 0, ai = 0;
+            a.setup.seats = kinds.map((k, i) => k === 'ai' ? { kind: 'ai', name: ais[ai++], color: cols[i], persona: 'balanced' } : { kind: 'human', name: names[h++], color: cols[i] });
+        }
+        await new Promise(r => setTimeout(r, 100));
+        if (a.startProblem) return;
+        a.startGame();
     })()`);
     await sleep(400); await shot('02-setup', false);
+    if (await evaluate('!!window.elizaApp.startProblem')) { console.log('start blocked:', await evaluate('window.elizaApp.startProblem')); proc.kill(); process.exit(0); }
     // play: the AI brain drives the human too, until the given round
     await evaluate(`(async () => {
         const a = window.elizaApp; const sleep = ms => new Promise(r => setTimeout(r, ms));

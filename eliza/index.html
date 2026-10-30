@@ -50,30 +50,33 @@
                     <p class="card__name">
                         <span v-if="seat.kind === 'human'">Player: </span><span v-else>AI: </span>
                         <input type="text" v-model="seat.name" maxlength="16" style="width: 9rem;" />
-                        <a href="#" v-if="setup.seats.length > 2 && !(seat.kind === 'ai' && nAIs <= 1) && !(seat.kind === 'human' && nHumans <= 1)" v-on:click.prevent="removeSeat(i)">remove</a>
+                        <a href="#" v-if="setup.seats.length > 1" v-on:click.prevent="removeSeat(i)" v-bind:aria-label="'Remove ' + (seat.name || (seat.kind === 'ai' ? 'this AI' : 'this player'))">remove</a>
                     </p>
                     <div class="card__area">
                         <ul class="player-color-options">
                             <li v-for="c in colors" :key="c" class="player-color-option" v-bind:class="[c === 'purple' ? 'blue' : c, { playerColorOptionSelected: seat.color === c }]" v-on:click="setSeatColor(i, c)">{{ c }}</li>
                         </ul>
                     </div>
-                    <div class="card__area" v-if="seat.kind === 'ai'">
-                        Persona:
-                        <select v-model="seat.persona">
-                            <option v-for="p in personas" :key="p.key" :value="p.key">{{ p.name }}</option>
-                        </select>
-                        <span class="text-tiny"><br />{{ personas.find(p => p.key === seat.persona).blurb }}</span>
+                    <div class="card__area persona" v-if="seat.kind === 'ai'">
+                        <label class="persona__label" v-bind:for="'persona-' + i">Persona</label>
+                        <div class="persona__field">
+                            <select v-bind:id="'persona-' + i" v-bind:aria-describedby="'persona-desc-' + i" v-model="seat.persona">
+                                <option v-for="p in personas" :key="p.key" :value="p.key">{{ p.name }}</option>
+                            </select>
+                            <p class="persona__blurb" v-bind:id="'persona-desc-' + i">{{ personas.find(p => p.key === seat.persona).blurb }}</p>
+                        </div>
                     </div>
                 </li>
             </ul>
             <div class="text-centered">
-                <a href="#" v-if="setup.seats.length < 4 && nHumans < 3" v-on:click.prevent="addSeat('human')">+ Add a player</a>
-                <span v-if="setup.seats.length < 4 && nHumans < 3 && nAIs < 2">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
+                <a href="#" v-if="setup.seats.length < 4" v-on:click.prevent="addSeat('human')">+ Add a player</a>
+                <span v-if="setup.seats.length < 4 && nAIs < 2">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
                 <a href="#" v-if="setup.seats.length < 4 && nAIs < 2" v-on:click.prevent="addSeat('ai')">+ Add an AI</a>
-                <p class="text-tiny">{{ setup.seats.length }}-player game</p>
+                <p class="text-tiny">{{ setup.seats.length }}-player game<span v-if="nAIs === 0 && nHumans > 1">, pass-and-play with no AI</span></p>
             </div>
             <br />
-            <button class="button" v-on:click="startGame">Proceed to Setup</button>
+            <p v-if="startProblem" class="important text-centered" id="start-problem" role="status">{{ startProblem }}</p>
+            <button class="button" v-on:click="startGame" v-bind:disabled="!!startProblem" v-bind:aria-describedby="startProblem ? 'start-problem' : null">Proceed to Setup</button>
             <br /><br />
             <h3>Important Notes</h3>
             <ul style="padding: 0 1rem;">

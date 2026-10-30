@@ -118,6 +118,13 @@ const app = new Vue({
         sheetTitle() {
             return { ledger: 'Ledger', hand: this.possessive(this.cur) + ' hand', board: 'Board', mat: this.possessive(this.cur) + ' player mat' }[this.sheet] || '';
         },
+        /** Why the game can't start yet ('' when it can). */
+        startProblem() {
+            const n = this.setup.seats.length;
+            if (n < 2) return 'Add another player or an AI: Brass needs 2 to 4 players.';
+            if (this.nHumans < 1) return 'Add a player: the game needs at least one person.';
+            return '';
+        },
         showNext() {
             const s = this.screen;
             return s === 'roundEnd' || s === 'eraEnd' || s === 'handoff' || (s === 'turn' && !!this.aiTurn)
@@ -145,18 +152,18 @@ const app = new Vue({
             const seats = this.setup.seats;
             if (seats.length >= 4) return;
             if (kind === 'ai' && this.nAIs >= 2) return; // 3rd AI planned for later
-            if (kind === 'human' && this.nHumans >= 3) return;
             const used = seats.map(s => s.color);
             const color = PLAYER_COLORS.find(c => !used.includes(c));
             if (kind === 'ai') seats.push({ kind, name: AI_NAMES.find(n => !seats.some(s => s.name === n)), color, persona: 'balanced' });
-            else seats.push({ kind, name: 'Player ' + (this.nHumans + 1), color });
+            else {
+                let n = this.nHumans + 1;
+                while (seats.some(s => s.name === 'Player ' + n)) n++;
+                seats.push({ kind, name: 'Player ' + n, color });
+            }
         },
         removeSeat(i) {
             const s = this.setup.seats;
-            if (s.length <= 2) return;
-            const seat = s[i];
-            if (seat.kind === 'ai' && this.nAIs <= 1) return;
-            if (seat.kind === 'human' && this.nHumans <= 1) return;
+            if (s.length <= 1) return;
             s.splice(i, 1);
         },
         setSeatColor(i, color) {
@@ -165,6 +172,7 @@ const app = new Vue({
             this.setup.seats[i].color = color;
         },
         startGame() {
+            if (this.startProblem) return;
             const seats = this.setup.seats.map(s => ({ ...s, name: (s.name || '').trim() || (s.kind === 'ai' ? 'AI' : 'Player') }));
             const g = newGame({ players: seats, mode: this.setup.mode });
             this.g = freeze(g);

@@ -44,3 +44,11 @@ test('deck sizes match the player aid', () => {
     assert.equal(deckFor(3).length, 54);
     assert.equal(deckFor(4).length, 64);
 });
+
+test('pure pass-and-play: 2-4 humans, no AI, both modes', () => {
+    for (const n of [2, 3, 4]) {
+        const seats = Array.from({ length: n }, (_, i) => ({ name: 'H' + i, kind: 'human' }));
+        playRandom(100 + n, seats, 'phone');
+        playRandom(200 + n, seats, 'physical');
+    }
+});

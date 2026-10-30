@@ -241,6 +241,10 @@ input[type="text"], select {
 .card__hint { margin: 0.15rem 0 0; font-size: 0.85rem; color: var(--muted); }
 .card__area { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; border-top: 1px dashed var(--rule); margin-top: 0.5rem; padding-top: 0.5rem; }
 .card__area label { min-height: 36px; display: inline-flex; align-items: center; gap: 0.3rem; }
+.persona { flex-wrap: nowrap; align-items: flex-start; gap: 0.75rem; }
+.persona__label { font-weight: 700; min-height: 40px; }
+.persona__field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.persona__blurb { margin: 0; font-size: 0.85rem; color: var(--muted); }
 
 /* ---- primary button bar ---- */
 .button-container {
@@ -269,7 +273,7 @@ input[type="text"], select {
     cursor: pointer;
 }
 .button:hover { background: var(--btn-bg-hover); }
-.button:disabled { background: var(--muted); cursor: wait; }
+.button:disabled { background: var(--muted); cursor: not-allowed; }
 
 /* ---- scores ---- */
 .score { padding: 0.25rem 1rem; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); }

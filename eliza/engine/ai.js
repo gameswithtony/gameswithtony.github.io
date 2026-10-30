@@ -44,12 +44,12 @@ export const PERSONAS = {
 
 /** Names and blurbs for the setup screen (keys match PERSONAS). */
 export const PERSONA_INFO = [
-    { key: 'balanced', name: 'Balanced', blurb: 'Plays the board in front of her. No fixed plan.' },
+    { key: 'balanced', name: 'Balanced', blurb: 'Adapts to the cards and the board. No fixed plan.' },
     { key: 'cotton', name: 'Cotton Baron', blurb: 'Develops cotton early and sells it in bulk.' },
     { key: 'goods', name: 'Manufacturer', blurb: 'Climbs the manufactured goods ladder around Birmingham.' },
     { key: 'potter', name: 'Potter', blurb: 'High risk, high reward: chases the big pottery tiles.' },
     { key: 'railBaron', name: 'Rail Baron', blurb: 'Brews beer and spends it on double rail links.' },
-    { key: 'supplier', name: 'Ironmaster', blurb: 'Coal and iron first, then cashes in.' },
+    { key: 'supplier', name: 'Ironmaster', blurb: "Supplies everyone's coal and iron, then invests the profits." },
 ];
 
 export function weights(persona) {

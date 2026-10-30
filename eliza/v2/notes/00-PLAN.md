@@ -167,3 +167,8 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   top nav (now a flex row with no '|' separators) and top-right of the start screen. Renames: "Game State"
   (was View Board State). `node sim/shot.js --theme dark`.
 - 2026-10-29: Footer tab 'Standings' renamed 'Ledger' (Tony: Standings was awkward). Tabs: Ledger | Hand | Board | Mat.
+- 2026-10-29: Pure human pass-and-play (Tony). Seats: any seat removable (down to 1); up to 4 humans when no AI;
+  AIs still max 2; total 2-4. Start blocked unless 2-4 seats and >=1 human (startProblem computed shows why;
+  button disabled). Persona blurbs reworded (Balanced: "Adapts to the cards and the board. No fixed plan.";
+  Ironmaster: "Supplies everyone's coal and iron, then invests the profits."); blurb sits under the persona select
+  with aria-describedby. sim/shot.js --seats human,human. Test: all-human games 2-4p, both modes.
