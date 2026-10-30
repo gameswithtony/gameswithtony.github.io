@@ -383,9 +383,9 @@
                         <button class="sheet__close" v-on:click="sheet = null">Close</button>
                     </div>
                     <div class="sheet__body">
-                        <template v-if="sheet === 'standings'">
+                        <template v-if="sheet === 'ledger'">
                 <table class="ledger">
-                    <caption><span class="visually-hidden">Standings. </span><span class="ledger__time">{{ eraLine() }}</span></caption>
+                    <caption><span class="visually-hidden">Ledger. </span><span class="ledger__time">{{ eraLine() }}</span></caption>
                     <thead>
                         <tr><th scope="col">Player</th><th scope="col">Money</th><th scope="col">Income</th><th scope="col">VP</th><th scope="col"><abbr title="Money spent this round. Least spent goes first next round.">Spent</abbr></th></tr>
                     </thead>

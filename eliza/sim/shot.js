@@ -66,7 +66,7 @@ try {
         for (let i = 0; i < 50 && !(a.isHumanTurn && !a.aiTurn && a.screen === 'turn'); i++) { await sleep(150); if (!a.thinking && (a.aiTurn || a.screen !== 'turn')) a.next(); }
     })()`);
     await sleep(600); await shot('03-turn', false);
-    for (const k of ['standings', 'hand', 'board', 'mat']) {
+    for (const k of ['ledger', 'hand', 'board', 'mat']) {
         await evaluate("(async () => { const a = window.elizaApp; if (a.phoneTabs.some(x => x.k === '" + k + "')) a.toggleSheet('" + k + "'); })()");
         await sleep(300); await shot('03-sheet-' + k, false);
         await evaluate("(() => { const b = document.querySelector('.sheet__body'); if (b) b.scrollTop = b.scrollHeight; })()");

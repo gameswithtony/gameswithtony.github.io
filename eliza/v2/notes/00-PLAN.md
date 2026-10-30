@@ -166,3 +166,4 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   default follows prefers-color-scheme; an inline head script sets it before first paint. Sun/moon button in the
   top nav (now a flex row with no '|' separators) and top-right of the start screen. Renames: "Game State"
   (was View Board State). `node sim/shot.js --theme dark`.
+- 2026-10-29: Footer tab 'Standings' renamed 'Ledger' (Tony: Standings was awkward). Tabs: Ledger | Hand | Board | Mat.

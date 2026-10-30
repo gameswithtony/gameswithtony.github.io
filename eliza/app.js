@@ -59,7 +59,7 @@ const app = new Vue({
         gameState: '',
         mapSel: null,
         theme: document.documentElement.getAttribute('data-theme') || 'light',
-        sheet: null,        // phone mode: open information sheet (standings | hand | board | mat)
+        sheet: null,        // phone mode: open information sheet (ledger | hand | board | mat)
         bigMap: false,
         mapKey: IND_ABBR.map((abbr, i) => ({ abbr, name: IND_NAMES[i] })),
     },
@@ -108,7 +108,7 @@ const app = new Vue({
         /** Phone mode footer tabs. Hand and mat only on the current human's own turn (pass-and-play privacy). */
         phoneTabs() {
             if (!this.isPhone || this.error || this.screen === 'setup' || this.screen === 'handoff') return [];
-            const tabs = [{ k: 'standings', label: 'Standings' }];
+            const tabs = [{ k: 'ledger', label: 'Ledger' }];
             const mine = this.screen === 'turn' && this.isHumanTurn && !this.aiTurn;
             if (mine) tabs.push({ k: 'hand', label: 'Hand', count: (this.curPlayer.hand || []).length });
             tabs.push({ k: 'board', label: 'Board' });
@@ -116,7 +116,7 @@ const app = new Vue({
             return tabs;
         },
         sheetTitle() {
-            return { standings: 'Standings', hand: this.possessive(this.cur) + ' hand', board: 'Board', mat: this.possessive(this.cur) + ' player mat' }[this.sheet] || '';
+            return { ledger: 'Ledger', hand: this.possessive(this.cur) + ' hand', board: 'Board', mat: this.possessive(this.cur) + ' player mat' }[this.sheet] || '';
         },
         showNext() {
             const s = this.screen;
