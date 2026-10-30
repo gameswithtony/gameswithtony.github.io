@@ -126,8 +126,8 @@ const app = new Vue({
         /** Why the game can't start yet ('' when it can). */
         startProblem() {
             const n = this.setup.seats.length;
-            if (n < 2) return 'Add another player or an AI: Brass needs 2 to 4 players.';
-            if (this.nHumans < 1) return 'Add a player: the game needs at least one person.';
+            if (n < 2) return 'Add a human or an AI: Brass needs 2 to 4 players.';
+            if (this.nHumans < 1) return 'Add a human: the game needs at least one.';
             return '';
         },
         showNext() {

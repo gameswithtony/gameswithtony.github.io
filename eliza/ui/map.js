@@ -3,8 +3,7 @@
 // Positions follow images/board.jpg (1200 x 1200) so it reads like the real board.
 import { LOCATIONS, LINKS, SPACES_AT, SPACES, IND, ERA } from '../engine/data.js';
 
-export const IND_ABBR = ['Br', 'Mg', 'Ct', 'Po', 'Cl', 'Fe'];
-export const IND_LEGEND = 'Br Brewery, Mg Manufactured Goods, Ct Cotton Mill, Po Pottery, Cl Coal Mine, Fe Iron Works';
+export const IND_ABBR = ['BR', 'MG', 'CT', 'PO', 'CL', 'FE'];
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 export const COLOR_HEX = { purple: '#7B5EA7', red: '#E06A2C', yellow: '#E2B93B', gray: '#7E8790' };
 
@@ -16,6 +15,18 @@ const POS = {
 };
 const SQ = 46;
 
+// Tile label widths in px at 700 16px Atkinson Hyperlegible, measured in Chrome (sim/measure: canvas measureText).
+// Labels wider than the tile minus its outline go on two lines.
+const LABEL_PX = {
+    'BR I': 33.1, 'BR II': 40.5, 'BR III': 47.8, 'BR IV': 43.6,
+    'MG I': 37.4, 'MG II': 44.8, 'MG III': 52.1, 'MG IV': 47.9, 'MG V': 40.6, 'MG VI': 47.9, 'MG VII': 55.2, 'MG VIII': 62.6,
+    'CT I': 33.1, 'CT II': 40.4, 'CT III': 47.7, 'CT IV': 43.6,
+    'PO I': 34.7, 'PO II': 42, 'PO III': 49.3, 'PO IV': 45.2, 'PO V': 37.9,
+    'CL I': 31.8, 'CL II': 39.1, 'CL III': 46.5, 'CL IV': 42.3,
+    'FE I': 30.4, 'FE II': 37.8, 'FE III': 45.1, 'FE IV': 40.9,
+};
+const fitsOneLine = label => (LABEL_PX[label] ?? 99) <= 42.5;
+
 export const MAP_CSS = `
 .board-map-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
 .board-map { width: var(--map-zoom, 100%); max-width: none; height: auto; display: block; background: var(--map-bg, #E3E9E6); }
@@ -26,12 +37,14 @@ export const MAP_CSS = `
 .board-map .map-name { font: 700 30px 'Atkinson Hyperlegible', sans-serif; fill: var(--map-text, #15181B); paint-order: stroke; stroke: var(--map-halo, #FBFCFA); stroke-width: 7px; }
 .board-map .map-net { fill: var(--prussian, #1B3A57); text-decoration: underline; }
 .board-map .map-small { font: 400 22px 'Atkinson Hyperlegible', sans-serif; fill: var(--map-text, #15181B); }
-.board-map .map-tile { font: 700 17px 'Atkinson Hyperlegible', sans-serif; fill: #FFFFFF; paint-order: stroke; stroke: #15181B; stroke-width: 3px; }
+.board-map .map-tile { font: 700 16px 'Atkinson Hyperlegible', sans-serif; fill: #FFFFFF; paint-order: stroke; stroke: #15181B; stroke-width: 3px; }
+.board-map .map-tile--lvl { font-size: 13px; }
+.board-map .map-res { font: 700 13px 'Atkinson Hyperlegible', sans-serif; fill: var(--map-text, #15181B); }
 .board-map .map-tiny { font: 400 12px 'Atkinson Hyperlegible', sans-serif; fill: var(--map-tiny, #4A5560); }
 .board-map .map-hl .sp-empty, .board-map .map-hl .merch { stroke: var(--prussian, #1B3A57); stroke-width: 6px; }`;
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const merchText = m => m.accepts.length === 0 ? 'blank' : m.accepts.length === 3 ? 'Mg Ct Po' : m.accepts.map(i => IND_ABBR[i]).join(' ');
+const merchText = m => m.accepts.length === 0 ? 'blank' : m.accepts.slice().sort((a, b) => a - b).map(i => IND_ABBR[i]).join(' ');
 
 export function mapSVG(g, highlight = null, net = []) {
     const out = [`<svg class="board-map" viewBox="0 30 1200 1140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Map of the board. Game State describes the same information as text.">`];
@@ -71,10 +84,17 @@ export function mapSVG(g, highlight = null, net = []) {
                 out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="${SQ}" rx="5" fill="${color}"/>`);
                 if (t.flip) out.push(`<path d="M${sx} ${sy + 12}V${sy + 5}Q${sx} ${sy} ${sx + 5} ${sy}H${sx + SQ - 5}Q${sx + SQ} ${sy} ${sx + SQ} ${sy + 5}V${sy + 12}Z" class="sp-band"/>`);
                 out.push(`<rect x="${sx}" y="${sy}" width="${SQ}" height="${SQ}" rx="5" fill="none" class="sp-tile" stroke-width="${t.flip ? 4 : 2}"/>`);
-                out.push(`<text x="${sx + SQ / 2}" y="${sy + 31}" text-anchor="middle" class="map-tile">${IND_ABBR[t.ind]} ${ROMAN[t.lvl]}</text>`);
+                // one line when it fits ("CT IV"), else industry over level ("MG" / "VIII"); clear of the flipped band
+                const label = `${IND_ABBR[t.ind]} ${ROMAN[t.lvl]}`;
+                if (fitsOneLine(label)) {
+                    out.push(`<text x="${sx + SQ / 2}" y="${sy + 33}" text-anchor="middle" class="map-tile">${label}</text>`);
+                } else {
+                    out.push(`<text x="${sx + SQ / 2}" y="${sy + 28}" text-anchor="middle" class="map-tile">${IND_ABBR[t.ind]}</text>`);
+                    out.push(`<text x="${sx + SQ / 2}" y="${sy + 43}" text-anchor="middle" class="map-tile map-tile--lvl">${ROMAN[t.lvl]}</text>`);
+                }
                 if (t.res) {
                     const kind = t.ind === IND.CoalMine ? 'coal' : t.ind === IND.IronWorks ? 'iron' : 'beer';
-                    out.push(`<text x="${sx + SQ / 2}" y="${sy + SQ + 20}" text-anchor="middle" class="map-small">${t.res} ${kind}</text>`);
+                    out.push(`<text x="${sx + SQ / 2}" y="${sy + SQ + 15}" text-anchor="middle" class="map-res">${t.res} ${kind}</text>`);
                 }
             });
             out.push(`<text x="${x}" y="${y - SQ / 2 - 8}" text-anchor="middle" class="map-name${net.includes(loc.id) ? ' map-net' : ''}">${name}</text>`);

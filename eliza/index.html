@@ -48,9 +48,9 @@
             <ul class="cards">
                 <li v-for="(seat, i) in setup.seats" :key="i" class="card">
                     <p class="card__name">
-                        <span v-if="seat.kind === 'human'">Player: </span><span v-else>AI: </span>
+                        <span v-if="seat.kind === 'human'">Human: </span><span v-else>AI: </span>
                         <input type="text" v-model="seat.name" maxlength="16" style="width: 9rem;" />
-                        <a href="#" v-if="setup.seats.length > 1" v-on:click.prevent="removeSeat(i)" v-bind:aria-label="'Remove ' + (seat.name || (seat.kind === 'ai' ? 'this AI' : 'this player'))">remove</a>
+                        <a href="#" v-if="setup.seats.length > 1" v-on:click.prevent="removeSeat(i)" v-bind:aria-label="'Remove ' + (seat.name || (seat.kind === 'ai' ? 'this AI' : 'this human'))">remove</a>
                     </p>
                     <div class="card__area">
                         <ul class="player-color-options">
@@ -69,7 +69,7 @@
                 </li>
             </ul>
             <div class="text-centered">
-                <a href="#" v-if="setup.seats.length < 4" v-on:click.prevent="addSeat('human')">+ Add a player</a>
+                <a href="#" v-if="setup.seats.length < 4" v-on:click.prevent="addSeat('human')">+ Add a human</a>
                 <span v-if="setup.seats.length < 4 && nAIs < 2">&nbsp;&nbsp;|&nbsp;&nbsp;</span>
                 <a href="#" v-if="setup.seats.length < 4 && nAIs < 2" v-on:click.prevent="addSeat('ai')">+ Add an AI</a>
                 <p class="text-tiny">{{ setup.seats.length }}-player game<span v-if="nAIs === 0 && nHumans > 1">, pass-and-play with no AI</span></p>
@@ -80,23 +80,15 @@
             <br /><br />
             <h3>Important Notes</h3>
             <ul style="padding: 0 1rem;">
-                <li class="action-desc">
-                    The AIs play by exactly the same rules as you: the same cards, money, income, coal, iron and beer. They have no special rules.
-                </li>
-                <li class="action-desc">
-                    The app will refer to spaces in locations by number, for example "Coalbrookdale (Space 2)". The spaces are numbered from left-to-right, top-to-bottom. See the below reference:
+                <li class="action-desc" v-if="setup.mode === 'physical'">
+                    The app names spaces by number, for example "Coalbrookdale (Space 2)", counting left to right, top to bottom:
                     <br />
-                    <img src="images/Birmingham_Spaces.png" style="width: 350px;" alt="Space numbering reference" />
+                    <img src="images/Birmingham_Spaces.png" style="width: 350px; max-width: 100%;" alt="Space numbering reference" />
                 </li>
-                <li class="action-desc">
-                    The app keeps track of everyone's money and income, including yours. Tell it what you do, and it will tell you how much money you have.
-                </li>
-                <li class="action-desc">
-                    If you think the app is making a mistake, use the 'Game State' link at the top of the app to compare your physical board with the app's. 'History' shows every move so far.
-                </li>
-                <li class="action-desc">
-                    If you load the app in your device's browser the app will work and save if you turn on airplane mode. You will need an internet connection to refresh the page however.
-                </li>
+                <li class="action-desc">The app tracks everyone's money, including yours.</li>
+                <li class="action-desc" v-if="setup.mode === 'physical'">If the app and your table disagree, check Board or Game State.</li>
+                <li class="action-desc">The AIs follow the same rules as you.</li>
+                <li class="action-desc">Once the app has loaded in your browser, it keeps working and saving without a connection, so you can turn on airplane mode to avoid interruptions. You'll need a connection to reload the page.</li>
             </ul>
         </section>
 
@@ -403,11 +395,11 @@
                 </table>
                 <div class="markets">
                     <div class="market market--coal">
-                        <p class="market__label">Coal <strong>&pound;{{ nextPrice('coal') }}</strong> <span class="market__count">{{ g.coal }} of 14 left</span></p>
+                        <p class="market__label">Coal <strong>&pound;{{ nextPrice('coal') }}</strong> <span class="market__count">{{ g.coal }} of 14 available</span></p>
                         <ol class="market__pips" aria-hidden="true"><li v-for="(pip, i) in marketPips('coal')" :key="i" v-bind:class="{ full: pip.full }"><span v-if="i % 2 === 0">{{ pip.price }}</span></li></ol>
                     </div>
                     <div class="market market--iron">
-                        <p class="market__label">Iron <strong>&pound;{{ nextPrice('iron') }}</strong> <span class="market__count">{{ g.iron }} of 10 left</span></p>
+                        <p class="market__label">Iron <strong>&pound;{{ nextPrice('iron') }}</strong> <span class="market__count">{{ g.iron }} of 10 available</span></p>
                         <ol class="market__pips" aria-hidden="true"><li v-for="(pip, i) in marketPips('iron')" :key="i" v-bind:class="{ full: pip.full }"><span v-if="i % 2 === 0">{{ pip.price }}</span></li></ol>
                     </div>
                 </div>
