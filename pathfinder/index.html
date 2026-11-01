@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#070d14">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Play On Mars on your phone against Pathfinder, an unofficial solo opponent. Fan-made, not affiliated with the publisher.">
+    <title>Pathfinder · On Mars solo</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+    <script src="lz-string.min.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+
+    <!-- ============================ setup ============================ -->
+    <main v-if="!st" class="setup">
+        <div class="setup-card">
+            <p class="brand"><ic n="pf" :s="28" c="var(--c-pf)"></ic> PATHFINDER</p>
+            <h1>On Mars · solo</h1>
+            <p class="lede">Play On Mars against Pathfinder, a solo opponent driven by its card deck.</p>
+
+            <fieldset>
+                <legend>Difficulty</legend>
+                <div class="seg">
+                    <label v-for="d in ['rookie','chief','legend']" :key="d" :class="{ on: setup.difficulty===d }">
+                        <input type="radio" name="diff" :value="d" v-model="setup.difficulty">
+                        <b>{{ d[0].toUpperCase() + d.slice(1) }}</b><small>{{ diffInfo[d] }}</small>
+                    </label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Missions</legend>
+                <div class="seg">
+                    <label :class="{ on: !setup.firstGame && setup.length==='short' }"><input type="radio" name="len" @change="setup.firstGame=false; setup.length='short'" :checked="!setup.firstGame && setup.length==='short'"><b>Short</b><small>2 short + 1 long</small></label>
+                    <label :class="{ on: !setup.firstGame && setup.length==='long' }"><input type="radio" name="len" @change="setup.firstGame=false; setup.length='long'" :checked="!setup.firstGame && setup.length==='long'"><b>Long</b><small>1 short + 2 long</small></label>
+                    <label :class="{ on: setup.firstGame }"><input type="radio" name="len" @change="setup.firstGame=true" :checked="setup.firstGame"><b>First game</b><small>Blueprints · Scientists · Bots</small></label>
+                </div>
+            </fieldset>
+            <button class="btn primary wide big" @click="start"><ic n="shuttle" :s="20"></ic> Launch</button>
+            <p class="fine">Fan-made. On Mars is by Vital Lacerda. The app plays the game but doesn't teach the rules.</p>
+            <p v-if="error" class="err">{{ error }}</p>
+        </div>
+    </main>
+
+    <!-- ============================ game ============================ -->
+    <div v-else class="game" :class="{ wide, mid, deciding: isHexPrompt }">
+        <header class="hud">
+            <span class="hud-brand" aria-hidden="true"><ic n="pf" :s="18" c="var(--c-pf)"></ic></span>
+            <button class="score you" @click="openPanel('me')" aria-label="Your score and board">
+                <ic n="you" :s="16" c="var(--c-you)"></ic><b>{{ scores[0] }}</b>
+            </button>
+            <button class="score pf" @click="openPanel('pf')" aria-label="Pathfinder score and board">
+                <ic n="pf" :s="16" c="var(--c-pf)"></ic><b>{{ scores[1] }}</b>
+            </button>
+            <span class="hud-stat" v-tip="{ ic: 'clock', t: 'Round', v: st.final ? st.round + ' (final round)' : String(st.round), d: [st.final ? 'Last round: no shuttle phase, then final scoring.' : 'Each round every player takes one turn, then the shuttle phase.'] }"><ic n="clock" :s="15"></ic><b>{{ st.round }}</b><small v-if="st.final">final</small></span>
+            <button class="hud-stat" title="Colony level and life support" aria-label="Colony level and life support" @click="openPanel('lss')"><ic n="level" :s="15"></ic><b>{{ st.level }}</b></button>
+            <button class="hud-stat" title="Missions to end the game" @click="openPanel('cards')"><ic n="mission" :s="15"></ic><b>{{ missionsLeft }}</b><small v-if="st.endTriggered" class="warn">end!</small></button>
+            <span class="sp"></span>
+            <button class="icon-btn" :disabled="!undo.length" @click="doUndo" aria-label="Undo" title="Undo (Ctrl+Z)"><ic n="undo" :s="20"></ic></button>
+            <button class="icon-btn" @click="openSheet('menu')" aria-label="Menu"><ic n="menu" :s="20"></ic></button>
+        </header>
+
+        <shuttle-strip :st="st" :view="view" @view="v => view = v" @open="openSheet('shuttle')"></shuttle-strip>
+
+        <div class="stage">
+            <aside class="col-left" v-if="wide">
+                <orbit-view :st="st" @card="c => card = c"></orbit-view>
+            </aside>
+
+            <section class="col-main">
+                <template v-if="wide || view==='colony'">
+                    <colony-strip :st="st"></colony-strip>
+                    <lss-widget :st="st" @open="openPanel('lss')"></lss-widget>
+                    <mars-map :st="st" :prompt="prompt" @hex="onAnswer" @inspect="onInspect">
+                        <div v-if="inspectInfo" class="inspect" role="dialog" aria-label="Hex details">
+                            <button class="icon-btn sm close" @click="inspect=null" aria-label="Close"><ic n="close" :s="14"></ic></button>
+                            <p v-for="(l,i) in inspectInfo.lines" :key="i"><ic :n="l.ic" :s="16" :c="l.c"></ic>{{ l.txt }}</p>
+                        </div>
+                    </mars-map>
+                </template>
+                <orbit-view v-else :st="st" @card="c => card = c"></orbit-view>
+            </section>
+
+            <aside class="col-right" v-if="wide || mid">
+                <nav class="tabs" role="tablist">
+                    <button v-for="t in [['me','you','You'],['pf','pf','Pathfinder'],['lss','lss','LSS'],['cards','scientist','Cards'],['log','log','Log']]" :key="t[0]" role="tab" :aria-selected="side===t[0]" :class="{ on: side===t[0] }" @click="side=t[0]"><ic :n="t[1]" :s="16"></ic>{{ t[2] }}</button>
+                </nav>
+                <div class="tab-body">
+                    <player-board v-if="side==='me'" :st="st" :pi="0" :interactive="prompt && prompt.kind==='menu'" @deliver="onDeliver" @card="c => card = c"></player-board>
+                    <player-board v-if="side==='pf'" :st="st" :pi="1" @card="c => card = c"></player-board>
+                    <lss-board v-if="side==='lss'" :st="st"></lss-board>
+                    <cards-panel v-if="side==='cards'" :st="st" @card="c => card = c"></cards-panel>
+                    <log-panel v-if="side==='log'" :st="st"></log-panel>
+                </div>
+            </aside>
+        </div>
+
+        <prompt-dock v-if="prompt" :st="st" :prompt="prompt" :can-undo="undo.length > 0" @answer="onAnswer" @undo="doUndo" @tip="t => tip = t"></prompt-dock>
+
+        <nav class="dockbar" v-if="!wide && !mid" aria-label="Boards">
+            <button @click="openSheet('me')" :class="{ on: sheet==='me' }"><ic n="you" :s="20" c="var(--c-you)"></ic><span>Me</span></button>
+            <button @click="openSheet('pf')" :class="{ on: sheet==='pf' }"><ic n="pf" :s="20" c="var(--c-pf)"></ic><span>Pathfinder</span></button>
+            <button @click="openSheet('lss')" :class="{ on: sheet==='lss' }"><ic n="lss" :s="20"></ic><span>LSS</span></button>
+            <button @click="openSheet('cards')" :class="{ on: sheet==='cards' }"><ic n="scientist" :s="20"></ic><span>Cards</span></button>
+            <button @click="openSheet('log')" :class="{ on: sheet==='log' }"><ic n="log" :s="20"></ic><span>Log</span></button>
+        </nav>
+
+        <!-- sheets -->
+        <div v-if="sheet" class="scrim" @click.self="sheet=null">
+            <div class="sheet" role="dialog" :aria-label="sheet">
+                <header class="sheet-head">
+                    <h2 v-if="sheet==='me'"><ic n="you" :s="20" c="var(--c-you)"></ic> Your board</h2>
+                    <h2 v-if="sheet==='pf'"><ic n="pf" :s="20" c="var(--c-pf)"></ic> Pathfinder</h2>
+                    <h2 v-if="sheet==='shuttle'"><ic n="shuttle" :s="20"></ic> Shuttle</h2>
+                    <h2 v-if="sheet==='lss'"><ic n="lss" :s="20"></ic> Life support</h2>
+                    <h2 v-if="sheet==='cards'"><ic n="scientist" :s="20"></ic> Cards &amp; missions</h2>
+                    <h2 v-if="sheet==='log'"><ic n="log" :s="20"></ic> History</h2>
+                    <h2 v-if="sheet==='menu'"><ic n="menu" :s="20"></ic> Menu</h2>
+                    <button class="icon-btn" @click="sheet=null" aria-label="Close"><ic n="close" :s="20"></ic></button>
+                </header>
+                <div class="sheet-body">
+                    <player-board v-if="sheet==='me'" :st="st" :pi="0" :interactive="prompt && prompt.kind==='menu'" @deliver="onDeliver" @card="c => card = c"></player-board>
+                    <player-board v-if="sheet==='pf'" :st="st" :pi="1" @card="c => card = c"></player-board>
+                    <shuttle-board v-if="sheet==='shuttle'" :st="st"></shuttle-board>
+                    <lss-board v-if="sheet==='lss'" :st="st"></lss-board>
+                    <cards-panel v-if="sheet==='cards'" :st="st" @card="c => card = c"></cards-panel>
+                    <log-panel v-if="sheet==='log'" :st="st"></log-panel>
+                    <div v-if="sheet==='menu'" class="menu">
+                        <p class="muted small">{{ st.opts.difficulty }} · {{ st.opts.firstGame ? 'first-game missions' : st.opts.length }} · round {{ st.round }}</p>
+                        <button class="btn wide" @click="makeShare"><ic n="share" :s="18"></ic> Share game state</button>
+                        <div v-if="share" class="share">
+                            <p class="small">{{ copied ? 'Copied. Paste it in your bug report.' : 'Copy this code for a bug report:' }}</p>
+                            <textarea readonly rows="4" @focus="$event.target.select()">{{ share }}</textarea>
+                        </div>
+                        <!-- placeholders until the rules pages exist -->
+                        <button class="btn wide" disabled><ic n="pf" :s="18"></ic> Pathfinder rules <small class="tag">Soon</small></button>
+                        <button class="btn wide" disabled><ic n="help" :s="18"></ic> Rules summary <small class="tag">Soon</small></button>
+                        <button class="btn wide" disabled><ic n="deck" :s="18"></ic> Components <small class="tag">Soon</small></button>
+                        <button v-if="!confirmNew" class="btn wide danger" @click="confirmNew=true"><ic n="flag" :s="18"></ic> New game</button>
+                        <div v-else class="confirm">
+                            <p>Abandon this game?</p>
+                            <button class="btn danger" @click="newGame">Yes, start over</button>
+                            <button class="btn ghost" @click="confirmNew=false">Keep playing</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="popInfo" class="scrim pop-scrim" @click.self="closePop">
+            <div class="pop" role="dialog" :aria-label="popInfo.title">
+                <header class="sheet-head"><h2><ic :n="popInfo.ic" :s="20"></ic> {{ popInfo.title }}</h2><button class="icon-btn" @click="closePop" aria-label="Close"><ic n="close" :s="18"></ic></button></header>
+                <p v-if="popInfo.v" class="pop-v">{{ popInfo.v }}</p>
+                <ul class="card-lines"><li v-for="(l,i) in popInfo.lines" :key="i">{{ l }}</li></ul>
+            </div>
+        </div>
+
+        <div v-if="error" class="toast err" role="alert"><span>{{ error }}</span><button class="icon-btn sm" @click="error=null" aria-label="Dismiss"><ic n="close" :s="14"></ic></button></div>
+    </div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
