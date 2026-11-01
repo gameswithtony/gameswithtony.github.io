@@ -325,7 +325,7 @@ button.hud-stat { cursor: pointer; }
 .tile .extra { display: inline-flex; align-items: center; font: 700 11px var(--font-hud); color: var(--caution); }
 .tile.off { opacity: .4; cursor: not-allowed; }
 .tile .why { font-size: 9px; color: var(--muted); display: flex; align-items: center; gap: 2px; text-align: center; line-height: 1.1; }
-.exec-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.exec-row { display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
 .exec-row .lbl { color: var(--muted); }
 .xbtn { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-width: 46px; min-height: 46px; padding: 4px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--sunken); cursor: pointer; }
 .xbtn small { display: inline-flex; align-items: center; font: 600 11px var(--font-hud); color: var(--muted); }
@@ -444,7 +444,7 @@ button.hud-stat { cursor: pointer; }
 .tab-body { padding: 8px; overflow: auto; flex: 1; }
 @media (min-width: 700px) and (max-width: 1099px) {
     .dock { max-height: 40dvh; }
-    .tiles.main { max-width: 640px; }
+    .tiles.main { max-width: 640px; margin: 0 auto; width: 100%; }
 }
 
 /* ---------- tablets: map/orbit | boards ---------- */
