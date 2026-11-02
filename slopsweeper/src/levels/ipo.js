@@ -16,9 +16,8 @@ export const ipo = {
   name: 'Launch Day',
   story:
     'The acquisition closes if the public launch goes well. Every capability you built this year ' +
-    'is on one map, B through F, behind firewalls, with checklists that go in order. Launch day ' +
-    'forgives one lost user and no more. Dana says to treat it like any other Tuesday. It is a ' +
-    'Thursday.',
+    'is on one map, B through F, behind firewalls, and some checklists go in order. Dana says to ' +
+    'treat it like any other Tuesday. It is a Thursday.',
   map: `
 ^^^^^^^^^^E#^^^^^^^^^^
 ^^^^^#################

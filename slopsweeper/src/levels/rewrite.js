@@ -13,10 +13,9 @@ export const rewrite = {
   id: 'rewrite',
   name: 'The Rewrite',
   story:
-    'The original system is too slow, and the plan is to replace it while it is still running. ' +
-    'Your code can go around it either way, and each way has a tight spot. Users need search (B), ' +
-    'the dashboard (C), sharing (D) and history (E), and some need more than one, so pick the ' +
-    'side you start on before anyone shows up.',
+    'The old system is too slow, so you are replacing it while it still runs. Your code can go ' +
+    'around it either way, and each way has a tight spot. Users need search (B), the dashboard ' +
+    '(C), sharing (D) and history (E). Pick a side before anyone shows up.',
   map: `
 ##########^^^^^^B#########
 ##########################

@@ -15,9 +15,8 @@ export const audit = {
   name: 'Due Diligence',
   story:
     'A bigger company wants to buy you, and their auditors are reading everything. They need ' +
-    'access logs (B), contracts (C), the security review (D) and revenue numbers (E), and they ' +
-    'want them from three directions at once. Read the code before anyone walks on it. The ' +
-    'auditors will.',
+    'access logs (B), contracts (C), the security review (D) and revenue numbers (E), from three ' +
+    'directions at once.',
   map: `
 ....#B##......................
 ....####......................

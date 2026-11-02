@@ -14,8 +14,8 @@ export const demo = {
   name: 'The Demo',
   story:
     'Dana booked an investor demo for Friday. The investors want to watch someone sign up (B) and ' +
-    'send an invoice (C). Signup is close to done. Invoicing needs code nobody has written yet. ' +
-    "Investors don't read code, but they notice when a demo crashes.",
+    "send an invoice (C). Signup is nearby. Invoicing is all the way across. Investors don't read " +
+    'code, but they notice when a demo crashes.',
   map: `
 ................................
 ######B######...................

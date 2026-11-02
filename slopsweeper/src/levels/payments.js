@@ -13,9 +13,9 @@ export const payments = {
   id: 'payments',
   name: 'Payments',
   story:
-    'The enterprise deal closed, and now everyone wants to pay you. Some need account settings ' +
-    '(B), some need checkout (C), and some need both. Code that touches money is code you write ' +
-    'by hand, so the narrow parts are yours. You have two betas this time, one for each group.',
+    'The enterprise deal closed, and now everyone wants to pay you. Some users need account ' +
+    'settings (B), some need checkout (C), and some need both. Code that touches money gets ' +
+    'written by hand, so the narrow parts are yours. You have two betas, one toward each.',
   map: `
 ......B...........................
 ......#...........................

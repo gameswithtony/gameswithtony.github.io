@@ -789,7 +789,7 @@ function boot() {
   // Every generated block ships at least two defects now, so the old "got away with it"
   // branch and the singular form are both unreachable.
   bus.on('blockPlaced', (/** @type {{ mines: number }} */ ev) => {
-    hud.toast(`INTRODUCED ${ev.mines} DEFECTS`);
+    hud.toast(`${ev.mines} BUGS IN THIS BLOCK`);
   });
   // Shipping a beta changes where users are walking, which is a bigger deal than the one tile
   // that appeared says. The toast names the consequence rather than the tile.
@@ -806,7 +806,7 @@ function boot() {
   // is only the cells whose construction was removed, so the visual extent comes from
   // core's own blastArea() over the pre-blast state.
   bus.on('detonate', (/** @type {{ at: number, destroyed: number[] }} */ ev) => {
-    hud.notice(`DETONATION · ${ev.destroyed.length} TILES LOST`);
+    hud.notice(`BUG EXPLODED · ${ev.destroyed.length} TILES LOST`);
     fx.detonate(prev, ev.at, ev.destroyed, blastArea(prev, ev.at), walkDelay(ev.at));
     stopRun();     // no second notice: a blast announces itself louder than a line of text
   });

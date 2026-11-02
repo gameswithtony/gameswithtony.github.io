@@ -15,11 +15,10 @@ export const launch = {
   name: 'Day One',
   story:
     'You are the first engineer at a startup that makes invoicing software for small businesses. ' +
-    'On day one the founder, Dana, hands you a laptop, an AI coding assistant, and a waitlist. ' +
-    'Six people come in at A wanting one thing: to sign up (B). The assistant writes code fast, ' +
-    'and every block it writes has at least two bugs in it. The narrow part in the middle is too ' +
-    'tight for the assistant, so you write that code yourself. Ship a beta partway there and the ' +
-    'waitlist will start moving toward signup instead of standing at the door.',
+    'The founder, Dana, hands you a laptop, an AI coding assistant, and a waitlist. Everyone on ' +
+    'the waitlist comes in at A and needs signup (B). The assistant writes code fast, and every ' +
+    'block it writes has at least two bugs. The middle is too narrow for its blocks, so you write ' +
+    'that part by hand. A beta partway there gets the waitlist moving before signup is finished.',
   map: `
 ###############..#################
 ###############..#################

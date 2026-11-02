@@ -14,10 +14,8 @@ export const blackfriday = {
   id: 'blackfriday',
   name: 'Black Friday',
   story:
-    'Every one of your customers runs a sale on the same day. Two waves of shoppers need carts ' +
-    '(B), coupons (C), checkout (D), receipts (E) and shipping (F), and none of them will wait ' +
-    'long. Ship betas early, one ahead of every aisle, and read the code before the crowd reaches ' +
-    'it.',
+    'Every one of your customers runs a sale on the same day. Shoppers arrive in two waves and ' +
+    'need carts (B), coupons (C), checkout (D), receipts (E) and shipping (F).',
   map: `
 ^^^^^^^^^^^#B##^^^^^^^^^^^^^^^^^^^
 ^^^^^^^^^^^####^^^^^^^^^^^^^^^^^^^

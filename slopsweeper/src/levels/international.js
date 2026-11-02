@@ -15,8 +15,8 @@ export const international = {
   name: 'International',
   story:
     'The company is expanding into three countries. Users need local taxes (B), local currency ' +
-    '(C) and local banks (D), and each one is farther down the same long stretch of code. The ' +
-    'users who need the most will need a beta waiting for them more than once.',
+    '(C) and local banks (D), each farther along the same winding route. Users headed for all three ' +
+    'will need more than one beta.',
   map: `
 ###########A############
 ########################

@@ -13,9 +13,9 @@ export const mobile = {
   id: 'mobile',
   name: 'Mobile',
   story:
-    'Dana promised the board a mobile app by the end of the month. Users want invoices (B), ' +
-    'payments (C), receipts (D) and reports (E) on their phones. Each one sits at the end of a ' +
-    'long pier. Ship a beta partway along and users will wait there while you finish it.',
+    'Dana promised the board a mobile app this month. Phone users need invoices (B), payments ' +
+    '(C), receipts (D) and reports (E), each at the end of its own long branch. A beta halfway ' +
+    'down a branch lets users wait there while you finish it.',
   map: `
 ..................................
 ...##B#....##C#....##D#....##E#...

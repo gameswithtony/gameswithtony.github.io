@@ -52,12 +52,12 @@ import * as cam from './camera.js';
  * @type {Partial<Record<ActionKind, { label: string, key: string, title: string }>>}
  */
 const VERBS = {
-  place: { label: 'PLACE', key: 'P', title: 'Build one tile by hand (SPEC §4.1) · 1 turn · key P' },
+  place: { label: 'PLACE', key: 'P', title: 'Write one tile by hand · 1 turn · key P' },
   beta: { label: 'BETA ×{left}', key: 'B', title: 'Ship a beta here: users walk out to it and wait there · {left} left · 1 turn · key B' },
-  analyze: { label: 'ANALYZE', key: 'A', title: 'Review this cell; a zero opens its neighbours too · 1 turn · key A' },
+  analyze: { label: 'ANALYZE', key: 'A', title: 'Review this cell; a zero opens its neighbors too · 1 turn · key A' },
   placeBlock: { label: 'COMMIT BLOCK', key: '↵', title: 'Commit the generated block here · 1 turn · key Enter' },
   generate: { label: 'GENERATE', key: 'G', title: 'Draw a block; the turn is charged when you commit it · key G' },
-  flag: { label: 'FLAG', key: 'F', title: 'Mark a suspected defect: costs no turn, and users refuse to walk through it · key F' },
+  flag: { label: 'FLAG', key: 'F', title: 'Mark a suspected bug; users will not walk through it · free · key F' },
   wait: { label: 'WAIT', key: 'W', title: 'Let a turn pass · 1 turn · key W' },
 };
 
@@ -106,11 +106,11 @@ function cellHint(s, cell) {
   if (cell < 0 || s.phase.k !== 'play') return '';
   if (s.con[cell].k !== 'aiHidden') return '';
   if (!flaggedAt(s, cell)) {
-    return 'ANALYZE REVEALS THIS CELL · A ZERO CASCADES · A MINE DETONATES · FLAG IS FREE';
+    return 'ANALYZE: A ZERO OPENS ITS NEIGHBORS, A BUG EXPLODES · FLAG IS FREE';
   }
   return blockingFlagSet(s).has(cell)
-    ? 'THIS FLAG IS THE ROADBLOCK: USERS ARE STUCK BEHIND IT · UNFLAG OR BUILD AROUND'
-    : 'FLAGGED · USERS REFUSE TO ENTER · UNFLAG TO ANALYZE';
+    ? 'USERS ARE STUCK BEHIND THIS FLAG · UNFLAG OR BUILD AROUND'
+    : 'FLAGGED · USERS WILL NOT ENTER · UNFLAG TO ANALYZE';
 }
 
 /**

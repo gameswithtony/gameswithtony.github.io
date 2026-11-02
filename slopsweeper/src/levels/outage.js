@@ -15,10 +15,9 @@ export const outage = {
   name: 'The Outage',
   story:
     'At two in the morning, something the assistant wrote three weeks ago took down production. ' +
-    'Customers need alerts (B), a status page (C) and their backups (D). From now on a bug takes ' +
-    'out the code around it, not just its own tile. The rock walls are firewalls: a blast stops ' +
-    'at them. If a tile looks suspicious, write one of your own next to it. Your tile shows how ' +
-    'many bugs it touches.',
+    'Customers need alerts (B), a status page (C) and their backups (D). Here a bug also takes ' +
+    'out the tiles around it. The rock walls are firewalls, and a blast stops at them. To check a ' +
+    'suspicious tile, write one of your own beside it and read its number.',
   map: `
 ############################^^####
 ##################################

@@ -53,49 +53,47 @@ import { initials, pickPost } from './linkedup.js';
  */
 const HELP = [
   ['THE GOAL', [
-    'Welcome to Slopsweeper! You are a coder with software to ship. Users come in at A. The other letters are capabilities: signup, checkout, billing. Each user needs one or more of them, and the USERS panel shows which.',
+    'Users come in at A. The other letters are capabilities, like signup, checkout or billing. Each user needs one or more of them, and the USERS panel shows which.',
     'Build code between the letters. The moment a user can reach a capability they need, they walk there on their own.',
-    'A user who finishes their whole list exits and scores you a point. Each level sets a goal: serve that many to clear it and open the next level. Every user is a perfect run.',
+    'A user who finishes their whole list scores you a point. Each level sets a goal: serve that many to clear it. Serving every user is a perfect run.',
   ]],
   ['TURNS', [
     'Tap a cell, then pick an action from the bar at the bottom. Every action takes one turn, except FLAG, which is free.',
-    'Users move while you work: after every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
-    'Users are not patient. Each turn one of them stands stuck, they lose one patience, and it never comes back. A user who runs out leaves for good.',
-    'There is one way to win patience back: a user who reaches one of their stops, with more still to visit, gets half the bar back.',
+    'After every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
+    'Each turn a user stands stuck costs them one patience, and it never comes back. A user who runs out gives up and leaves.',
+    'A user who reaches a stop with more still to visit gets half their patience back.',
     'The USERS panel lists everyone: who is stuck and how many turns until they leave, who is walking, and who arrives next. Stops joined by arrows must be visited in that order; dots mean any order. Dim letters are stops already visited.',
   ]],
   ['WRITE CODE', [
-    'PLACE writes one tile of code by hand. One turn. It must touch code already built. Hand-written code never has bugs.',
-    'GENERATE asks the AI for code. One turn buys a whole block. Rotate it if you like, then drop it on a highlighted anchor.',
-    'You cannot preview a block and you cannot reject one. And every block contains bugs: at least two defects, hidden inside. The game tells you how many, not where.',
+    'PLACE writes one tile of code by hand. It must touch code already built. Hand-written code never has bugs.',
+    'GENERATE asks the AI for a whole block of code. Rotate it, then drop it on a highlighted anchor.',
+    'You cannot preview or reject a block, and every block hides at least two bugs.',
   ]],
   ['THE BUGS', [
-    'A defect explodes when a user steps on it, or when you analyze it. The blast turns its tile back into open ocean, and any user standing there leaves for good. On some levels it takes the tiles around it too, including yours. Rock walls stop a blast.',
-    'The numbers on the board are how you find defects first. Each number counts the defects in the eight cells touching it.',
-    'Your hand tiles show a number too, so building next to AI code is a safe way to probe it. A blank hand tile means zero: nothing dangerous beside it.',
-    'The badge on each block counts the defects still in that block.',
+    'A bug explodes when a user steps on it, or when you analyze it. The blast erases its tile, and any user standing there leaves for good. On some levels it takes the tiles around it too, including yours. Rock walls stop a blast.',
+    'Each number on the board counts the bugs in the eight cells touching it.',
+    'Hand tiles show a number too, so building next to AI code is a safe way to probe it. A blank tile means zero.',
+    'The badge on each block counts the bugs still in it: how many, not where.',
   ]],
   ['REVIEW', [
-    'ANALYZE reviews one cell of AI code. One turn.',
-    'If the cell is clean, it flips over and shows its number. If that number is zero, its neighbours open too, free.',
-    'If the cell is a defect, it explodes. The numbers are there so you can know before you click.',
-    'FLAG is free and reversible. Mark a cell you do not trust and users will refuse to walk through it. A flag in front of walking users stops them while you read the code ahead.',
-    'A flag can also close your only road. When your flag is the one thing keeping stuck users from their next stop, it glows red: the guardrail has become the roadblock.',
+    'ANALYZE reviews one cell of AI code. A clean cell flips over and shows its number. If that number is zero, its neighbors open too, free. A bug explodes.',
+    'FLAG marks a cell you do not trust, and users will not walk through it. A flag in front of walking users stops them while you read the code ahead. UNFLAG removes it.',
+    'When a flag is the one thing keeping stuck users from their next stop, it glows red.',
   ]],
   ['BETAS', [
-    'You get a few beta releases per run. The BETA button counts them down.',
-    'A beta is one tile, one turn, placed like a hand tile. Users walk out to a beta and wait there instead of standing at A. That keeps them moving and stages them closer to their next stop, but it does not score. Only finishing the list scores.',
-    'Careful: users will cross unreviewed AI code to reach a beta.',
+    'Each level gives you a few betas. The BETA button counts them down.',
+    'A beta is one tile, placed like a hand tile. Users walk out to it and wait there, closer to their next stop. A beta does not score.',
+    'Users will cross unreviewed AI code to reach a beta.',
   ]],
   ['CONTROLS', [
-    'Tap a cell to select it, then act from the bar at the bottom. Or stay on the keyboard: arrow keys move the selection, and every button wears its key. P places, G generates, A analyzes, F flags, B ships a beta, W waits, Space runs.',
+    'On a keyboard, arrow keys move the selection and every button shows its key: P places, G generates, A analyzes, F flags, B ships a beta, W waits, Space runs.',
     'R rotates a block, Enter commits it, Esc deselects.',
     'Drag to pan. Pinch, scroll, or the + and − buttons to zoom. Tap the minimap to jump anywhere.',
     'WAIT passes one turn without building. RUN keeps passing turns until something needs your attention.',
   ]],
 ];
 
-const PREMISE = 'Users are waiting. The AI builds fast and leaves defects. Ship anyway.';
+const PREMISE = 'Users are waiting. The AI writes code fast, and every block has bugs.';
 
 /**
  * @param {string} tag

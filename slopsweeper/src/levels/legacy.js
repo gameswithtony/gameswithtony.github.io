@@ -14,9 +14,9 @@ export const legacy = {
   name: 'Legacy',
   story:
     'Your newest customer runs the whole company on a system older than you are. It sits in the ' +
-    'middle of everything and nobody is allowed to touch it, so your code has to go around it. ' +
-    'Their staff need reports (B) and exports (C). A few of them have used the old system for ' +
-    'twenty years, and they will not wait long for yours.',
+    'middle of everything, and nobody is allowed to touch it. Their staff need reports (B) and ' +
+    'exports (C). A few have used the old system for twenty years and will not wait long for ' +
+    'yours.',
   map: `
 #####################^^^^#####
 ##############################

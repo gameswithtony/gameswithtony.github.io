@@ -14,9 +14,9 @@ export const enterprise = {
   id: 'enterprise',
   name: 'Enterprise',
   story:
-    'An enterprise client signed a contract with a strict onboarding checklist. Every new account ' +
-    'needs single sign-on (B), then permissions (C), then billing (D), in that order. Reaching ' +
-    "billing early doesn't count. Their IT department checks.",
+    'An enterprise client signed a contract with an onboarding checklist. Every new account needs ' +
+    'single sign-on (B), then permissions (C), then billing (D). Passing through billing early ' +
+    "doesn't count.",
   map: `
 ##################################
 ##################################
