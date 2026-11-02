@@ -310,6 +310,10 @@ button.hud-stat { cursor: pointer; }
 .deciding .dock { max-height: 30dvh; }
 .dock-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px 0; background: var(--surface); }
 .dock-head h2 { font-size: 17px; }
+.dock-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px 0 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.dock-toggle .chev { display: inline-flex; color: var(--muted); transition: transform .15s; }
+.dock.collapsed .dock-toggle .chev { transform: rotate(180deg); }
+.dock.collapsed { padding-bottom: 0; }
 .dock-head .sp { flex: 1; }
 .left-tag { font: 700 13px var(--font-hud); color: var(--c-op); }
 .q-pfTurn { border-top-color: var(--c-pf); }

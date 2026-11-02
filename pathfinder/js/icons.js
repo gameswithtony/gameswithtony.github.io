@@ -65,6 +65,7 @@ const P = {
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     skip: '<path d="M5 5l9 7-9 7zM18 5v14"/>',
     back: '<path d="M15 6l-6 6 6 6"/>',
+    chev: '<path d="M6 9l6 6 6-6"/>',
     swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     flag: '<path d="M5 21V4M5 4h12l-3 4 3 4H5"/>',

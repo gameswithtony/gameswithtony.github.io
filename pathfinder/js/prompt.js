@@ -9,8 +9,8 @@ export const PromptDock = {
     components: { Ic, Chip, Slots },
     props: ['st', 'prompt', 'canUndo'],
     emits: ['answer', 'undo', 'card', 'tip'],
-    data() { return { num: 0, explain: false }; },
-    watch: { prompt: { immediate: true, handler(p) { this.explain = false; if (p && p.kind === 'num') this.num = p.def ?? 0; } } },
+    data() { return { num: 0, explain: false, collapsed: false }; },
+    watch: { prompt: { immediate: true, handler(p) { this.explain = false; this.collapsed = false; if (p && p.kind === 'num') this.num = p.def ?? 0; } } },
     computed: {
         pr() { return this.prompt; },
         q() { return this.pr.kind === 'menu' ? 'menu' : this.pr.q || this.pr.kind; },
@@ -78,15 +78,21 @@ export const PromptDock = {
         },
     },
     template: `
-<section class="dock" :class="['q-' + q, { explaining: explain }]" aria-live="polite">
+<section class="dock" :class="['q-' + q, { explaining: explain, collapsed }]" aria-live="polite">
   <header class="dock-head">
-    <Ic :n="title.ic" :s="20" :c="q==='pfTurn' ? 'var(--c-pf)' : 'var(--primary-bright)'"/>
-    <h2>{{ title.txt }}</h2>
-    <span v-if="pr.left" class="left-tag" :aria-label="pr.left + ' left'">×{{ pr.left }}</span>
+    <h2 class="dock-title">
+      <button type="button" class="dock-toggle" @click="collapsed = !collapsed" :aria-expanded="!collapsed" aria-controls="dock-main">
+        <Ic :n="title.ic" :s="20" :c="q==='pfTurn' ? 'var(--c-pf)' : 'var(--primary-bright)'"/>
+        <span>{{ title.txt }}</span>
+        <span v-if="pr.left" class="left-tag" :aria-label="pr.left + ' left'">×{{ pr.left }}</span>
+        <span class="chev"><Ic n="chev" :s="18"/></span>
+      </button>
+    </h2>
     <span class="sp"></span>
-    <button v-if="pr.kind !== 'over'" class="icon-btn explain-btn" :class="{ on: explain }" @click="explain = !explain" :aria-pressed="explain" :aria-label="explain ? 'Stop explaining' : 'Explain the buttons'" :title="explain ? 'Stop explaining' : 'Explain the buttons'"><Ic n="help" :s="18"/></button>
+    <button v-if="pr.kind !== 'over'" class="icon-btn explain-btn" :class="{ on: explain }" @click="explain = !explain; collapsed = false" :aria-pressed="explain" :aria-label="explain ? 'Stop explaining' : 'Explain the buttons'" :title="explain ? 'Stop explaining' : 'Explain the buttons'"><Ic n="help" :s="18"/></button>
     <button class="icon-btn" :disabled="!canUndo" @click="$emit('undo')" aria-label="Undo" title="Undo"><Ic n="undo" :s="18"/></button>
   </header>
+  <div id="dock-main" v-show="!collapsed">
   <p v-if="explain" class="explain-bar"><Ic n="help" :s="15"/><span>Tap a button to see what it does.</span><button class="btn ghost" @click="explain = false">Done</button></p>
 
   <!-- ===================== your turn ===================== -->
@@ -319,6 +325,7 @@ export const PromptDock = {
       </template>
       <button v-if="pr.skip" class="opt ghost" @click="go('done')"><Ic n="skip" :s="18"/><small>{{ pr.left !== undefined && pr.q !== 'pay' ? 'Done' : 'Skip' }}</small></button>
     </div>
+  </div>
   </div>
 </section>`,
 };
