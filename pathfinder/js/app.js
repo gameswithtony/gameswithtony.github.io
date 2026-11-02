@@ -40,6 +40,7 @@ const app = createApp({
             setup: { difficulty: 'rookie', length: 'short', firstGame: false },
             share: '', copied: false, confirmNew: false, error: null,
             w: window.innerWidth,
+            theme: document.documentElement.getAttribute('data-theme') || 'dark',
         };
     },
     computed: {
@@ -47,6 +48,7 @@ const app = createApp({
         mid() { return this.w >= 760 && this.w < 1100; },
         prompt() { return this.st?.prompt || null; },
         scores() { return this.st ? [scoreBreakdown(this.st, YOU).total, scoreBreakdown(this.st, PF).total] : [0, 0]; },
+        themeLabel() { return this.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'; },
         missionsLeft() { return this.st ? this.st.remaining : 3; },
         isHexPrompt() { return this.prompt?.kind === 'hex'; },
         diffInfo() {
@@ -151,6 +153,12 @@ const app = createApp({
         /** Boards open in the side column when there is one, otherwise as a sheet. */
         openPanel(k) { if (this.wide || this.mid) { this.side = k; this.sheet = null; } else this.openSheet(k); },
         openSheet(s) { this.sheet = this.sheet === s ? null : s; this.share = ''; this.confirmNew = false; },
+        toggleTheme() {
+            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', this.theme);
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.theme === 'dark' ? '#070d14' : '#e8edf2');
+            try { localStorage.setItem('pathfinder.theme', this.theme); } catch (e) { /* not saved; still applies */ }
+        },
         closeAll() { this.sheet = null; this.card = null; this.tip = null; this.inspect = null; },
         closePop() { this.card = null; this.tip = null; },
         onInspect(h) { this.inspect = this.inspect === h ? null : h; },

@@ -472,7 +472,7 @@ export const PlayerBoard = {
         <div class="lab-spaces" :class="'n' + col.spaces.length">
           <div v-for="s in col.spaces" :key="s.k" class="lab-hex" :class="{ full: s.tech, mine: s.tech && !isPF, theirs: s.tech && isPF }" v-tip="TIP.labSpace(s, col.c, pi)">
             <Ic v-if="s.tech" :n="tic(s.tech)" :s="20"/>
-            <Ic v-else-if="s.ben" :n="s.ben" :s="13" c="var(--faint)"/>
+            <Ic v-else-if="s.ben" :n="s.ben" :s="13" c="var(--muted)"/>
           </div>
         </div>
         <div class="lab-op" v-tip="TIP.labCol(col)">{{ col.op }}</div>
