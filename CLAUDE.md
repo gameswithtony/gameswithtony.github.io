@@ -33,6 +33,16 @@ The repository is organized as a collection of separate web applications, each i
 - **Updating cards**: run `node mc/converter/build.js`. It pulls https://github.com/zzorba/marvelsdb-json-data into `mc/converter/data/` (gitignored), rewrites `data.js`, and prints what changed plus anything new it doesn't understand ("Needs a decision"). Never edit `data.js` by hand; fix things in `overrides.js` or the rules in `build.js`.
 - **Saved games**: each tracked character is a full copy in localStorage, so card data changes don't break games in progress.
 
+### Pathfinder (On Mars vs the Pathfinder solo bot)
+- **Location**: `/pathfinder/`
+- **Purpose**: Full digital On Mars (2-player rules) against Tony's Pathfinder solo mode; mobile-first, no official art
+- **Key files**: `js/engine.js` (public API), `js/core.js` (state + task runner), `js/tasks.js` (human rules), `js/pathfinder.js` (bot), `js/data.js` (all card/board data), `js/board.js` (SVG map), `js/views.js` + `js/prompt.js` (Vue 3 components), `docs/` (COMPONENTS / RULES / PATHFINDER reference)
+- **Engine model**: game flow is a stack of plain-object tasks; every decision is a `st.prompt`, answered via `answer(st, v)` (validated against `choices(prompt)`). State is pure JSON with a seeded RNG, so saves, undo and share codes are snapshots.
+- **Testing**: `node --test tests/*.test.js`; random-play fuzzing `node sim/run.js [games] [seed] [random|builder]`; `sim/repro.js` replays a failing sim game; `dev/devices.html` previews phone/tablet frames.
+- **Admin**: `loadgame.html` loads a `PATHFINDER1:` share code into localStorage.
+- **UI text**: tap-to-explain text for every data point and dock button lives in `js/tips.js` (attached with `v-tip`).
+- **Source material**: `resources/` (rulebooks, TTS images) is gitignored and stays local.
+
 ### Kanban EV
 - **Location**: `/kanbanev/`
 - **Purpose**: Solo mode automation for Kanban EV
