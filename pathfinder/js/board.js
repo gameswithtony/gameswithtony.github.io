@@ -186,9 +186,14 @@ export const MarsMap = {
         <stop offset="0%" stop-color="var(--mars-1)"/><stop offset="100%" stop-color="var(--mars-3)"/>
       </radialGradient>
       <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity=".55"/></filter>
+      <!-- fixed backing under the see-through terrain, so tiles look the same on any theme's backdrop -->
+      <radialGradient id="hex-base" gradientUnits="userSpaceOnUse" cx="${(BOUNDS.x + BOUNDS.w / 2).toFixed(0)}" cy="${(BOUNDS.y + BOUNDS.h * 0.4).toFixed(0)}" r="${(Math.max(BOUNDS.w, BOUNDS.h) * 0.6).toFixed(0)}">
+        <stop offset="0%" stop-color="#3a1709"/><stop offset="100%" stop-color="#070d14"/>
+      </radialGradient>
     </defs>
     <!-- terrain -->
     <g class="terrain">
+      <polygon v-for="h in hexes" :key="'b' + h.id" :points="h.pts" fill="url(#hex-base)"/>
       <polygon v-for="h in hexes" :key="h.id" :points="h.pts" :data-h="h.id"
         class="hx" :style="{ fillOpacity: 0.55 + h.s * 0.35 }"
         :class="{ dim: hexPrompt && !hi[h.id], center: h.id === '${D.CENTER}' }"/>

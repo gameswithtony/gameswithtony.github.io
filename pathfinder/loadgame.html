@@ -6,6 +6,17 @@
     <meta name="robots" content="noindex">
     <title>Pathfinder · load game state</title>
     <link rel="stylesheet" href="styles.css">
+    <script>
+        // apply the saved theme before first paint; dark unless light was chosen
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('pathfinder.theme'); } catch (e) { /* storage blocked */ }
+            if (t !== 'light') t = 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'dark' ? '#070d14' : '#e8edf2');
+        })();
+    </script>
     <script src="lz-string.min.js"></script>
     <style>
         body { padding: 16px; } main { max-width: 640px; margin: 0 auto; display: grid; gap: 12px; }
