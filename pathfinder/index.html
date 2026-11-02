@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#070d14">
     <meta name="color-scheme" content="dark light">
-    <meta name="description" content="Play On Mars on your phone against Pathfinder, an unofficial solo opponent. Fan-made, not affiliated with the publisher.">
+    <meta name="description" content="Play On Mars on your phone against Pathfinder, an unofficial solo opponent. Not affiliated with Vital Lacerda or Eagle-Gryphon Games.">
     <title>Pathfinder · On Mars solo</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,7 +55,7 @@
                 </div>
             </fieldset>
             <button class="btn primary wide big" @click="start"><ic n="shuttle" :s="20"></ic> Launch</button>
-            <p class="fine">Fan-made. On Mars is by Vital Lacerda. The app plays the game but doesn't teach the rules.</p>
+            <p class="fine">On Mars is designed by Vital Lacerda and published by Eagle-Gryphon Games. This site is not affiliated with either.</p>
             <p v-if="error" class="err">{{ error }}</p>
         </div>
     </main>
@@ -150,10 +150,9 @@
                             <p class="small">{{ copied ? 'Copied. Paste it in your bug report.' : 'Copy this code for a bug report:' }}</p>
                             <textarea readonly rows="4" @focus="$event.target.select()">{{ share }}</textarea>
                         </div>
-                        <!-- placeholders until the rules pages exist -->
-                        <button class="btn wide" disabled><ic n="pf" :s="18"></ic> Pathfinder rules <small class="tag">Soon</small></button>
-                        <button class="btn wide" disabled><ic n="help" :s="18"></ic> Rules summary <small class="tag">Soon</small></button>
-                        <button class="btn wide" disabled><ic n="deck" :s="18"></ic> Components <small class="tag">Soon</small></button>
+                        <a class="btn wide" href="https://boardgamegeek.com/filepage/190116/on-mars-english-rulebook-final" target="_blank" rel="noopener"><ic n="help" :s="18"></ic> On Mars rulebook</a>
+                        <a class="btn wide" href="https://boardgamegeek.com/filepage/211160/pathfinder-an-unofficial-on-mars-solo-mode-w-curio" target="_blank" rel="noopener"><ic n="pf" :s="18"></ic> Pathfinder rules</a>
+                        <a class="btn wide" href="https://www.eagle-gryphon.com/products/on-mars" target="_blank" rel="noopener"><ic n="buy" :s="18"></ic> Buy On Mars</a>
                         <button v-if="!confirmNew" class="btn wide danger" @click="confirmNew=true"><ic n="flag" :s="18"></ic> New game</button>
                         <div v-else class="confirm">
                             <p>Abandon this game?</p>
