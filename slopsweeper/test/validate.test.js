@@ -86,8 +86,10 @@ test('init() refuses to load a level the validator rejects', () => {
 });
 
 test('THE STANDING TEST: every registered level is structurally sound', () => {
+  // The campaign, in order (2026-11-02). Registry order is the menu and the unlock chain.
   assert.deepEqual(levelIds(), [
-    'tutorial', 'channel', 'strait', 'caldera', 'atoll', 'delta', 'marina', 'gyre', 'reach', 'sprawl',
+    'launch', 'demo', 'enterprise', 'payments', 'legacy', 'mobile',
+    'outage', 'rewrite', 'international', 'audit', 'blackfriday', 'ipo',
   ]);
   for (const def of allLevels()) {
     const { errors: errs, warnings } = validateLevel(def);

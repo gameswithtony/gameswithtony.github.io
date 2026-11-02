@@ -108,7 +108,7 @@
 // everything means opening B on turn 42 and C on turn 53, thirty turns after the queue is dead.
 // The level says "read *some* of it" and it says so very sharply.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const caldera = {
   id: 'caldera',
   name: 'The Caldera',

@@ -129,7 +129,7 @@
 // `perfect` is 0% over 1000 games: twelve walkers, a route made almost entirely of unread slop,
 // and bots that never flag. Every AI row above is a floor.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const reach = {
   id: 'reach',
   name: 'The Long Reach',

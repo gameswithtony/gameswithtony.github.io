@@ -8,12 +8,20 @@
 // that fact you can build against. So the chip carries the worst case (hud.js) and this panel
 // carries the queue, sorted by whose patience runs out first.
 //
+// ALWAYS ON SCREEN since 2026-11-02 (owner request). It used to sit behind the WAITING chip and
+// said "NOBODY HAS ARRIVED YET" for the whole opening, which is exactly when the player is
+// deciding where to build. Now it is a side column on wide screens and a one-row strip on
+// phones (tap for the full sheet), and it covers the people who have not arrived yet: the cast
+// is dealt at init (casting.js), so who comes, when, and where they need to go is known from
+// turn zero and shown from turn zero. Read top to bottom: who is about to quit, who is walking,
+// who is coming next, who is done.
+//
 // Everything on it is derived from `GameState` alone, NAMES INCLUDED. A refresh that restores
 // a save (PLAN §11.10) brings back the same people in the same order with the same names,
 // because nothing here is stored and nothing here is rolled: no Math.random, no Date, no
 // reach into core's PRNG stream. The panel is a view of the state, exactly like the board is.
 
-import { patienceLimit } from '../core/state.js';
+import { levelParams, patienceLimit } from '../core/state.js';
 import { IMPATIENT_AT, patienceSpent, stopLetter } from './renderer.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -76,109 +84,148 @@ export function userName(seed, id, bump = 0) {
 }
 
 /**
- * Names for the whole run, collision-free ON FIRST NAMES. The first draft deduped whole
+ * Names for every scheduled slot, collision-free ON FIRST NAMES. The first draft deduped whole
  * pairs, and the very first playtest produced a CORBIN · SUPPORT killed in a crater while a
- * CORBIN · PEOPLE OPS queued at the origin — technically distinct rows that read as one
- * person moonlighting. A list whose entire job is telling two people apart may not repeat a
- * first name at all; forty names against a dozen arrivals leaves room to insist. A taken
- * first name rehashes at the next bump.
+ * CORBIN · PEOPLE OPS queued at the origin. A list whose job is telling people apart may not
+ * repeat a first name; forty names against a dozen arrivals leaves room to insist.
  *
- * It stays a pure function of (seed, ids): ids never change, and the scan is ascending, so a
- * user's name is fixed the moment they are scheduled and no later arrival can rename them.
+ * The scan is ascending over slot ids and a slot's name depends only on the slots before it,
+ * so naming the whole schedule up front (the arriving list needs it) gives every spawned user
+ * the same name the old spawned-only scan did.
  * @param {GameState} s
- * @returns {Map<number, string>}
+ * @returns {string[]}
  */
 function namesFor(s) {
-  const ids = s.users.map((u) => u.id).sort((a, b) => a - b);
   const firstOf = (/** @type {string} */ n) => n.slice(0, n.indexOf(' '));
   /** @type {Set<string>} */
   const taken = new Set();
-  /** @type {Map<number, string>} */
-  const out = new Map();
-  for (const id of ids) {
+  /** @type {string[]} */
+  const out = [];
+  for (let id = 0; id < s.schedule.total; id++) {
     let bump = 0;
     let name = userName(s.seed, id, 0);
-    // Bounded: after eight rehashes take the collision rather than loop on a pool this small.
     while (taken.has(firstOf(name)) && bump < 8) name = userName(s.seed, id, ++bump);
     taken.add(firstOf(name));
-    out.set(id, name);
+    out.push(name);
   }
   return out;
 }
+
+/** Turns of patience left at or below which a stuck row is an alarm, not a warning. */
+export const URGENT_LEFT = 2;
 
 /**
  * @typedef {object} Status
  * @property {string} word    the one word the row leads with
  * @property {string} cls     row modifier class
- * @property {boolean} done   resolved: no countdown, greyed, sorted to the bottom
+ * @property {'stuck' | 'walking' | 'done'} group
  */
 
 /**
- * What this user is doing, in one word, from the state and nothing else — so it survives a
- * refresh exactly as the board does. The four live words are the four things that can be true
- * of somebody who is still coming:
+ * What this user is doing, from the state alone:
  *   QUEUED   at A, no path out yet (SPEC §6.2)
  *   WALKING  moving, and patience is not being spent this turn
- *   WAITING  stalled or stranded (SPEC §6.4) — the state that costs you the run
- *   BETA     stalled on a beta block: they walked out to what you shipped and are testing it
+ *   STUCK    stalled or stranded mid-route (SPEC §6.4)
+ *   AT BETA  stalled on a beta block: they walked out to what you shipped
  * @param {GameState} s
  * @param {User} u
  * @returns {Status}
  */
 function statusOf(s, u) {
-  if (u.state === 'arrived') return { word: 'SERVED ✓', cls: 'done good', done: true };
-  // The two ways a user is gone for good, told apart by the same threshold the reducer used:
-  // at or past patience they walked away, otherwise a blast took them (SPEC §5). "The same
-  // threshold" is now a per-walker question (SPEC §6.6), and this row is the reason the helper
-  // exists rather than the arithmetic being inlined: an impatient walker who gave up at twelve
-  // on a twenty-six-tick level would otherwise be filed under KILLED — a blast that never
-  // happened, reported to the player as the board's fault instead of the clock's.
+  if (u.state === 'arrived') return { word: 'SERVED', cls: 'done good', group: 'done' };
+  // Gave up (patience) versus failed (hit a bug), told apart by the walker's own bar (SPEC §6.6).
   if (u.state === 'gone') {
     return u.waited >= patienceLimit(s, u)
-      ? { word: 'GAVE UP', cls: 'done bad', done: true }
-      : { word: 'KILLED', cls: 'done bad', done: true };
+      ? { word: 'GAVE UP', cls: 'done bad', group: 'done' }
+      : { word: 'FAILED', cls: 'done bad', group: 'done' };
   }
-  if (u.state === 'queued') return { word: 'QUEUED', cls: 's-queued', done: false };
-  if (!u.stalled) return { word: 'WALKING', cls: 's-walking', done: false };
+  if (u.state === 'queued') return { word: 'QUEUED', cls: 's-queued', group: 'stuck' };
+  if (!u.stalled) return { word: 'WALKING', cls: 's-walking', group: 'walking' };
   return s.con[u.at].k === 'beta'
-    ? { word: 'BETA', cls: 's-beta', done: false }
-    : { word: 'WAITING', cls: 's-waiting', done: false };
+    ? { word: 'AT BETA', cls: 's-beta', group: 'stuck' }
+    : { word: 'STUCK', cls: 's-waiting', group: 'stuck' };
 }
 
 /**
- * The stops this user still owes, as the letters the board is wearing (2026-08-05). `u.todo`
- * is indexes into the level's destination list, so the letters come out of the same arithmetic
- * the tiles do — one place decides that stop 0 is 'B' and both readers ask it.
- *
- * TWO KINDS OF ITINERARY, TWO PUNCTUATIONS, and the punctuation is the only explanation the
- * row gets:
- *
- * · An ordinary user owes a **set**. They walk whichever stop is reachable (SPEC §6.3), so the
- *   letters sort ascending and join with '·'. The order the level happened to author them in
- *   is not a fact about the walk, and a "D·B" three rows above a "B·D" would read as two
- *   different errands rather than as the same two stops in a different mood.
- * · An `ordered` user owes a **sequence**, and there the authored order is the whole fact.
- *   Sorting it would print a route they are not allowed to walk, which is the worst thing a
- *   status panel can do. Those keep the array's order and join with '→': B→C→D says "C is not
- *   available until B is done" without spending a word on it.
- *
- * The ascending argument therefore applies to the unordered case only. It was never a claim
- * about tidiness — it was a claim that the order carried no information, and for one of these
- * two shapes that claim is now false.
- *
- * `ordered` is read bare, no `?? false` anywhere: core made it an OPTIONAL field precisely so
- * that absent is falsy is unordered, which is what every user on every board before today was
- * and what every user restored from a v3 save still is. `todo` keeps its guard for the older
- * reason — it is the field the whole walk is decided from, and a roster that throws on a state
- * without one would take the panel down over a decoration.
- * @param {User} u
- * @returns {string} '' when there is nothing to say
+ * Every stop on a slot's itinerary as letters, in the order the panel prints them, plus
+ * whether the order is enforced. Ordered lists keep the authored order (it is the whole fact);
+ * loose ones sort, because their order carries none. No cast entry means every destination.
+ * @param {GameState} s
+ * @param {number} id
+ * @returns {{ letters: string[], ordered: boolean }}
  */
-function todoLetters(u) {
-  const todo = /** @type {{ todo?: number[] }} */ (/** @type {unknown} */ (u)).todo;
-  if (!Array.isArray(todo) || todo.length === 0) return '';
-  const letters = todo.map(stopLetter);
-  return u.ordered ? letters.join('→') : letters.sort().join('·');
+function itineraryOf(s, id) {
+  const entry = levelParams(s).cast?.[id];
+  if (!entry) return { letters: s.dests.map((_, i) => stopLetter(i)), ordered: false };
+  return entry.ordered
+    ? { letters: entry.stops.slice(), ordered: true }
+    : { letters: entry.stops.slice().sort(), ordered: false };
+}
+
+/**
+ * The stops as spans: visited ones dimmed, the live one(s) bright. For an ordered list only
+ * the first remaining stop is live and the joiner is an arrow; a loose list has every
+ * remaining stop live and a dot between them.
+ * @param {GameState} s
+ * @param {number} id
+ * @param {number[] | null} todo  remaining dest indexes, or null for a user not yet arrived
+ * @returns {HTMLElement}
+ */
+function stopsNode(s, id, todo) {
+  const { letters, ordered } = itineraryOf(s, id);
+  const left = todo ? new Set(todo.map(stopLetter)) : new Set(letters);
+  /** @type {string | null} null means every remaining stop is live */
+  let now = null;
+  if (ordered) now = todo ? (todo.length ? stopLetter(todo[0]) : '') : letters[0];
+  const wrap = make('span', `pp-stops${ordered ? ' ordered' : ''}`);
+  wrap.title = ordered ? 'Must visit in this order' : 'Visits these in any order';
+  letters.forEach((ch, i) => {
+    if (i) wrap.append(make('span', 'pp-join', ordered ? '→' : '·'));
+    const cls = !left.has(ch) ? 'st-done' : (now === null || now === ch) ? 'st-now' : 'st-later';
+    wrap.append(make('span', cls, ch));
+  });
+  return wrap;
+}
+
+/**
+ * Where this user goes next, as letters: the head of an ordered list, or every remaining stop
+ * of a loose one (any of them counts next). Owner rule (2026-11-02): the panel says where a
+ * user is going and, if they are stuck, when they quit; it never shows steps taken or turns
+ * already waited, so there is no patience bar here.
+ * @param {GameState} s
+ * @param {number} id
+ * @param {number[] | null} todo  remaining dest indexes, or null for a user not yet arrived
+ * @returns {string}
+ */
+function nextStop(s, id, todo) {
+  const { letters, ordered } = itineraryOf(s, id);
+  const left = todo ? letters.filter((ch) => todo.map(stopLetter).includes(ch)) : letters;
+  if (!left.length) return '';
+  return ordered ? left[0] : left.join('·');
+}
+
+/**
+ * The turn slot `k` is due, read from the level's schedule (either shape).
+ * @param {GameState} s
+ * @param {number} k
+ * @returns {number}
+ */
+function arrivalTick(s, k) {
+  const a = levelParams(s).arrivals;
+  if (a?.at) return a.at[k] ?? a.at[a.at.length - 1];
+  if (a && typeof a.firstTick === 'number') return a.firstTick + k * a.every;
+  // Unassociated params: extrapolate from the stored schedule.
+  return s.schedule.nextTick + (k - s.schedule.spawned) * (s.schedule.every || 1);
+}
+
+/**
+ * Actions until slot `k` walks in. Spawns run inside the turn that starts at its due tick, so a
+ * slot due this turn arrives with the next action: "IN 1". Same arithmetic as the NEXT IN chip.
+ * @param {GameState} s
+ * @param {number} k
+ */
+export function arrivesIn(s, k) {
+  return Math.max(1, arrivalTick(s, k) - s.tick + 1);
 }
 
 /**
@@ -205,6 +252,41 @@ function make(tag, cls, text) {
 }
 
 /**
+ * @typedef {{ u: User, st: Status, left: number, limit: number }} LiveRow
+ * @typedef {{ id: number, in: number, limit: number }} ComingRow
+ */
+
+/**
+ * What all three views read: every slot of the schedule, sorted into its group.
+ * @param {GameState} s
+ */
+function model(s) {
+  const names = namesFor(s);
+  /** @type {LiveRow[]} */
+  const stuck = [];
+  /** @type {LiveRow[]} */
+  const walking = [];
+  /** @type {{ u: User, st: Status }[]} */
+  const done = [];
+  for (const u of s.users) {
+    const st = statusOf(s, u);
+    if (st.group === 'done') { done.push({ u, st }); continue; }
+    const limit = patienceLimit(s, u);
+    (st.group === 'stuck' ? stuck : walking).push({ u, st, left: Math.max(0, limit - (u.waited ?? 0)), limit });
+  }
+  // Most urgent first; ties on id so rows do not reshuffle under the finger.
+  stuck.sort((a, b) => a.left - b.left || a.u.id - b.u.id);
+  walking.sort((a, b) => a.left - b.left || a.u.id - b.u.id);
+  done.sort((a, b) => a.u.id - b.u.id);
+  /** @type {ComingRow[]} */
+  const coming = [];
+  for (let k = s.schedule.spawned; k < s.schedule.total; k++) {
+    coming.push({ id: k, in: arrivesIn(s, k), limit: patienceLimit(s, { id: k }) });
+  }
+  return { names, stuck, walking, done, coming };
+}
+
+/**
  * @typedef {object} RosterHandlers
  * @property {(cell: number) => void} onJump   the minimap's own centring path (main.js)
  */
@@ -214,18 +296,20 @@ function make(tag, cls, text) {
  */
 export function createRoster(h) {
   const root = el('roster');
-  const list = el('roster-list');
+  const sheet = el('roster-list');
   const closeBtn = el('roster-close');
+  const panel = el('people');
+  const list = el('pp-list');
+  const strip = el('pp-strip');
+  const tally = el('pp-tally');
   let open = false;
+  /** @type {GameState | null} */
+  let last = null;
 
-  // Tap outside — the scrim itself, never a row — closes. Same gesture as every sheet on a
-  // phone, and it means the panel needs no dismiss instruction.
   root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });
   closeBtn.addEventListener('click', close);
+  strip.addEventListener('click', () => { if (last) toggle(last); });
 
-  // Esc, in capture, so it closes the panel instead of reaching the board's deselect. It only
-  // swallows the key while the panel is open; start.js's own overlays are never open at the
-  // same time (main.js closes this one before an end screen lands).
   window.addEventListener('keydown', (e) => {
     if (!open || e.key !== 'Escape') return;
     close();
@@ -233,88 +317,168 @@ export function createRoster(h) {
     e.preventDefault();
   }, true);
 
-  // One delegated listener rather than a listener per row: the list is rebuilt on every turn,
-  // and rebuilding handlers with it is how a panel starts leaking them.
-  list.addEventListener('click', (e) => {
+  // One delegated listener per list: the rows are rebuilt every turn.
+  /** @param {Event} e */
+  const onRowClick = (e) => {
     const row = e.target instanceof Element ? e.target.closest('[data-cell]') : null;
     if (!row) return;
     close();
     h.onJump(Number(row.getAttribute('data-cell')));
-  });
+  };
+  sheet.addEventListener('click', onRowClick);
+  list.addEventListener('click', onRowClick);
+
+  /** @type {Map<HTMLElement, number>} when the player last scrolled each list by hand */
+  const scrolledAt = new Map();
+  for (const node of [sheet, list]) {
+    for (const type of ['wheel', 'touchmove', 'pointerdown']) {
+      node.addEventListener(type, () => scrolledAt.set(node, performance.now()), { passive: true });
+    }
+  }
 
   /**
-   * The bar is read per row rather than once per render (SPEC §6.6, 2026-08-05): a cast may give
-   * a walker its own patience, so "LEAVES IN n" is only true if `n` counts down that walker's
-   * own clock. It is a WeakMap lookup per row on a list of a dozen, which is nothing, and the
-   * alternative is a panel whose whole job is telling two people apart quoting one of them the
-   * other's deadline.
+   * Line two of every row: where the user goes next, then the whole sequence when there is
+   * more than one stop (next emphasized, visited struck).
    * @param {GameState} s
-   * @param {User} u
-   * @param {string} name
-   * @returns {HTMLElement}
+   * @param {number} id
+   * @param {number[] | null} todo
    */
-  function rowFor(s, u, name) {
-    const st = statusOf(s, u);
-    // Live rows are buttons because they do something; resolved rows are not, because they
-    // do not — a control that looks tappable and is not is worse than no control.
-    const node = make(st.done ? 'div' : 'button', `ru-row ${st.cls}`);
-    if (!st.done) {
-      node.setAttribute('data-cell', String(u.at));
-      node.setAttribute('type', 'button');
-    }
-    node.append(make('span', 'ru-name', name), make('span', 'ru-state', st.word));
+  function routeLine(s, id, todo) {
+    const l2 = make('span', 'pp-l2');
+    const next = nextStop(s, id, todo);
+    const label = make('span', 'pp-next', 'NEXT ');
+    label.append(make('b', undefined, next || '·'));
+    l2.append(label);
+    // The sequence only when it says more than NEXT does: an ordered list, or a loose one with
+    // a stop already visited.
+    const { letters, ordered } = itineraryOf(s, id);
+    const visited = !!todo && todo.length < letters.length;
+    if (letters.length > 1 && (ordered || visited)) l2.append(stopsNode(s, id, todo));
+    return l2;
+  }
 
-    if (!st.done) {
-      // The itinerary rides between the status and the countdown, which is the reading order of
-      // the row: who, what they are doing, WHERE THEY STILL HAVE TO GO, how long you have. It
-      // is two characters per stop and the name is the only elastic thing on the row, so a
-      // narrow panel eats into the name — the one field that can lose its tail and still be the
-      // person you were looking for. Resolved rows get none of this: an itinerary is a debt,
-      // and theirs is settled one way or the other.
-      const stops = todoLetters(u);
-      if (stops) node.append(make('span', 'ru-todo', stops));
-      const left = Math.max(0, patienceLimit(s, u) - (u.waited ?? 0));
-      const cd = make('span', 'ru-left', `LEAVES IN ${left}`);
-      // The same two-thirds the board's dot uses, imported rather than restated: one warning
-      // threshold in the game, or the panel and the board disagree about who is in trouble.
-      if (patienceSpent(s, u) >= IMPATIENT_AT) cd.classList.add('urgent');
-      // A walker's countdown is true but paused — patience is only spent on the turns they
-      // could not move — so it is dimmed rather than dropped. Dropping it would read as "this
-      // one is safe", and the walk they are on can strand at any tile.
-      if (st.word === 'WALKING') cd.classList.add('paused');
-      node.append(cd);
+  /**
+   * One stuck or walking person. Stuck: the box is turns until they quit. Walking: no number,
+   * because nothing is running down while they walk.
+   * @param {GameState} s
+   * @param {LiveRow} r
+   * @param {string} name
+   */
+  function liveRow(s, r, name) {
+    const stuck = r.st.group === 'stuck';
+    const urgent = stuck && r.left <= URGENT_LEFT;
+    const warn = stuck && patienceSpent(s, r.u) >= IMPATIENT_AT;
+    const row = make('button', `pp-row ${r.st.cls}${urgent ? ' urgent' : warn ? ' warn' : ''}`);
+    row.setAttribute('type', 'button');
+    row.setAttribute('data-cell', String(r.u.at));
+    const box = make('span', stuck ? 'pp-left' : 'pp-left pp-go');
+    if (stuck) {
+      box.append(make('span', undefined, 'QUITS'), make('b', undefined, String(r.left)));
+      box.title = `Quits in ${r.left} turn${r.left === 1 ? '' : 's'}`;
+    } else {
+      box.append(make('b', undefined, '→'));
+      box.title = 'Walking';
     }
-    return node;
+    const main = make('span', 'pp-main');
+    const l1 = make('span', 'pp-l1');
+    l1.append(make('span', 'pp-name', name), make('span', 'pp-state', r.st.word));
+    main.append(l1, routeLine(s, r.u.id, r.u.todo));
+    row.append(box, main);
+    return row;
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {ComingRow} c
+   * @param {string} name
+   */
+  function comingRow(s, c, name) {
+    const row = make('button', 'pp-row coming');
+    row.setAttribute('type', 'button');
+    row.setAttribute('data-cell', String(s.origin));
+    const box = make('span', 'pp-in');
+    box.append(make('span', undefined, 'IN'), make('b', undefined, String(c.in)));
+    box.title = `Arrives at A in ${c.in} turn${c.in === 1 ? '' : 's'}; quits after ${c.limit} turns stuck`;
+    const main = make('span', 'pp-main');
+    const l1 = make('span', 'pp-l1');
+    l1.append(make('span', 'pp-name', name));
+    main.append(l1, routeLine(s, c.id, null));
+    row.append(box, main);
+    return row;
+  }
+
+  /**
+   * @param {GameState} s
+   * @param {HTMLElement} into
+   */
+  function renderList(s, into) {
+    const m = model(s);
+    // The top of the list is the most urgent row, so a re-render goes back to it, unless the
+    // player scrolled this list in the last few seconds and is reading something further down.
+    const keep = performance.now() - (scrolledAt.get(into) ?? -1e9) < 4000 ? into.scrollTop : 0;
+    into.innerHTML = '';
+    /** @param {string} text @param {number} n */
+    const sep = (text, n) => into.append(make('div', 'pp-sep', `${text} · ${n}`));
+    if (m.stuck.length) {
+      sep('STUCK', m.stuck.length);
+      for (const r of m.stuck) into.append(liveRow(s, r, m.names[r.u.id] ?? '?'));
+    }
+    if (m.walking.length) {
+      sep('WALKING', m.walking.length);
+      for (const r of m.walking) into.append(liveRow(s, r, m.names[r.u.id] ?? '?'));
+    }
+    if (m.coming.length) {
+      sep('ARRIVING', m.coming.length);
+      for (const c of m.coming) into.append(comingRow(s, c, m.names[c.id] ?? '?'));
+    }
+    if (m.done.length) {
+      // Done is a tally, not a list.
+      const count = (/** @type {string} */ w) => m.done.filter((d) => d.st.word === w).length;
+      const line = make('div', 'pp-sep pp-tally');
+      line.append(
+        make('span', 'good', `SERVED ${count('SERVED')}`),
+        make('span', undefined, ' · '),
+        make('span', 'bad', `GAVE UP ${count('GAVE UP')}`),
+        make('span', undefined, ' · '),
+        make('span', 'bad', `FAILED ${count('FAILED')}`),
+      );
+      into.append(line);
+    }
+    into.scrollTop = keep;
+  }
+
+  /**
+   * The phone strip: the stuck in urgency order, a walking count, then the next arrivals.
+   * @param {GameState} s
+   */
+  function renderStrip(s) {
+    const m = model(s);
+    strip.innerHTML = '';
+    for (const r of m.stuck) {
+      const urgent = r.left <= URGENT_LEFT;
+      const warn = patienceSpent(s, r.u) >= IMPATIENT_AT;
+      const chip = make('span', `ps-chip ${r.st.cls}${urgent ? ' urgent' : warn ? ' warn' : ''}`);
+      const first = (m.names[r.u.id] ?? '?').split(' ')[0];
+      chip.append(make('b', undefined, String(r.left)), make('span', 'ps-name', first), stopsNode(s, r.u.id, r.u.todo));
+      strip.append(chip);
+    }
+    if (m.walking.length) strip.append(make('span', 'ps-chip s-walking', `${m.walking.length} WALKING`));
+    for (const c of m.coming.slice(0, 6)) {
+      const chip = make('span', 'ps-chip coming');
+      chip.append(make('span', 'ps-in', `IN ${c.in}`), stopsNode(s, c.id, null));
+      strip.append(chip);
+    }
+    if (!strip.childElementCount) strip.append(make('span', 'ps-chip', 'EVERYONE RESOLVED'));
   }
 
   /** @param {GameState} s */
   function render(s) {
-    const names = namesFor(s);
-    /** @type {User[]} */
-    const live = [];
-    /** @type {User[]} */
-    const done = [];
-    for (const u of s.users) (statusOf(s, u).done ? done : live).push(u);
-
-    // Most urgent first: the row you have to answer is the row at the top. "Urgent" is turns
-    // REMAINING, not turns spent — the two diverged when walkers got their own patience
-    // (SPEC §6.6): an impatient walker three turns from quitting must outrank a patient one
-    // who has waited longer but has half a bar left. Ties break on id so the order is stable
-    // turn to turn — a list that reshuffles under the finger is a list nobody taps.
-    const leftOf = (/** @type {User} */ u) => patienceLimit(s, u) - (u.waited ?? 0);
-    live.sort((a, b) => (leftOf(a) === leftOf(b) ? a.id - b.id : leftOf(a) - leftOf(b)));
-
-    list.innerHTML = '';
-    if (live.length === 0 && done.length === 0) {
-      list.append(make('div', 'ru-empty', 'NOBODY HAS ARRIVED YET'));
-    }
-    for (const u of live) list.append(rowFor(s, u, names.get(u.id) ?? '—'));
-    if (done.length) {
-      list.append(make('div', 'ru-sep', 'RESOLVED'));
-      // Served first, then the losses, newest id last: the top of this section is the score.
-      done.sort((a, b) => a.id - b.id);
-      for (const u of done) list.append(rowFor(s, u, names.get(u.id) ?? '—'));
-    }
+    last = s;
+    const st = s.stats;
+    tally.textContent = `${s.schedule.total} USERS · ${st.served} SERVED · ${st.lost ?? 0} LOST`;
+    renderList(s, list);
+    renderStrip(s);
+    if (open) renderList(s, sheet);
   }
 
   function close() {
@@ -323,31 +487,34 @@ export function createRoster(h) {
     root.classList.add('hidden');
   }
 
+  /** @param {GameState} s */
+  function toggle(s) {
+    if (open) return close();
+    // On wide screens the side column already is the full list: the chip points at it.
+    if (getComputedStyle(list).display !== 'none' && list.offsetParent !== null) {
+      list.scrollTop = 0;
+      panel.classList.remove('flash');
+      void panel.offsetWidth;
+      panel.classList.add('flash');
+      return;
+    }
+    open = true;
+    root.classList.remove('hidden');
+    renderList(s, sheet);
+  }
+
   return {
-    /**
-     * The chip in the HUD is a toggle: the same tap that opened it puts it away.
-     * @param {GameState} s
-     */
-    toggle(s) {
-      if (open) return close();
-      open = true;
-      root.classList.remove('hidden');
-      render(s);
-    },
+    toggle,
 
     /**
-     * Every state update, and only while open — patience moves on every turn, so a stale
-     * roster is a lying one. Closed, this costs one boolean test.
+     * Every state update. The panel is always on screen now, so it always renders.
      * @param {GameState} s
      */
-    update(s) { if (open) render(s); },
+    update: render,
 
     close,
 
-    /**
-     * Asked by main.js on every keystroke: while a panel is up it owns the keyboard, so a hotkey
-     * cannot spend a turn on a board the player is not currently looking at (input.js).
-     */
+    /** While the sheet is up it owns the keyboard (input.js). */
     isOpen: () => open,
   };
 }

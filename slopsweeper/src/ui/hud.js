@@ -53,11 +53,11 @@ import * as cam from './camera.js';
  */
 const VERBS = {
   place: { label: 'PLACE', key: 'P', title: 'Build one tile by hand (SPEC §4.1) · 1 turn · key P' },
-  beta: { label: 'BETA ×{left}', key: 'B', title: 'Ship a beta here — users walk out to it and wait there — {left} left · 1 turn · key B' },
-  analyze: { label: 'ANALYZE', key: 'A', title: 'Review this cell — a zero opens its neighbours too · 1 turn · key A' },
+  beta: { label: 'BETA ×{left}', key: 'B', title: 'Ship a beta here: users walk out to it and wait there · {left} left · 1 turn · key B' },
+  analyze: { label: 'ANALYZE', key: 'A', title: 'Review this cell; a zero opens its neighbours too · 1 turn · key A' },
   placeBlock: { label: 'COMMIT BLOCK', key: '↵', title: 'Commit the generated block here · 1 turn · key Enter' },
-  generate: { label: 'GENERATE', key: 'G', title: 'Draw a block — the turn is charged when you commit it · free · key G' },
-  flag: { label: 'FLAG', key: 'F', title: 'Mark a suspected defect — costs no turn, and users refuse to walk through it · key F' },
+  generate: { label: 'GENERATE', key: 'G', title: 'Draw a block; the turn is charged when you commit it · key G' },
+  flag: { label: 'FLAG', key: 'F', title: 'Mark a suspected defect: costs no turn, and users refuse to walk through it · key F' },
   wait: { label: 'WAIT', key: 'W', title: 'Let a turn pass · 1 turn · key W' },
 };
 
@@ -110,7 +110,7 @@ function cellHint(s, cell) {
   }
   return blockingFlagSet(s).has(cell)
     ? 'THIS FLAG IS THE ROADBLOCK: USERS ARE STUCK BEHIND IT · UNFLAG OR BUILD AROUND'
-    : 'FLAGGED — USERS REFUSE TO ENTER · UNFLAG TO ANALYZE';
+    : 'FLAGGED · USERS REFUSE TO ENTER · UNFLAG TO ANALYZE';
 }
 
 /**
@@ -174,6 +174,10 @@ export function createHud(h) {
     seed: el('seed'),
     tick: el('tick'),
     scServed: el('sc-served'),
+    scLabel: el('sc-label'),
+    score: el('score'),
+    brief: /** @type {HTMLButtonElement} */ (el('btn-brief')),
+    levelsMenu: /** @type {HTMLButtonElement} */ (el('btn-levels-menu')),
     scLost: el('sc-lost'),
     remaining: el('fc-remaining'),
     next: el('fc-next'),
@@ -229,6 +233,13 @@ export function createHud(h) {
   // and registers itself. Disabled rather than silently inert: a control that does nothing
   // when tapped is worse than one that says it is not ready.
   dom.help.disabled = true;
+  // The drawer's BRIEFING and LEVELS rows, wired by main.js once start.js has loaded.
+  dom.brief.disabled = true;
+  dom.levelsMenu.disabled = true;
+  dom.brief.addEventListener('click', () => briefFn?.());
+  dom.levelsMenu.addEventListener('click', () => { dom.levelsMenu.blur(); levelsFn?.(); });
+  /** @type {(() => void) | null} */
+  let briefFn = null;
   dom.help.addEventListener('click', () => helpFn?.());
   /** @type {(() => void) | null} */
   let helpFn = null;
@@ -242,12 +253,18 @@ export function createHud(h) {
   });
 
   /**
-   * The bar names the booted level by ID, as the old <select> did — the display names live on
-   * the level-select cards, and the ids are short enough to hold the bar's fixed width.
+   * The bar shows the chapter number and the level's display name (2026-11-02; it showed the
+   * id before the campaign had chapters). The name trims to the old fixed width; the title
+   * carries it whole.
    * @param {string} id
+   * @param {{ chapter?: number, name?: string, story?: string }} [info]
    */
-  function setLevel(id) {
-    dom.levelName.textContent = id;
+  function setLevel(id, info = {}) {
+    const ch = info.chapter ? String(info.chapter).padStart(2, '0') : '';
+    const name = (info.name ?? id).toUpperCase();
+    dom.levelName.textContent = ch ? `${ch} ${name}` : name;
+    dom.levels.title = ch ? `Chapter ${ch}: ${info.name ?? id}. Opens the level select` : 'Opens the level select';
+    dom.brief.classList.toggle('hidden', !info.story);
   }
 
   /**
@@ -270,7 +287,21 @@ export function createHud(h) {
 
     // The score. `lost` goes red the moment it is non-zero: it is the one number in the HUD
     // that can only ever get worse, and it is what separates a good run from a shipped one.
-    dom.scServed.textContent = `${s.stats.served}/${s.schedule.total}`;
+    // Served over the level's GOAL (2026-11-02), not over the total: the goal is the number that
+    // decides the level, and the total is in the users panel. MET once reached; MISSED the
+    // moment the served plus everyone still alive or still to come falls short of it.
+    const goal = Math.max(1, levelParams(s).goal ?? 1);
+    const served = s.stats.served;
+    let alive = s.schedule.total - s.schedule.spawned;
+    for (const u of s.users) if (u.state === 'queued' || u.state === 'moving') alive++;
+    const met = served >= goal;
+    const missed = !met && served + alive < goal;
+    dom.scServed.textContent = `${served}/${goal}`;
+    dom.scLabel.textContent = met ? 'GOAL ✓' : missed ? 'MISSED' : 'GOAL';
+    dom.score.classList.toggle('met', met);
+    dom.score.classList.toggle('missed', missed);
+    dom.score.title = `${served} served of the ${goal} needed to clear · ${s.schedule.total} users in all`
+      + (missed ? ' · too few users left to reach the goal' : '');
     dom.scLost.textContent = String(s.stats.lost ?? 0);
     dom.scLost.style.color = (s.stats.lost ?? 0) > 0 ? PALETTE.RED : '';
 
@@ -439,6 +470,16 @@ export function createHud(h) {
     onLevels(fn) {
       levelsFn = fn;
       dom.levels.disabled = false;
+      dom.levelsMenu.disabled = false;
+    },
+
+    /**
+     * Hand the drawer's BRIEFING button the briefing card.
+     * @param {() => void} fn
+     */
+    onBrief(fn) {
+      briefFn = fn;
+      dom.brief.disabled = false;
     },
 
     /**

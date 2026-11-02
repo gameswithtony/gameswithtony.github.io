@@ -19,6 +19,8 @@ import { createInput } from './input.js';
 import { createHud } from './hud.js';
 import { createRoster } from './roster.js';
 import { createDrawer } from './drawer.js';
+import { frontier, loadProgress, recordResult } from './progress.js';
+import { arrivalCount } from '../core/casting.js';
 import { createEffects } from './particles.js';
 import { PALETTE } from './palette.js';
 
@@ -293,6 +295,8 @@ function boot() {
   let endScreen = null;
   /** @type {import('./start.js').EndFacts | null} a result that finished before the module did */
   let pendingEnd = null;
+  /** @type {import('./start.js').BriefFacts | null} a briefing asked for before start.js loaded */
+  let pendingBrief = null;
 
   /**
    * Hand the end screen plain numbers rather than the state: it is shown after the game is
@@ -316,6 +320,10 @@ function boot() {
       generated: s.stats.generated,
       analyzed: s.stats.analyzed,
       waited: s.stats.waited,
+      goal: levelParams(s).goal ?? 1,
+      chapter: labDef ? 0 : ids.indexOf(levelId) + 1,
+      // NEXT LEVEL is offered on every win short of the last level.
+      nextId: won && !labDef && ids.indexOf(levelId) + 1 < ids.length ? ids[ids.indexOf(levelId) + 1] : null,
     };
     // The roster is a live view of a game in progress; this one is over, and an end screen is
     // a decision that must not have a list arguing with it from underneath.
@@ -399,7 +407,7 @@ function boot() {
   });
   // Same write `startWith` makes: a restored Lab game boots straight past `startWith`, and
   // without this the bar would name some other level over the board actually on screen.
-  hud.setLevel(levelId);
+  hud.setLevel(levelId, levelInfo());
 
   createInput(board, camera, {
     getState: () => s,
@@ -460,7 +468,38 @@ function boot() {
       startWith(save.state);
     } else {
       newGame(id, pinnedSeed ?? randomSeed());
+      openBrief();
     }
+  }
+
+  /**
+   * What the bar and the briefing say about the booted level: its chapter (registry position),
+   * display name and story. A Lab level has no chapter and no story.
+   */
+  function levelInfo() {
+    const chapter = labDef ? 0 : ids.indexOf(levelId) + 1;
+    return { chapter, name: levelDef.name ?? levelId, story: labDef ? '' : (levelDef.story ?? '') };
+  }
+
+  /**
+   * The chapter card (2026-11-02): shown when a level starts fresh, and from the drawer's
+   * BRIEFING button. A level with no story gets no card. Waits for start.js if it has not
+   * loaded yet.
+   */
+  function openBrief() {
+    const info = levelInfo();
+    if (!info.story) return;
+    drawer.close();
+    roster.close();
+    const b = {
+      chapter: info.chapter,
+      name: info.name,
+      story: info.story,
+      goal: levelParams(s).goal ?? 1,
+      total: arrivalCount(levelParams(s).arrivals ?? { count: s.schedule.total, firstTick: 0, every: 1 }),
+    };
+    if (endScreen) endScreen.brief(b);
+    else pendingBrief = b;
   }
 
   /**
@@ -498,7 +537,7 @@ function boot() {
     roster.close();          // a new game's roster is a new set of people; open it yourself
     drawer.close();          // and a level switch is made FROM the drawer: it has done its job
     endScreen?.close();
-    hud.setLevel(levelId);
+    hud.setLevel(levelId, levelInfo());
     const url = new URL(location.href);
     if (labDef) url.searchParams.delete('level');
     else url.searchParams.set('level', levelId);
@@ -744,7 +783,7 @@ function boot() {
   bus.on('visited', (/** @type {{ user: number, dest?: number }} */ ev) => {
     const at = stopCell(ev);
     if (at >= 0) fx.pop(at, fx.remaining(ev.user));
-    hud.toast('STOP REACHED — PATIENCE RESTORED');
+    hud.toast('STOP REACHED · HALF PATIENCE BACK');
   });
 
   // Every generated block ships at least two defects now, so the old "got away with it"
@@ -754,11 +793,11 @@ function boot() {
   });
   // Shipping a beta changes where users are walking, which is a bigger deal than the one tile
   // that appeared says. The toast names the consequence rather than the tile.
-  bus.on('betaPlaced', () => hud.toast('BETA SHIPPED — USERS WILL WALK TO IT'));
+  bus.on('betaPlaced', () => hud.toast('BETA SHIPPED · USERS WALK TO IT'));
   // Since 2026-08-12 a bad roll is redrawn silently, so this only fires when the whole pool
   // fits nowhere — the message says the true thing: no block, no turn spent, try changing
   // the board first.
-  bus.on('generateRefunded', () => hud.notice('NO BLOCK FITS ANYWHERE — GENERATE CANCELED'));
+  bus.on('generateRefunded', () => hud.notice('NO BLOCK FITS ANYWHERE · GENERATE CANCELED'));
   bus.on('analyzed', (/** @type {{ revealed: number[], minesFound: number[] }} */ ev) => {
     hud.toast(`REVIEWED ${ev.revealed.length} CELL${ev.revealed.length === 1 ? '' : 'S'}`);
     for (const c of ev.revealed) fx.flip(c, PALETTE.AI_REVEALED, 0);
@@ -767,7 +806,7 @@ function boot() {
   // is only the cells whose construction was removed, so the visual extent comes from
   // core's own blastArea() over the pre-blast state.
   bus.on('detonate', (/** @type {{ at: number, destroyed: number[] }} */ ev) => {
-    hud.notice(`DETONATION — ${ev.destroyed.length} TILES LOST`);
+    hud.notice(`DETONATION · ${ev.destroyed.length} TILES LOST`);
     fx.detonate(prev, ev.at, ev.destroyed, blastArea(prev, ev.at), walkDelay(ev.at));
     stopRun();     // no second notice: a blast announces itself louder than a line of text
   });
@@ -780,13 +819,24 @@ function boot() {
   // the one loss the player can still do something about next time — so it is named, and it
   // says which of the two ways it happened.
   bus.on('userLost', (/** @type {{ reason: 'gaveUp' | 'detonation' }} */ ev) => {
-    hud.notice(ev.reason === 'gaveUp' ? 'A USER GAVE UP WAITING' : 'A USER WAS CAUGHT IN THE BLAST');
+    hud.notice(ev.reason === 'gaveUp' ? 'A USER GAVE UP WAITING' : 'A USER HIT A BUG');
     stopRun();
   });
   // The end screens are overlays (PLAN §11.9), so they are held back until the module lands;
   // in practice it has loaded long before anybody finishes a game.
-  bus.on('won', (/** @type {{ served: number, total: number }} */ ev) => { stopRun(); showEnd(true, ev); });
-  bus.on('lost', (/** @type {{ served: number, total: number }} */ ev) => { stopRun(); showEnd(false, ev); });
+  // Every finished game on a registered level is booked (progress.js): best score always, and
+  // a win clears the level and opens the next one. Booked before the end screen opens, so its
+  // NEXT LEVEL button and a LEVELS tap both see the unlock.
+  bus.on('won', (/** @type {{ served: number, total: number }} */ ev) => {
+    stopRun();
+    if (!labDef) recordResult(levelId, { served: ev.served, total: ev.total, won: true });
+    showEnd(true, ev);
+  });
+  bus.on('lost', (/** @type {{ served: number, total: number }} */ ev) => {
+    stopRun();
+    if (!labDef) recordResult(levelId, { served: ev.served, total: ev.total, won: false });
+    showEnd(false, ev);
+  });
 
   // --- fast-forward (PLAN §12.6) ------------------------------------------------------
   // Pure UI sugar over the same `wait` the button next to it dispatches. It stops the
@@ -834,7 +884,7 @@ function boot() {
     clearTimeout(ffTimer);
     ffTimer = undefined;
     hud.setRun(false);
-    if (reason) hud.notice(`STOPPED — ${reason}`);
+    if (reason) hud.notice(`STOPPED · ${reason}`);
   }
 
   function tickRun() {
@@ -973,6 +1023,8 @@ function boot() {
   // an end screen over it — or under it — would be a flash of the wrong thing, and the
   // finished board behind the menu still has RESTART and the LEVEL button if Esc uncovers it.
   const wantStart = !isLab && !params.has('seed') && !params.has('level');
+  // A level booted fresh by URL (a share link, or ?level= with no save) gets its briefing.
+  const wantBrief = !wantStart && !isLab && !restored;
   if (wantStart) document.body.classList.add('starting');
   if (!wantStart && restored && (s.phase.k === 'won' || s.phase.k === 'lost')) {
     showEnd(s.phase.k === 'won', { served: s.stats.served, total: s.schedule.total });
@@ -994,13 +1046,18 @@ function boot() {
           };
         },
         onRestart: restart,
+        record: (id) => loadProgress()[id],
+        frontier: () => frontier(ids),
       });
       hud.onHelp(endScreen.help);
       // The bar's LEVEL button is the mid-game door to the same screen the front door shows —
       // without it, a player whose save was restored (which skips the title card) had no way
       // back to the level select short of finishing the game (owner report 2026-08-20).
-      hud.onLevels(endScreen.open);
+      hud.onLevels(() => { drawer.close(); roster.close(); endScreen?.open(); });
+      hud.onBrief(openBrief);
       if (wantStart) endScreen.open();
+      else if (wantBrief) openBrief();
+      if (pendingBrief && !wantStart) { endScreen.brief(pendingBrief); pendingBrief = null; }
       // A game short enough to finish before this module lands is not a real possibility, but
       // if it happened the result would otherwise be swallowed.
       if (pendingEnd) { endScreen.end(pendingEnd); pendingEnd = null; }

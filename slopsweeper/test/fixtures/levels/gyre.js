@@ -131,7 +131,7 @@
 // `perfect` is 0% over 1000 games — fourteen walkers, three destinations, and bots that never
 // flag. Every AI row is a floor.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const gyre = {
   id: 'gyre',
   name: 'The Gyre',

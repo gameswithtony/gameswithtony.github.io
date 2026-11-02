@@ -3,16 +3,18 @@
 // optional field defaults from rules.js, so `{ id, map }` alone is a playable level.
 
 import { LEVEL_DEFAULTS } from '../core/rules.js';
-import { tutorial } from './tutorial.js';
-import { channel } from './channel.js';
-import { strait } from './strait.js';
-import { caldera } from './caldera.js';
-import { atoll } from './atoll.js';
-import { delta } from './delta.js';
-import { marina } from './marina.js';
-import { gyre } from './gyre.js';
-import { reach } from './reach.js';
-import { sprawl } from './sprawl.js';
+import { launch } from './launch.js';
+import { demo } from './demo.js';
+import { payments } from './payments.js';
+import { legacy } from './legacy.js';
+import { enterprise } from './enterprise.js';
+import { outage } from './outage.js';
+import { mobile } from './mobile.js';
+import { rewrite } from './rewrite.js';
+import { international } from './international.js';
+import { audit } from './audit.js';
+import { blackfriday } from './blackfriday.js';
+import { ipo } from './ipo.js';
 
 /**
  * @typedef {object} LevelDef
@@ -23,6 +25,8 @@ import { sprawl } from './sprawl.js';
  *                                       `{ count, firstTick, every }` — a cadence — or
  *                                       `{ at: [2, 5, 9] }`, the turns spelled out, whose
  *                                       length is the user count. Never both (rev. 2026-08-05)
+ * @property {number} [goal]             users served to clear the level; default 1
+ * @property {string} [story]            the briefing shown before the level starts
  * @property {number} [mineDensity]
  * @property {number} [patience]         the level's bar; a walker may carry its own
  * @property {number} [betaSupply]
@@ -79,6 +83,8 @@ export function resolveLevel(def) {
     arrivals: def.arrivals?.at !== undefined
       ? { at: def.arrivals.at.slice() }
       : { ...LEVEL_DEFAULTS.arrivals, ...(def.arrivals ?? {}) },
+    goal: def.goal ?? LEVEL_DEFAULTS.goal,
+    story: def.story ?? '',
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
     betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
@@ -133,14 +139,16 @@ export function allLevels() {
 // level earlier the same day (see `tutorial.js`): the id moved, the position did not. And
 // `--all` reads straight down the registry, so a corpus sim table now prints in difficulty
 // order — the rows moved on this date and the numbers did not.
-register(tutorial);
-register(channel);
-register(strait);
-register(caldera);
-register(atoll);
-register(delta);
-register(marina);
-register(gyre);
-register(reach);
-register(sprawl);
+register(launch);
+register(demo);
+register(enterprise);
+register(payments);
+register(legacy);
+register(mobile);
+register(outage);
+register(rewrite);
+register(international);
+register(audit);
+register(blackfriday);
+register(ipo);
 

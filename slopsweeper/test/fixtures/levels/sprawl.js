@@ -99,7 +99,7 @@
 // stage toward. If a later tuning pass wants the verb to earn its keep by measurement, the dial
 // is patience, and patience is pinned by the hand-only margin above.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const sprawl = {
   id: 'sprawl',
   name: 'The Archipelago',

@@ -30,6 +30,7 @@ import { n4, n8 } from '../core/grid.js';
 import { compositePotential, distField, passable, pathComplete } from '../core/routing.js';
 import { betaRejection, clue, legalActions, placeRejection } from '../core/reduce.js';
 import { placementCells } from '../core/generate.js';
+import { makeExpert } from './expert.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
 /** @typedef {import('../core/state.js').Action} Action */
@@ -499,6 +500,36 @@ function review(s, mem, cell) {
 export function makePolicy(spec, seed) {
   const text = String(spec);
   const [head, param] = text.split(':');
+  // THE EXPERT (2026-11-02) has its own modifiers: `-nobeta` never ships a beta, `-scatterN`
+  // places its first N blocks at a random legal anchor (the opening-impact measurement), and
+  // `-urgentN` / `-gainN` move its two main thresholds for tuning the bot itself.
+  if (head === 'expert' || head.startsWith('expert-')) {
+    /** @type {Partial<import('./expert.js').ExpertOpts>} */
+    const opts = {};
+    for (const m of head.split('-').slice(1)) {
+      if (m === 'nobeta') opts.betas = false;
+      else if (m === 'noholds') opts.holds = false;
+      else if (m === 'holds') opts.holds = true;
+      else if (/^scatter\d+$/.test(m)) opts.scatter = Number(m.slice(7));
+      else if (/^urgent\d+$/.test(m)) opts.urgent = Number(m.slice(6));
+      else if (/^gain\d+$/.test(m)) opts.betaGain = Number(m.slice(4));
+      else if (/^slack\d+$/.test(m)) opts.slack = Number(m.slice(5));
+      else if (/^sloppy\d+$/.test(m)) opts.sloppy = Number(m.slice(6)) / 100;
+      else if (/^probe\d+$/.test(m)) opts.handProbe = Number(m.slice(5)) / 100;
+      else throw new Error(`policy '${text}': unknown expert modifier '${m}'`);
+    }
+    const bot = makeExpert(opts, seed, mulberry32((seed ^ 0x5bd1e995) >>> 0));
+    return {
+      name: text,
+      observe: bot.observe,
+      act: (s) => {
+        const action = bot.act(s);
+        const cell = /** @type {{ cell?: number }} */ (action).cell;
+        const kinds = cell === undefined ? legalActions(s) : legalActions(s, cell);
+        return kinds.includes(action.t) ? action : { t: 'wait' };
+      },
+    };
+  }
   let style = /** @type {'coverage' | 'edge'} */ ('coverage');
   let betas = false;
   let base = head;
@@ -600,7 +631,7 @@ export function makePolicy(spec, seed) {
   };
 }
 
-export const POLICY_NAMES = ['handOnly', 'genRush', 'balanced', 'careful'];
+export const POLICY_NAMES = ['handOnly', 'genRush', 'balanced', 'careful', 'expert'];
 
 /** The sweep `--all` runs, chosen so each PLAN §13 gate has a column that measures it. */
 export const DEFAULT_SWEEP = [

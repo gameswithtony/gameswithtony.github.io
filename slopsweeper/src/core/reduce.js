@@ -36,6 +36,7 @@ export function init(def, seed) {
   /** @type {LevelParams} */
   const params = {
     arrivals,
+    goal: def.goal ?? LEVEL_DEFAULTS.goal,
     mineDensity: def.mineDensity ?? LEVEL_DEFAULTS.mineDensity,
     patience: def.patience ?? LEVEL_DEFAULTS.patience,
     betaSupply: def.betaSupply ?? LEVEL_DEFAULTS.betaSupply,
@@ -811,8 +812,9 @@ function patience(d, ev) {
   if (!d.users.every((u) => u.state === 'arrived' || u.state === 'gone')) return;
   const served = d.stats.served;
   const total = d.schedule.total;
-  d.phase = served >= 1 ? { k: 'won' } : { k: 'lost' };
-  ev.push({ t: served >= 1 ? 'won' : 'lost', served, total });
+  const won = served >= levelParams(d).goal;
+  d.phase = won ? { k: 'won' } : { k: 'lost' };
+  ev.push({ t: won ? 'won' : 'lost', served, total });
 }
 
 // --- helpers ------------------------------------------------------------------------

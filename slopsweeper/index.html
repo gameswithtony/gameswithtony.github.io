@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Slopsweeper</title>
   <meta name="description" content="A turn-based puzzle about building software under deadline with AI assistance.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,8 +22,8 @@
        would have been a second, worse copy of it. Same slot, same job, same onLevel underneath. -->
   <header id="topbar">
     <button id="btn-menu" class="chip" title="Seed and turn count"><span class="burger">☰</span><span class="narrow-hide">MENU</span></button>
-    <button id="btn-levels" class="chip" title="Choose a level — opens the level select"><span class="narrow-hide">LEVEL</span> <b id="level-name">—</b><span class="lv-caret">▾</span></button>
-    <button id="btn-restart" class="chip" title="New game — rerolls the seed unless ?seed= pins it">RESTART</button>
+    <button id="btn-levels" class="chip" title="Opens the level select"><span class="narrow-hide">LEVEL</span> <b id="level-name">—</b><span class="lv-caret">▾</span></button>
+    <button id="btn-restart" class="chip" title="New game; rerolls the seed unless ?seed= pins it">RESTART</button>
     <!-- The walker strip: the bar's whole point, and the only place the eye is meant to land.
          WAITING is the tension meter, so it is the biggest type on the page — the count says you
          are behind, and the number after the dot says how many turns the least patient of them
@@ -31,7 +33,7 @@
          NEXT IN and SERVED · LOST ride beside it in the ordinary chip size: those two are the
          persistent arrival forecast SPEC §6.1 asks for (see the note on #fc-remaining below). -->
     <div id="walkers">
-      <button id="btn-roster" title="Turns before the most impatient user gives up — tap for the roster">
+      <button id="btn-roster" title="Users stuck · turns before the first of them quits">
         <span class="wl-label"><span class="tiny-hide">WAITING</span><span class="tiny-only">WAIT</span></span>
         <b id="fc-waiting">—</b><b id="fc-soonest"></b>
         <span class="wl-caret">▾</span>
@@ -43,8 +45,11 @@
       <span class="wk-stat wk-next" title="Turns until the next user arrives"><span class="tiny-hide">NEXT IN</span><span class="tiny-only">NEXT</span> <b id="fc-next">—</b></span>
       <!-- Users served is the whole point total; users lost are the ones no amount of building
            brings back. -->
-      <span id="score" class="wk-stat" title="Users served · users lost for good">
-        <span class="tiny-hide">SERVED</span> <b id="sc-served">0/0</b>
+      <!-- Since 2026-11-02 the first number is measured against the level's GOAL, not its
+           total: served over needed. It turns green when the goal is met and red (MISSED) the
+           moment too few users are left to reach it. The total lives in the users panel. -->
+      <span id="score" class="wk-stat" title="Users served / users needed to clear the level · users lost">
+        <span id="sc-label" class="tiny-hide">GOAL</span> <b id="sc-served">0/0</b>
         <span class="tiny-hide sep">·</span>
         <span class="tiny-hide">LOST</span><span class="tiny-only">✕</span><b id="sc-lost">0</b>
       </span>
@@ -58,6 +63,15 @@
     <!-- The end screens are overlays now (PLAN §11.9), not a banner inside the board. -->
   </main>
 
+  <!-- The users panel (src/ui/roster.js, 2026-11-02): always on screen. A side column on wide
+       screens (#pp-list), a one-row strip on narrow ones (#pp-strip, tap for the full sheet in
+       #roster). Who is about to quit, who is walking, who arrives next and where they go. -->
+  <aside id="people" aria-label="Users">
+    <button id="pp-strip" type="button" title="Users: stuck, walking, arriving. Tap for the full list"></button>
+    <div class="pp-head"><h2>USERS</h2><span id="pp-tally"></span></div>
+    <div id="pp-list"></div>
+  </aside>
+
   <footer id="hud">
     <div id="tray" class="hidden">
       <canvas id="tray-canvas"></canvas>
@@ -67,7 +81,7 @@
           <!-- ROTATE keeps a counter rather than its key: which of four rotations you are looking
                at is the thing you need mid-placement, and the title says R. CONFIRM's badge is
                the key, like every other button in the game now. -->
-          <button id="btn-rotate" title="Rotate — key R"><span class="narrow-hide">ROTATE</span><span class="narrow-only">ROT</span> <i id="rot-label">1/1</i></button>
+          <button id="btn-rotate" title="Rotate · key R"><span class="narrow-hide">ROTATE</span><span class="narrow-only">ROT</span> <i id="rot-label">1/1</i></button>
           <button id="btn-confirm" title="Commit the block · 1 turn · key Enter" disabled><span class="narrow-hide">CONFIRM</span><span class="narrow-only">OK</span> <i>↵</i></button>
         </div>
       </div>
@@ -77,7 +91,7 @@
          used to carry the turn cost; the cost moved into the title, because the cost is a thing you
          learn once and the key is a thing you need every turn. -->
     <div id="globals">
-      <button id="btn-generate" title="Draw a block — the turn is charged when you commit it · key G"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>G</i></button>
+      <button id="btn-generate" title="Draw a block; the turn is charged when you commit it · key G"><span class="tiny-hide">GENERATE</span><span class="tiny-only">GEN</span> <i>G</i></button>
       <button id="btn-wait" title="Let a turn pass · 1 turn · key W">WAIT <i>W</i></button>
       <!-- Fast-forward (PLAN §12.6): Wait on a timer, stopped by anything worth looking at.
            No letter badge: it is a toggle rather than a verb, and its key is the space bar. -->
@@ -123,6 +137,8 @@
         <button id="drawer-close" title="Close (Esc)" aria-label="Close">✕</button>
       </div>
       <div class="drawer-body">
+        <button id="btn-brief" class="chip" title="Read this level's briefing again">BRIEFING</button>
+        <button id="btn-levels-menu" class="chip" title="Level select">LEVELS</button>
         <button id="seed" class="chip" title="Copy a link that replays this exact game">SEED —</button>
         <div class="drawer-row"><span>TURN</span><b id="tick">0</b></div>
         <!-- REMAINING moved in here, and SPEC §6.1's persistently-visible demand forecast is

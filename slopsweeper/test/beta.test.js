@@ -23,6 +23,7 @@ import {
 import { betaRejection, cellHasMine, clue, init, legalActions, reduce } from '../src/core/reduce.js';
 import { makePolicy } from '../src/sim/policies.js';
 import { getLevel } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 
 /** @typedef {import('../src/core/state.js').GameState} GameState */
 /** @typedef {import('../src/core/state.js').Ev} Ev */
@@ -156,7 +157,7 @@ test('NO BETA ON THE BOARD: the waypoint field IS the distance field, gate inclu
   // identity that only holds on a single-destination board — which is the very fast path this
   // guarantee exists to pin. Stripping `C`… from the live map (and the cast that names them)
   // keeps the mid-game realism without freezing a copy of the level in this file.
-  const caldera = getLevel('caldera');
+  const caldera = fixture('caldera');
   const single = { ...caldera, map: caldera.map.replace(/[C-H]/g, '#'), walkers: [], itineraries: [] };
   let s = init(/** @type {any} */ (single), 20260805);
   const bot = makePolicy('balanced:0.5', 20260805);
@@ -201,7 +202,7 @@ test('A BETA THAT IS NOT THE BEST WAYPOINT CHANGES NOTHING', () => {
 });
 
 test('the potential field is terrain-only, cached, and blind to what is built', () => {
-  const s = init(getLevel('tutorial'), 1);
+  const s = init(fixture('tutorial'), 1);
   const before = potentialField(s, s.dests[0]);
   assert.equal(before[s.dests[0]], 0);
   assert.ok(before[s.origin] > 0);
@@ -211,7 +212,7 @@ test('the potential field is terrain-only, cached, and blind to what is built', 
   assert.equal(potentialField(built, built.dests[0]), before, 'construction cannot move it — that is the point');
 
   // Volcano and void are out by capability row, never by name.
-  const caldera = init(getLevel('caldera'), 1);
+  const caldera = init(fixture('caldera'), 1);
   const pot = potentialField(caldera, caldera.dests[0]);
   for (let i = 0; i < caldera.terrain.length; i++) {
     if (caldera.terrain[i] === 'volcano' || caldera.terrain[i] === 'void') {
@@ -485,7 +486,7 @@ test('the -beta policy modifier parses and composes with the ghost styles', () =
 
 test('a -beta bot ships betas under pressure and never asks for an illegal one', () => {
   const bot = makePolicy('careful-beta:0.4', 3);
-  let s = init(getLevel('sprawl'), 3);
+  let s = init(fixture('sprawl'), 3);
   let guard = 0;
   while ((s.phase.k === 'play' || s.phase.k === 'placing') && guard++ < 300) {
     const a = bot.act(s);

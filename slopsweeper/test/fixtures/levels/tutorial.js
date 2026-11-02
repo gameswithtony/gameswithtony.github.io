@@ -139,7 +139,7 @@
 // door when* is different every game. That is the smallest possible demonstration of what a cast
 // is for, which is the right size for a first level.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const tutorial = {
   id: 'tutorial',
   name: 'Open Water',

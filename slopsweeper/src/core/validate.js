@@ -266,6 +266,14 @@ function checkNumbers(def, errors, warnings) {
     errors.push(String(/** @type {Error} */ (err).message));
   }
 
+  // The goal is a count of users, so it has to fit inside the schedule (2026-11-02).
+  if (def.goal !== undefined) {
+    const total = def.arrivals?.at ? def.arrivals.at.length : (def.arrivals?.count ?? LEVEL_DEFAULTS.arrivals.count);
+    if (!Number.isInteger(def.goal) || def.goal < 1 || def.goal > total) {
+      errors.push(`goal must be an integer in [1, ${total}] (got ${def.goal})`);
+    }
+  }
+
   // `blastRadius: 0` is a level that only kills the triggerer; `betaSupply: 0` is a level
   // with the beta verb switched off. Both are meaningful settings, so both floor at zero.
   const ZERO_IS_MEANINGFUL = ['blastRadius', 'betaSupply'];

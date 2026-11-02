@@ -6,6 +6,7 @@ import { RULES, LEVEL_DEFAULTS } from '../src/core/rules.js';
 import { MOVE_STREAM_XOR, initStreams, mulberry32 } from '../src/core/rng.js';
 import { CON, TERRAIN, caps } from '../src/core/state.js';
 import { getLevel, levelIds } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 import { init } from '../src/core/reduce.js';
 
 test('rules.js carries every PLAN §8 constant', () => {
@@ -92,9 +93,9 @@ test('the construction table carries the full SPEC §2.2 union', () => {
 });
 
 test('the registry boots a level into a well-formed state', () => {
-  assert.ok(levelIds().includes('tutorial'));
-  const s = init(getLevel('tutorial'), 1);
-  assert.equal(s.level, 'tutorial');
+  const first = levelIds()[0];
+  const s = init(getLevel(first), 1);
+  assert.equal(s.level, first);
   assert.equal(s.tick, 0);
   assert.equal(s.stats.served + s.stats.lost, 0);
   assert.equal(s.phase.k, 'play');

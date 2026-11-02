@@ -95,12 +95,25 @@ npm test                                     # same thing
 node src/sim/validate.js                     # structural check of every registered level
 node src/sim/validate.js caldera             # …or just one
 
+node src/sim/report.js                       # the campaign verdicts: goal rate, beta curve,
+                                             # opening impact, hand-only floor, the arc (16 threads)
+node src/sim/tune.js --level legacy --patience 6,7,8 --first 4,5 --win 0.84 --need 2
+                                             # sweep a level's dials, best goal per combination
+
 node src/sim/run.js --all                    # levels x policies, as a markdown table
 node src/sim/run.js --level caldera --policy balanced:0.5 --games 200 --seed 1
 npm run sim -- --all --games 200             # same runner
 ```
 
-Policies: `handOnly`, `genRush`, `balanced:p`, `careful:p`, each optionally suffixed
+**The campaign (2026-11-02).** Twelve levels in registry order, each with a `goal` and a
+one-paragraph `story` briefing. Every level is open; a new player starts on level 1, and the level select marks what is cleared and what is next. They
+are tuned against `expert`, a bot that reads clues and block badges the way a strong player does,
+flags, probes, protects walkers and times its betas. The older policies never flag, so they only
+ever measured a floor. `src/levels/README.md` §0 explains the rules each level is held to. The ten
+levels that came before live on as test fixtures in `test/fixtures/levels/`.
+
+Policies: `expert` (modifiers `-nobeta`, `-scatterN`, `-sloppyN`, `-probeN`), and the older
+`handOnly`, `genRush`, `balanced:p`, `careful:p`, each optionally suffixed
 `-greedy` (default) or `-edge` to pick the ghost-placement strategy, and `-beta` to ship beta
 milestones under pressure (SPEC §4.7). Suffixes compose in any order —
 `balanced-edge-beta:0.4`. `-beta` is deliberately out of the default sweep, so `--all` keeps

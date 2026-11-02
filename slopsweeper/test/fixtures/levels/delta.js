@@ -195,7 +195,7 @@
 // longest of 3000 measured games was 113 — comfortably inside the 400-tick guard that
 // `test/itinerary.test.js` plays this level under.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const delta = {
   id: 'delta',
   name: 'The Delta',

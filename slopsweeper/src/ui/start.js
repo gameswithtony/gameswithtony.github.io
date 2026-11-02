@@ -53,16 +53,16 @@ import { initials, pickPost } from './linkedup.js';
  */
 const HELP = [
   ['THE GOAL', [
-    'Welcome to Slopsweeper! You are a coder with software to ship. Users arrive at A, and each one carries a list of destinations to visit, the things they came to do. On many levels that list is just B.',
-    'Build paths of code between the letters. The moment a user can reach one of their stops, they walk there on their own, in any order they can manage.',
-    'A user who finishes their whole list exits and scores you a point. One is a win. Every user is a perfect run.',
+    'Welcome to Slopsweeper! You are a coder with software to ship. Users come in at A. The other letters are capabilities: signup, checkout, billing. Each user needs one or more of them, and the USERS panel shows which.',
+    'Build code between the letters. The moment a user can reach a capability they need, they walk there on their own.',
+    'A user who finishes their whole list exits and scores you a point. Each level sets a goal: serve that many to clear it and open the next level. Every user is a perfect run.',
   ]],
   ['TURNS', [
-    'Tap a cell, then pick an action from the bar at the bottom. Each button shows its cost in turns.',
+    'Tap a cell, then pick an action from the bar at the bottom. Every action takes one turn, except FLAG, which is free.',
     'Users move while you work: after every turn you spend, each walking user takes one step, and new users keep arriving on a schedule.',
     'Users are not patient. Each turn one of them stands stuck, they lose one patience, and it never comes back. A user who runs out leaves for good.',
     'There is one way to win patience back: a user who reaches one of their stops, with more still to visit, gets half the bar back.',
-    'Tap the WAITING counter any time to see each user by name, which stops they still owe (arrows mean the order is fixed), and how many turns they have left.',
+    'The USERS panel lists everyone: who is stuck and how many turns until they leave, who is walking, and who arrives next. Stops joined by arrows must be visited in that order; dots mean any order. Dim letters are stops already visited.',
   ]],
   ['WRITE CODE', [
     'PLACE writes one tile of code by hand. One turn. It must touch code already built. Hand-written code never has bugs.',
@@ -70,7 +70,7 @@ const HELP = [
     'You cannot preview a block and you cannot reject one. And every block contains bugs: at least two defects, hidden inside. The game tells you how many, not where.',
   ]],
   ['THE BUGS', [
-    'A defect explodes when a user steps on it, or when you analyze it. The blast turns nearby code back into open ocean, including yours, and kills any user standing in it.',
+    'A defect explodes when a user steps on it, or when you analyze it. The blast turns its tile back into open ocean, and any user standing there leaves for good. On some levels it takes the tiles around it too, including yours. Rock walls stop a blast.',
     'The numbers on the board are how you find defects first. Each number counts the defects in the eight cells touching it.',
     'Your hand tiles show a number too, so building next to AI code is a safe way to probe it. A blank hand tile means zero: nothing dangerous beside it.',
     'The badge on each block counts the defects still in that block.',
@@ -79,7 +79,7 @@ const HELP = [
     'ANALYZE reviews one cell of AI code. One turn.',
     'If the cell is clean, it flips over and shows its number. If that number is zero, its neighbours open too, free.',
     'If the cell is a defect, it explodes. The numbers are there so you can know before you click.',
-    'FLAG is free and reversible. Mark a cell you do not trust and users will refuse to walk through it.',
+    'FLAG is free and reversible. Mark a cell you do not trust and users will refuse to walk through it. A flag in front of walking users stops them while you read the code ahead.',
     'A flag can also close your only road. When your flag is the one thing keeping stuck users from their next stop, it glows red: the guardrail has become the roadblock.',
   ]],
   ['BETAS', [
@@ -206,6 +206,19 @@ export function drawThumb(canvas, m) {
  * @property {number} generated
  * @property {number} analyzed
  * @property {number} waited
+ * @property {number} goal            users needed to clear the level
+ * @property {string | null} nextId   the next level, when this win opened one
+ * @property {number} chapter         1-based campaign position, 0 for a Lab level
+ */
+
+/**
+ * The briefing card's content (2026-11-02).
+ * @typedef {object} BriefFacts
+ * @property {number} chapter
+ * @property {string} name
+ * @property {string} story
+ * @property {number} goal
+ * @property {number} total
  */
 
 /**
@@ -258,6 +271,8 @@ export function shareText(f) {
  *                                            tick-0 board (what RESTART leaves), or one that
  *                                            no longer parses
  * @property {() => void} onRestart     replay the level that just ended
+ * @property {(id: string) => { cleared: boolean, best: number, total: number } | undefined} record
+ * @property {() => string} frontier      the first level not yet cleared
  */
 
 /**
@@ -266,7 +281,8 @@ export function shareText(f) {
  * @property {() => void} help       the "?" in the HUD
  * @property {(f: EndFacts) => void} end
  * @property {() => void} close
- * @property {() => boolean} isOpen  any of the four is up: the keyboard is not the board's
+ * @property {(b: BriefFacts) => void} brief   the chapter card shown before a fresh game
+ * @property {() => boolean} isOpen  any of the cards is up: the keyboard is not the board's
  */
 
 /**
@@ -306,9 +322,10 @@ export function createStart(h) {
       <div class="end-sub"></div>
       <div class="end-stats"></div>
       <div class="overlay-actions">
-        <button id="win-share">SHARE</button>
-        <button id="win-again">PLAY AGAIN</button>
+        <button id="win-next">NEXT LEVEL</button>
+        <button id="win-again">REPLAY</button>
         <button id="win-levels">LEVELS</button>
+        <button id="win-share">SHARE</button>
       </div>
     </div>`;
 
@@ -316,6 +333,7 @@ export function createStart(h) {
   lose.id = 'lose';
   lose.innerHTML = `
     <div class="overlay-card lose-card">
+      <div class="lose-score"></div>
       <div class="lu-brand">Linked<span>Up</span></div>
       <article class="lu-post">
         <header class="lu-head">
@@ -335,6 +353,20 @@ export function createStart(h) {
       </div>
     </div>`;
 
+  // THE BRIEFING (2026-11-02): one chapter of the story, shown when a level starts fresh.
+  const brief = make('div', 'overlay hidden');
+  brief.id = 'brief';
+  brief.innerHTML = `
+    <div class="overlay-card brief-card">
+      <div class="brief-chapter"></div>
+      <h2 class="brief-name"></h2>
+      <p class="brief-story"></p>
+      <p class="brief-goal"></p>
+      <div class="overlay-actions">
+        <button id="brief-start">START</button>
+      </div>
+    </div>`;
+
   /** @type {HTMLElement} */ (start.querySelector('.premise')).textContent = PREMISE;
 
   const body = /** @type {HTMLElement} */ (help.querySelector('.help-body'));
@@ -346,10 +378,12 @@ export function createStart(h) {
   const grid = /** @type {HTMLElement} */ (start.querySelector('#start-levels'));
   const back = /** @type {HTMLButtonElement} */ (help.querySelector('#help-back'));
   const shareBtn = /** @type {HTMLButtonElement} */ (win.querySelector('#win-share'));
+  const nextBtn = /** @type {HTMLButtonElement} */ (win.querySelector('#win-next'));
+  const startBtn = /** @type {HTMLButtonElement} */ (brief.querySelector('#brief-start'));
 
-  document.body.append(start, help, win, lose);
+  document.body.append(start, help, win, lose, brief);
 
-  const panels = { start, help, win, lose };
+  const panels = { start, help, win, lose, brief };
 
   /** @type {'start' | 'win' | 'lose' | null} where BACK out of help goes; null closes. */
   let helpReturn = null;
@@ -370,6 +404,7 @@ export function createStart(h) {
    */
   function buildCards() {
     const current = h.getLevel();
+    const frontier = h.frontier();
     grid.innerHTML = '';
     h.levels.forEach((id, i) => {
       const def = levelById(id);
@@ -378,6 +413,11 @@ export function createStart(h) {
       const card = /** @type {HTMLButtonElement} */ (make('button', 'level-card'));
       card.type = 'button';
       card.classList.toggle('current', id === current);
+      // The campaign (2026-11-02): every level is open. Cleared cards carry their best score and
+      // the first uncleared level is marked NEXT, which is guidance, not a gate.
+      const rec = h.record(id);
+      card.classList.toggle('cleared', !!rec?.cleared);
+      card.classList.toggle('next', !rec?.cleared && id === frontier);
 
       const thumb = /** @type {HTMLCanvasElement} */ (make('canvas', 'level-thumb'));
       drawThumb(thumb, m);
@@ -390,10 +430,14 @@ export function createStart(h) {
       // The demand, on the card: §6.1's forecast argument starts at the menu — which level
       // you can face is a dosage judgement too, and users and stops are the dose.
       const stops = m.dests.length;
+      const total = arrivalCount(def.arrivals);
       const facts = make('span', 'level-facts',
-        `${arrivalCount(def.arrivals)} USERS · ${stops} ${stops === 1 ? 'STOP' : 'STOPS'}`);
+        `GOAL ${def.goal ?? 1}/${total} · ${stops} ${stops === 1 ? 'STOP' : 'STOPS'}`);
 
       card.append(thumb, name, facts);
+      if (rec?.cleared) card.append(make('span', 'level-best cleared', `CLEARED · BEST ${rec.best}/${rec.total}`));
+      else if (rec) card.append(make('span', 'level-best tried', `BEST ${rec.best}/${rec.total}`));
+      else if (card.classList.contains('next')) card.append(make('span', 'level-best next', 'NEXT'));
 
       // The CONTINUE badge (owner request 2026-08-20, with the per-level slots): a level
       // holding an unfinished game says so on its card, with the score so far — served over
@@ -404,14 +448,14 @@ export function createStart(h) {
       if (resume) {
         card.classList.add('saved');
         card.append(make('span', 'level-resume', `CONTINUE · ${resume.served}/${resume.total}`));
-        card.title = `Continue your saved game — turn ${resume.tick}, ${resume.served}/${resume.total} served`;
+        card.title = `Continue your saved game: turn ${resume.tick}, ${resume.served}/${resume.total} served`;
       } else {
         card.title = 'Start a new game';
       }
 
       // The blur is the HUD dropdown's fix (2026-08-05) applied here: a clicked button keeps
       // keyboard focus, and the next hotkey belongs to the board this card just revealed.
-      card.addEventListener('click', () => { card.blur(); h.onLevel(id); show(null); });
+      card.addEventListener('click', () => { card.blur(); show(null); h.onLevel(id); });
       grid.append(card);
     });
   }
@@ -419,6 +463,10 @@ export function createStart(h) {
   function openStart() {
     buildCards();
     show('start');
+    // Open on the level that matters now: the NEXT card, else the one being played.
+    grid.scrollTop = 0;
+    const focus = grid.querySelector('.level-card.next') ?? grid.querySelector('.level-card.current');
+    focus?.scrollIntoView({ block: 'nearest' });
   }
 
   /** @param {'start' | 'win' | 'lose' | null} from */
@@ -436,11 +484,13 @@ export function createStart(h) {
     lastEnd = f;
     const perfect = f.served >= f.total;
     const kicker = /** @type {HTMLElement} */ (win.querySelector('.end-kicker'));
-    kicker.textContent = perfect ? 'PERFECT' : 'SHIPPED';
+    kicker.textContent = perfect ? 'PERFECT' : 'CLEARED';
     kicker.classList.toggle('perfect', perfect);
     /** @type {HTMLElement} */ (win.querySelector('.end-score')).textContent = `SERVED ${f.served}/${f.total}`;
+    const ch = f.chapter ? `${String(f.chapter).padStart(2, '0')} ` : '';
     /** @type {HTMLElement} */ (win.querySelector('.end-sub')).textContent =
-      `${f.mapName.toUpperCase()} · ${f.ticks} TURNS · SEED ${f.seed}`;
+      `GOAL ${f.goal} · ${ch}${f.mapName.toUpperCase()} · ${f.ticks} TURNS · SEED ${f.seed}`;
+    nextBtn.classList.toggle('hidden', !f.nextId);
 
     const stats = /** @type {HTMLElement} */ (win.querySelector('.end-stats'));
     stats.innerHTML = '';
@@ -495,9 +545,13 @@ export function createStart(h) {
   /** @param {EndFacts} f */
   function openLose(f) {
     lastEnd = f;
+    /** @type {HTMLElement} */ (lose.querySelector('.lose-score')).textContent =
+      `NOT CLEARED · SERVED ${f.served} OF ${f.total} · GOAL ${f.goal}`;
     /** @type {PostFacts} */
     const facts = {
-      map: f.mapName,
+      // The posts write "the {map}"; a level whose name already starts with "The" would read
+      // "the The Demo".
+      map: f.mapName.replace(/^the\s+/i, ''),
       served: f.served,
       total: f.total,
       lost: f.lost,
@@ -523,6 +577,19 @@ export function createStart(h) {
     show('lose');
   }
 
+  // --- briefing ----------------------------------------------------------------------
+
+  /** @param {BriefFacts} b */
+  function openBrief(b) {
+    /** @type {HTMLElement} */ (brief.querySelector('.brief-chapter')).textContent =
+      b.chapter ? `CHAPTER ${String(b.chapter).padStart(2, '0')}` : '';
+    /** @type {HTMLElement} */ (brief.querySelector('.brief-name')).textContent = b.name.toUpperCase();
+    /** @type {HTMLElement} */ (brief.querySelector('.brief-story')).textContent = b.story;
+    /** @type {HTMLElement} */ (brief.querySelector('.brief-goal')).textContent = `Serve ${b.goal} of ${b.total}.`;
+    show('brief');
+    startBtn.focus();
+  }
+
   // --- wiring ------------------------------------------------------------------------
 
   /** @type {HTMLButtonElement} */ (start.querySelector('#start-help')).addEventListener('click', () => openHelp('start'));
@@ -536,6 +603,14 @@ export function createStart(h) {
   shareBtn.addEventListener('click', share);
   /** @type {HTMLButtonElement} */ (win.querySelector('#win-again')).addEventListener('click', () => { show(null); h.onRestart(); });
   /** @type {HTMLButtonElement} */ (win.querySelector('#win-levels')).addEventListener('click', openStart);
+  // NEXT LEVEL hands over to main.js, which boots the level and opens its briefing.
+  nextBtn.addEventListener('click', () => {
+    nextBtn.blur();
+    if (!lastEnd?.nextId) return;
+    show(null);
+    h.onLevel(lastEnd.nextId);
+  });
+  startBtn.addEventListener('click', () => { startBtn.blur(); show(null); });
   /** @type {HTMLButtonElement} */ (lose.querySelector('#lose-retry')).addEventListener('click', () => { show(null); h.onRestart(); });
   /** @type {HTMLButtonElement} */ (lose.querySelector('#lose-levels')).addEventListener('click', openStart);
 
@@ -545,6 +620,7 @@ export function createStart(h) {
     if (e.key !== 'Escape') return;
     if (!help.classList.contains('hidden')) back.click();
     else if (!start.classList.contains('hidden')) show(null);
+    else if (!brief.classList.contains('hidden')) show(null);
     else return;                        // an end screen is a decision, not a dialog
     e.stopPropagation();
     e.preventDefault();
@@ -562,6 +638,7 @@ export function createStart(h) {
     /** @param {EndFacts} f */
     end: (f) => (f.won ? openWin(f) : openLose(f)),
     close: () => show(null),
+    brief: openBrief,
 
     /**
      * Whether any of the four cards is up. main.js asks before letting a keystroke reach the

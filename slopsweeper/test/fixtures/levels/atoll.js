@@ -113,7 +113,7 @@
 // level's argument for reading a block before you walk somebody over it, one row of the roster
 // long.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const atoll = {
   id: 'atoll',
   name: 'The Atoll',

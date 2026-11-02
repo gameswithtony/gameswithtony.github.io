@@ -9,6 +9,7 @@ import { init, legalActions, reduce } from '../src/core/reduce.js';
 import { DEFAULT_SWEEP, POLICY_NAMES, makePolicy } from '../src/sim/policies.js';
 import { MAX_TICKS, runGame, runGames, median } from '../src/sim/batch.js';
 import { getLevel } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 
 /** The comments talk *about* the rules below, so they are not evidence of breaking them. */
 const POLICY_CODE = readFileSync(new URL('../src/sim/policies.js', import.meta.url), 'utf8')
@@ -24,18 +25,30 @@ test('no bot may read a mine (the information discipline of PLAN §13)', () => {
   assert.equal(/Math\.random/.test(POLICY_CODE), false, 'policies.js uses unseeded randomness');
 });
 
+test('the expert reads the board the same way a player does (2026-11-02)', () => {
+  // It reasons from the digits (`clue`) and the badge on every block (`blockMines`, which the
+  // renderer draws), never from the hidden ground truth and never from the instrumentation solver.
+  const code = readFileSync(new URL('../src/sim/expert.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  assert.ok(code.includes('mineOdds'), 'the stripper ate the file');
+  assert.equal(/\.mine\b/.test(code), false, 'expert.js reads con[].mine');
+  assert.equal(/solver/i.test(code), false, 'expert.js reaches for the solver');
+  assert.equal(/Math\.random/.test(code), false, 'expert.js uses unseeded randomness');
+});
+
 test('core and sim run with no DOM in sight (SPEC §10.2)', () => {
   for (const g of ['window', 'document', 'localStorage', 'HTMLElement']) {
     assert.equal(typeof /** @type {any} */ (globalThis)[g], 'undefined', `${g} exists in this runtime`);
   }
-  const st = runGames(getLevel('tutorial'), 'handOnly', 3, 1, { solver: false });
+  const st = runGames(fixture('tutorial'), 'handOnly', 3, 1, { solver: false });
   assert.equal(st.games, 3);
 });
 
 test('every bot only ever asks for actions the reducer would allow', () => {
   for (const spec of DEFAULT_SWEEP) {
     const bot = makePolicy(spec, 4);
-    let s = init(getLevel('caldera'), 4);
+    let s = init(fixture('caldera'), 4);
     let guard = 0;
     while ((s.phase.k === 'play' || s.phase.k === 'placing') && guard++ < 200) {
       const a = bot.act(s);
@@ -60,7 +73,7 @@ test('policy specs parse: names, dosages and ghost styles', () => {
 });
 
 test('SIM SMOKE: runGames(tutorial, handOnly, 5, seed) completes with sane stats', () => {
-  const st = runGames(getLevel('tutorial'), 'handOnly', 5, 1);
+  const st = runGames(fixture('tutorial'), 'handOnly', 5, 1);
   assert.equal(st.level, 'tutorial');
   assert.equal(st.policy, 'handOnly');
   assert.equal(st.games, 5);
@@ -82,7 +95,7 @@ test('SIM SMOKE: runGames(tutorial, handOnly, 5, seed) completes with sane stats
   for (const g of st.games_) {
     assert.ok(g.ticks > 0 && g.ticks <= MAX_TICKS);
     assert.equal(typeof g.won, 'boolean');
-    assert.equal(g.total, getLevel('tutorial').arrivals.count);
+    assert.equal(g.total, fixture('tutorial').arrivals.count);
     assert.ok(g.served <= g.total);
     // Points economy (2026-08-04): a win is *one* arrival, not all of them. `perfect` is
     // the old bar, and it is now a separate, much rarer thing.
@@ -93,12 +106,12 @@ test('SIM SMOKE: runGames(tutorial, handOnly, 5, seed) completes with sane stats
 });
 
 test('a batch is reproducible, and its per-game seeds are spread', () => {
-  const a = runGames(getLevel('atoll'), 'careful:0.4', 8, 99, { solver: false });
-  const b = runGames(getLevel('atoll'), 'careful:0.4', 8, 99, { solver: false });
+  const a = runGames(fixture('atoll'), 'careful:0.4', 8, 99, { solver: false });
+  const b = runGames(fixture('atoll'), 'careful:0.4', 8, 99, { solver: false });
   assert.deepEqual(a.games_, b.games_);
   assert.equal(new Set(a.games_.map((g) => g.seed)).size, 8);
 
-  const c = runGames(getLevel('atoll'), 'careful:0.4', 8, 100, { solver: false });
+  const c = runGames(fixture('atoll'), 'careful:0.4', 8, 100, { solver: false });
   assert.notDeepEqual(a.games_.map((g) => g.ticks), c.games_.map((g) => g.ticks));
 });
 
@@ -108,14 +121,14 @@ test('a game always terminates, and a stuck bot is a loss rather than a hang', (
     observe: () => {},
     act: () => /** @type {import('../src/core/state.js').Action} */ ({ t: 'generate' }),
   });
-  const g = runGame(getLevel('tutorial'), stubborn, 1, { solver: false, maxTicks: 60 });
+  const g = runGame(fixture('tutorial'), stubborn, 1, { solver: false, maxTicks: 60 });
   assert.equal(g.won, false);
   assert.ok(g.ticks <= 60);
 });
 
 test('the solver instrumentation rides along without changing the game', () => {
-  const withSolver = runGames(getLevel('strait'), 'balanced:0.5', 6, 5, { solver: true });
-  const without = runGames(getLevel('strait'), 'balanced:0.5', 6, 5, { solver: false });
+  const withSolver = runGames(fixture('strait'), 'balanced:0.5', 6, 5, { solver: true });
+  const without = runGames(fixture('strait'), 'balanced:0.5', 6, 5, { solver: false });
   assert.deepEqual(
     withSolver.games_.map((g) => [g.won, g.ticks, g.served]),
     without.games_.map((g) => [g.won, g.ticks, g.served]),

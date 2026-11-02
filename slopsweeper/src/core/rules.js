@@ -110,6 +110,7 @@ export const RULES = Object.freeze({
  * things the save already carries, which is why it is not there — see `casting.js`.
  * @typedef {object} LevelParams
  * @property {Arrivals} arrivals
+ * @property {number} goal          users served to clear the level (2026-11-02)
  * @property {number} mineDensity
  * @property {number} patience
  * @property {number} betaSupply
@@ -136,6 +137,9 @@ export const LEVEL_DEFAULTS = Object.freeze({
   // the puzzle can afford to be a puzzle again. A 16-cell block now carries ~3 defects.
   // The corpus runs 0.15–0.16 (PLAN §9); the validator warns outside 0.10–0.40.
   mineDensity: 0.16,
+  // THE GOAL (owner decision 2026-11-02). Clearing a level used to mean serving one user,
+  // which made the level select's unlock meaningless. A level now states how many it needs.
+  goal: 1,
   shapePool: 'compact',
   patience: RULES.USER_PATIENCE,
   betaSupply: RULES.BETA_SUPPLY,

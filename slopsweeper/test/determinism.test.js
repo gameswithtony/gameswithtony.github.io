@@ -8,6 +8,7 @@ import { init, reduce } from '../src/core/reduce.js';
 import { hashState, serializeState } from '../src/sim/hash.js';
 import { makePolicy } from '../src/sim/policies.js';
 import { getLevel, levelIds } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 
 /**
  * Play a whole game with a seeded bot — a deterministic action sequence by construction —
@@ -17,7 +18,7 @@ import { getLevel, levelIds } from '../src/levels/index.js';
  * @param {string} [policy]
  */
 function replay(levelId, seed, policy = 'balanced:0.5') {
-  const def = getLevel(levelId);
+  const def = levelIds().includes(levelId) ? getLevel(levelId) : fixture(levelId);
   let s = init(def, seed);
   const bot = makePolicy(policy, seed);
   /** @type {string[]} */
@@ -65,7 +66,7 @@ test('the same level, seed and actions produce the same hash at every tick', () 
 
 test('replaying a recorded action log reproduces the game exactly', () => {
   const { hashes, actions } = replay('caldera', 777);
-  let s = init(getLevel('caldera'), 777);
+  let s = init(fixture('caldera'), 777);
   const again = [hashState(s)];
   for (const a of actions) {
     s = reduce(s, a).s;
@@ -86,7 +87,7 @@ test('different seeds diverge', () => {
 });
 
 test('the hash covers everything a tick can change, in a fixed order', () => {
-  const base = init(getLevel('tutorial'), 3);
+  const base = init(fixture('tutorial'), 3);
   const text = serializeState(base);
   assert.equal(typeof text, 'string');
   assert.match(hashState(base), /^[0-9a-f]{8}$/);

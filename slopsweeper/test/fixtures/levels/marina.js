@@ -127,7 +127,7 @@
 // (`src/sim/policies.js`), cannot all arrive. A flagging human is the only player who could,
 // and every AI row above is a floor for the same reason.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const marina = {
   id: 'marina',
   name: 'The Marina',

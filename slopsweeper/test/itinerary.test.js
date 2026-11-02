@@ -25,6 +25,7 @@ import { validateLevel } from '../src/core/validate.js';
 import { hashState } from '../src/sim/hash.js';
 import { makePolicy } from '../src/sim/policies.js';
 import { allLevels, getLevel } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 
 /** @typedef {import('../src/core/state.js').GameState} GameState */
 /** @typedef {import('../src/core/state.js').Ev} Ev */
@@ -106,7 +107,7 @@ test('ONE DESTINATION: the per-mask field IS the field the betas left behind', (
   // entire subject — the degenerate mask the machinery must reduce to. Stripping `C`… from
   // the live map (and the cast that names them) keeps the mid-game realism without freezing
   // a copy of the level in this file.
-  const caldera = getLevel('caldera');
+  const caldera = fixture('caldera');
   const single = { ...caldera, map: caldera.map.replace(/[C-H]/g, '#'), walkers: [], itineraries: [] };
   let s = init(/** @type {any} */ (single), 20260805);
   const bot = makePolicy('balanced:0.5', 20260805);
@@ -449,7 +450,7 @@ test('dests and todo survive the save round trip and ride the hash', () => {
 test('a bot plays the multi-destination showcase without asking for anything illegal', () => {
   for (const spec of ['handOnly', 'balanced:0.4', 'careful-beta:0.4']) {
     const bot = makePolicy(spec, 5);
-    let s = init(getLevel('delta'), 5);
+    let s = init(fixture('delta'), 5);
     let guard = 0;
     while ((s.phase.k === 'play' || s.phase.k === 'placing') && guard++ < 400) {
       const r = reduce(s, bot.act(s));

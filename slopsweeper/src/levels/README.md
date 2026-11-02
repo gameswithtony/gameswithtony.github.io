@@ -9,6 +9,87 @@ level loads.
 
 ---
 
+## 0. The campaign (2026-11-02, read this first)
+
+The registry is a twelve-level campaign. Registry order is the menu and the difficulty arc. Every
+level is open to play; a new player starts on level 1. The ten levels that shipped before this date live on
+in `test/fixtures/levels/` because the test suite asserts behaviour on their geometry. The worked
+examples further down (§7, §8) still describe two of them; the reasoning holds, the files moved.
+
+**Every level states a `goal`**, the number of users it takes to clear it, and a `story`, the
+one-paragraph briefing the player reads before turn one. A level is won when every user has
+resolved and `served >= goal`.
+
+**The rules every campaign level is tuned to**, all measured, none asserted by eye:
+
+- The expert bot clears it often enough to call it fair, and less often than the level before.
+- Hand-only play never reaches the goal.
+- It needs betas. Without them the expert rarely clears it, and later levels need more of them.
+- The opening counts. Placing the first three blocks at random costs something, but not the game.
+
+### What makes a beta necessary
+
+Walking costs a user no patience. Only standing still does. So the moment a user can see any
+waypoint ahead of it, it stops burning patience, and a beta is the way to give it one before the
+route is finished. Two consequences decide level design:
+
+- **On open water one beta covers a whole direction.** Generated blocks build about five tiles of
+  route a turn and users walk one, so a single beta shipped early lets every user arriving before
+  the route is done start walking. A second beta toward the same destination adds almost nothing.
+- **So betas scale with stages.** A stage is a branch users need early that sits behind slow
+  ground. Slow ground is anything a block cannot enter: a passage two tiles wide is hand-built at
+  one tile a turn, because the smallest stencil is three wide. Each destination behind its own
+  narrow passage is one more beta the level needs, which is how the campaign climbs from one
+  required beta to four.
+
+### What makes a level fun (owner, 2026-11-02)
+
+The game is fun when the player ends up moving users with betas, placing generated blocks, and
+clearing them just before users step on them, saving people with a turn of patience to spare. It
+is not fun when it is a run of easy hand placements, or when users die to bugs a careful player
+could have caught. The report measures both, and the corpus is built around them:
+
+- **No long handwritten stretches.** A two-wide passage is hand-only and every tile is a click
+  with no decision in it. Keep those to two tiles. Channels are four wide, so most stencils fit;
+  three wide admits only R12 and gets hand-built in practice. `hand%` and `run` in the report
+  watch this (runs of four or five are probes and gap-closing, which are decisions).
+- **Careful play must beat sloppy play.** If the `sloppy` column beats `expert`, reviewing costs
+  more than the users it saves and the level teaches ignoring bugs. Lower the defect rate or
+  raise patience until protecting users pays (Black Friday needed both).
+- **Itineraries stay near each other.** A multi-stop user whose stops sit at the ends of separate
+  lanes walks back through A between them; on Launch Day that was sixty tiles of fast-forward.
+- **Spreading blasts need flags.** At blast radius 1 a crowd dies together. Flags are free, and a
+  flag in front of the crowd while you read the tile ahead is the counter; the expert does it
+  ("hold flags") and deaths fall from about one a game to near zero. At radius 0 holding costs
+  more patience than it saves, so the expert only holds where blasts spread.
+- **`close`** counts users served with two turns of patience or fewer left. A level near zero has
+  no tension; one or two a game is where it should sit.
+
+### The expert, and the two tools built on it
+
+`src/sim/expert.js` is a bot that plays like a strong player: it turns every visible clue and
+every block's defect badge into per-tile odds, flags certain defects, probes safe tiles, protects
+walkers before they step, rescues walkers whose road was cut, blows up flagged tiles that seal the
+only way through, builds toward the destination with the most demand, and times its betas. It
+reads nothing a player cannot see (`test/sim.test.js` greps it). The four older bots never flag,
+so their numbers are floors; the expert's are close to a ceiling, and the campaign is tuned
+against it.
+
+```sh
+node src/sim/report.js                         # every level: goal rate, beta curve, opening, verdicts
+node src/sim/report.js --level legacy --games 400
+
+node src/sim/tune.js --level legacy --patience 6,7,8 --first 4,5 --every 1,2 \
+     --win 0.84 --need 2                       # sweep the dials, pick the goal from the histograms
+node src/sim/tune.js --level blackfriday --at "4,5,6,7;3,4,5,6" --patience 5,6
+```
+
+Policy modifiers for experiments: `expert-nobeta`, `expert-scatterN` (first N blocks at random),
+`expert-sloppyN` (skips looking N% of turns, the middling player), `expert-probeN` (build a hand
+tile beside any doubtful tile at N% odds or worse; by default only where blasts spread).
+
+---
+
 ## 1. The shortest possible level
 
 ```js
@@ -171,7 +252,7 @@ spawn. Two things to hold in mind:
   `round(ownPatience × destRefill)`, so half a bar is half of *their* bar. A short-bar walker on
   a multi-stop itinerary is punishing on purpose.
 - **Everything on screen already knows.** The board's impatience shading, the roster's `LEAVES IN`
-  countdown, its `GAVE UP` versus `KILLED` wording and the HUD's worst-case chip all read the
+  countdown, its `GAVE UP` versus `FAILED` wording and the HUD's worst-case chip all read the
   walker's own bar, so a 12-tick walker can be the most urgent row on the panel while having
   waited the least.
 
@@ -493,9 +574,10 @@ If this list ever grows an opinion about difficulty, it has turned into a design
 **The game is scored in points** (2026-08-04). There is no confidence meter. Each user has
 `patience` cumulative ticks of being unable to move — queued at the origin, stalled, or
 stranded, all the same — and then it leaves for good. A blast kills everyone standing in it.
-The level ends when every scheduled user has arrived or gone: **one arrival is a win, all of
-them is the goal, none is a loss.** So `arrivals.count` is now the denominator of the score as
-well as the difficulty dial, and the number to read in the sim is **served**, not win %.
+The level ends when every scheduled user has arrived or gone, and it is won when at least
+`goal` of them arrived (2026-11-02; before that, one arrival was a win). So `arrivals.count` is
+the denominator of the score as well as a difficulty dial, and since the goal exists the number
+to read is the goal rate that `report.js` and `tune.js` print.
 
 **Arrival cadence is still the primary dial.** Tightening it raises the *floor* — the minimum
 AI usage below which you deliver nobody. The budget is per-user now and easy to compute: a
@@ -507,7 +589,7 @@ exceeds `patience` is one you were never going to deliver.
 AI policies lose most of their users to *blasts* and only one or two to patience — the old
 control level served the same 17% at every patience from 12 to 28, which is as clean a
 demonstration as you could ask for that the schedule is not the binding constraint. If a
-level scores badly, look at `killed` before you touch `arrivals`: the fix is less generated
+level scores badly, look at `failed` before you touch `arrivals`: the fix is less generated
 ground on the route, or `blastRadius`, not a looser schedule. (The 2026-08-06 pass leaned on
 `blastRadius: 0` hard for exactly this reason — the sim bots never flag, so radius 1 prices
 their misreads at five tiles of route and the whole table converges on zero. Radius 0 keeps a
@@ -661,7 +743,7 @@ every served figure is a floor a flagging human beats — the 2026-08-06 corpus'
 asks whether one user got through, so it reads high everywhere by design. Anything at 0% served
 across the *whole* policy sweep is a level nobody can play; anything near 100% is a level with
 no decision in it. Read the spread between `genRush`, `balanced` and `careful`, and read
-`gaveUp` against `killed` to see which pressure is actually biting.
+`gaveUp` against `failed` to see which pressure is actually biting.
 
 ---
 

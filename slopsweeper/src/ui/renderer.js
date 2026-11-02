@@ -400,9 +400,10 @@ export function createRenderer(canvas) {
       }
     }
 
-    if (tier !== 'near') return;
+    // Per-block mine badges at block centroids, live counts (PLAN §11.3). Drawn wherever the
+    // clue digits are (2026-11-02): the count is what turns a block into a puzzle, and at the
+    // default fit zoom on a desktop the board sits in the mid tier, where it used to vanish.
 
-    // Per-block mine badges at block centroids, live counts (PLAN §11.3).
     for (const b of s.blocks) {
       if (b.cells.length === 0) continue;
       const at2 = centroidCell(s, b.cells);

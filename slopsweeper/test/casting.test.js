@@ -28,6 +28,7 @@ import { init, reduce } from '../src/core/reduce.js';
 import { validateLevel } from '../src/core/validate.js';
 import { hashState } from '../src/sim/hash.js';
 import { allLevels, getLevel, resolveLevel } from '../src/levels/index.js';
+import { fixture } from './fixtures/levels/index.js';
 
 /** @typedef {import('../src/core/state.js').GameState} GameState */
 /** @typedef {import('../src/core/state.js').Ev} Ev */
@@ -110,7 +111,7 @@ test('THE STREAMS ARE UNTOUCHED: casting draws on nothing the game replays from'
   };
   for (const seed of [1, 2, 12345]) {
     assert.deepEqual(init(/** @type {any} */ (level), seed).rng, initStreams(seed));
-    assert.deepEqual(init(getLevel('tutorial'), seed).rng, initStreams(seed));
+    assert.deepEqual(init(fixture('tutorial'), seed).rng, initStreams(seed));
   }
   // And the split constant is genuinely its own: reusing the movement stream's would have made
   // the cast a preview of every routing tie-break in the game.

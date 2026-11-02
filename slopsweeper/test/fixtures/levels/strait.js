@@ -136,7 +136,7 @@
 //     flagging problem. Nobody has measured a flagging player's odds and this note will not
 //     invent them.
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const strait = {
   id: 'strait',
   name: 'The Strait',

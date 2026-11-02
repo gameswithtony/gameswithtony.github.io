@@ -5,6 +5,7 @@
 
 import { init, reduce } from '../core/reduce.js';
 import { solve } from '../core/solver.js';
+import { patienceLimit } from '../core/state.js';
 import { makePolicy } from './policies.js';
 
 /** @typedef {import('../core/state.js').GameState} GameState */
@@ -27,7 +28,11 @@ export const MAX_TICKS = 400;
  * @property {number} lostDetonation    users killed in a blast
  * @property {number} detonations
  * @property {number} waitingIntegral   Σ over users of the ticks they spent unable to move
- * @property {{ placed: number, generated: number, analyzed: number, waited: number }} verbs
+ * @property {{ placed: number, generated: number, analyzed: number, waited: number, betas: number }} verbs
+ * @property {number} firstServedTick   turn the first user arrived, -1 if nobody did
+ * @property {number} handStreak        longest run of consecutive hand placements (2026-11-02)
+ * @property {number} handShare         hand placements / turns spent building or reading
+ * @property {number} closeCalls        users served with two turns of patience or fewer left
  * @property {number} refunds
  * @property {boolean} guessForced      deduction was impossible at some sampled moment
  * @property {boolean} bailed           the solver gave up on a component at some point
@@ -51,7 +56,7 @@ export const MAX_TICKS = 400;
  * @property {number} detonationsPerGame
  * @property {number} waitingPerGame
  * @property {number} refundsPerGame
- * @property {{ placed: number, generated: number, analyzed: number, waited: number }} verbs
+ * @property {{ placed: number, generated: number, analyzed: number, waited: number, betas: number }} verbs
  * @property {number} guessForcedRate
  * @property {number} bailedRate
  * @property {number} rejects
@@ -78,11 +83,20 @@ export function runGame(def, policy, seed, opts = {}) {
   let guessForced = false;
   let bailed = false;
   let stalls = 0;
+  let freeRun = 0;
+  let firstServedTick = -1;
+  // FUN METRICS (owner, 2026-11-02): a run of easy hand placements is a chore, and a user
+  // served on their last turn of patience is the game at its best. Both are measured.
+  let streak = 0;
+  let handStreak = 0;
+  let busy = 0;
+  let closeCalls = 0;
 
   while (s.phase.k === 'play' || s.phase.k === 'placing') {
     if (s.tick >= maxTicks) break;
     const before = s.tick;
     const beforePhase = s.phase.k;
+    const prev = s;
     const action = bot.act(s);
     const r = reduce(s, action);
     s = r.s;
@@ -91,9 +105,20 @@ export function runGame(def, policy, seed, opts = {}) {
     for (const e of r.ev) {
       if (e.t === 'generateRefunded') refunds++;
       else if (e.t === 'rejected') rejects++;
+      else if (e.t === 'arrived') {
+        if (firstServedTick < 0) firstServedTick = s.tick;
+        const u = s.users[e.user];
+        if (u && patienceLimit(s, u) - u.waited <= 2) closeCalls++;
+      }
       // Cause of death is not stored on the user, so book it from the event that announced
       // it — the reducer already publishes exactly the split we want to report.
       else if (e.t === 'userLost') (e.reason === 'gaveUp' ? lostGaveUp++ : lostDetonation++);
+    }
+
+    if (s.tick !== before) {
+      if (action.t === 'place') { streak++; if (streak > handStreak) handStreak = streak; }
+      else streak = 0;
+      if (action.t !== 'wait') busy++;
     }
 
     // Sampled after the verbs that change what is knowable (PLAN §13).
@@ -106,8 +131,13 @@ export function runGame(def, policy, seed, opts = {}) {
     // Generate and a refund both leave the clock alone by design, so "no tick" is not a
     // stall — "no tick and no phase change" is. A bot that does that repeatedly is broken,
     // and the batch stops rather than spinning; `rejects` in the table says so.
-    stalls = (s.tick === before && s.phase.k === beforePhase) ? stalls + 1 : 0;
-    if (stalls > 32) break;
+    // A flag is free and changes the board without a tick, so "nothing moved" is judged by
+    // the state object itself (a rejected or refunded action hands the same one back), with a
+    // generous cap on free actions in a row as the backstop.
+    stalls = (r.s === prev || (s.tick === before && s.phase.k === beforePhase && action.t !== 'flag'))
+      ? stalls + 1 : 0;
+    freeRun = s.tick === before ? freeRun + 1 : 0;
+    if (stalls > 32 || freeRun > 400) break;
   }
 
   let waitingIntegral = 0;
@@ -129,7 +159,12 @@ export function runGame(def, policy, seed, opts = {}) {
       generated: s.stats.generated,
       analyzed: s.stats.analyzed,
       waited: s.stats.waited,
+      betas: s.stats.betas,
     },
+    firstServedTick,
+    handStreak,
+    handShare: busy ? s.stats.placed / busy : 0,
+    closeCalls,
     refunds,
     guessForced,
     bailed,
@@ -178,6 +213,7 @@ export function runGames(def, policy, n, seed, opts = {}) {
       generated: mean(games.map((g) => g.verbs.generated)),
       analyzed: mean(games.map((g) => g.verbs.analyzed)),
       waited: mean(games.map((g) => g.verbs.waited)),
+      betas: mean(games.map((g) => g.verbs.betas)),
     },
     guessForcedRate: n ? games.filter((g) => g.guessForced).length / n : 0,
     bailedRate: n ? games.filter((g) => g.bailed).length / n : 0,

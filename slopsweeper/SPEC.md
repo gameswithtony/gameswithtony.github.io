@@ -485,6 +485,12 @@ Ocean cells are known-empty and count as zero for clue purposes. *(Throughout th
 >   has either arrived or gone. **Score is arrivals.** One is a win, all of them is the goal,
 >   none is a loss.
 >
+> *(Revised 2026-11-02 by owner decision: **a level states its own goal.** `LevelDef.goal`
+> (default 1) is the number of arrivals that clears it, and the level is won when every user
+> has resolved and `served >= goal`. The campaign is twelve levels in registry order, and a
+> cleared level is the progress a player sees, which made "one arrival is a win" too low a bar
+> to mean anything. Every level is open to play; nothing is locked. `src/levels/README.md` §0 has the rules the goals are tuned to.)*
+>
 > `CONFIDENCE_START`, `WAIT_DRAIN_PER_USER`, `DETONATE_HIT` and `SERVED_BONUS` are deleted.
 > **The metaphor survives as flavour** — stakeholder confidence is a fine thing to call the
 > HUD's remaining-users readout, and §8.1's "AI is the exchange rate" framing still describes

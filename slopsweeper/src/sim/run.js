@@ -109,13 +109,13 @@ for (const id of args.levels) {
 
 console.log(`# slop-sweeper sim — ${args.games} games/cell, seed ${args.seed}\n`);
 console.log(markdownTable(
-  ['level', 'policy', 'served', 'perfect', 'win', 'score', 'gaveUp', 'killed', 'medTicks',
+  ['level', 'policy', 'served', 'perfect', 'win', 'score', 'gaveUp', 'failed', 'medTicks',
     'dets', 'waitΣ', 'place', 'gen', 'analyze', 'refund', 'guess', 'bad'],
   rows,
 ));
 console.log(`\n_${rows.length} cells in ${((Date.now() - started) / 1000).toFixed(1)}s. `
   + '**served** is the headline: mean users delivered / scheduled. perfect = every user '
   + 'delivered; win = at least one, so it reads high by design. score is mean users served; '
-  + 'gaveUp/killed split the losses by cause; medTicks is over winning games; waitΣ is the '
+  + 'gaveUp/failed split the losses by cause (patience, a bug); medTicks is over winning games; waitΣ is the '
   + 'total ticks users spent unable to move; guess is the share of games where deduction was '
   + 'ever impossible on a live route; bad counts rejected bot actions (should be ·)._');

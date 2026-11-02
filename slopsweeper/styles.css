@@ -777,73 +777,6 @@ body.starting #board > * { visibility: hidden; }
 .drawer-head h2 { margin-right: auto; }
 #roster-close, #drawer-close { padding: 4px 8px; flex: none; }
 
-/* The list scrolls INSIDE the card, like every other overlay here: the page behind it is a
-   fixed-height grid and must not learn that a long roster exists. */
-#roster-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.ru-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  padding: 5px 7px;
-  border: 1px solid var(--edge);
-  border-radius: 3px;
-  background: var(--void);
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--paper);
-  text-align: left;
-}
-
-button.ru-row { cursor: pointer; }
-button.ru-row:hover { border-color: var(--select); }
-
-.ru-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ru-state { flex: none; font-size: 10px; letter-spacing: 0.1em; }
-/* The stops still owed, in the letters the board is wearing (B·D). Paper, the name's own tone:
-   the itinerary is a fact about the person, like their name, and the coloured word between them
-   is the only status on the row. Coast was the first choice and is wrong — WAITING is already
-   coast, so "WAITING B·D" came out as one four-character status nobody could parse. Never
-   wraps; the name beside it is the elastic one. */
-.ru-todo { flex: none; font-size: 10px; letter-spacing: 0.08em; color: var(--paper); white-space: nowrap; }
-/* Fixed and right-aligned: the countdowns are a column you read down, not a ragged edge. */
-.ru-left { flex: none; min-width: 78px; text-align: right; font-size: 10px; color: var(--dim); }
-
-/* Each status wears the colour of the thing it describes on the board: the user dot's yellow
-   for a walker, the beta tile's green for somebody camped on one. */
-.ru-row.s-queued .ru-state { color: var(--dim); }
-.ru-row.s-walking .ru-state { color: var(--user); }
-.ru-row.s-waiting .ru-state { color: var(--coast); }
-.ru-row.s-beta .ru-state { color: var(--ok); }
-
-/* Resolved rows are history: greyed as a whole, with the one word that says which kind of
-   history keeping its colour. */
-.ru-row.done { opacity: 0.5; }
-.ru-row.done.good .ru-state { color: var(--ok); }
-.ru-row.done.bad .ru-state { color: var(--red); }
-
-.ru-left.urgent { color: var(--red); }
-.ru-left.paused { opacity: 0.55; }
-
-.ru-sep {
-  padding: 8px 7px 2px;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  color: var(--dim);
-}
-
-.ru-empty { padding: 10px 7px; font-size: 11px; color: var(--dim); }
-
 /* --- the menu drawer (src/ui/drawer.js) ---------------------------------------------
    The roster's twin on the other edge of the screen, and deliberately built out of the same
    parts: scrim you can tap through, card hung under the top bar rather than over it, Esc to
@@ -1198,4 +1131,242 @@ button.ru-row:hover { border-color: var(--select); }
 @media (max-width: 720px) {
   .lab-body { grid-template-columns: minmax(0, 1fr); }
   #lab-map { min-height: 150px; }
+}
+
+/* --- the users panel (src/ui/roster.js, 2026-11-02) ----------------------------------
+   Always on screen. Wide: a column beside the board holding the full list. Narrow: a
+   fixed-height strip between the top bar and the board; tap it for the full list as a sheet
+   (#roster). Both are fixed sizes, so the board is still a pure function of the viewport. */
+:root { --side-w: 272px; --strip-h: 0px; }
+
+body {
+  grid-template-columns: minmax(0, 1fr) var(--side-w);
+  grid-template-areas:
+    "top   top"
+    "board side"
+    "hud   hud";
+}
+#topbar { grid-area: top; }
+#board { grid-area: board; }
+#people { grid-area: side; }
+#hud { grid-area: hud; }
+
+#people {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--chrome);
+  border-left: 1px solid var(--edge);
+}
+#people.flash { animation: pp-flash 600ms ease-out; }
+@keyframes pp-flash { from { box-shadow: inset 0 0 0 2px var(--select); } }
+
+.pp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--edge);
+}
+.pp-head h2 { margin: 0; font-size: 12px; font-weight: 400; letter-spacing: 0.16em; color: var(--coast); }
+#pp-tally { margin-left: auto; font-size: 10px; color: var(--dim); white-space: nowrap; }
+
+#pp-list, #roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#pp-list { flex: 1 1 auto; }
+
+.pp-sep { padding: 6px 2px 1px; font-size: 10px; letter-spacing: 0.16em; color: var(--dim); }
+.pp-sep:first-child { padding-top: 0; }
+
+.pp-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background: var(--void);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  text-align: left;
+  white-space: normal;
+}
+button.pp-row { cursor: pointer; }
+button.pp-row:hover { border-color: var(--select); }
+
+/* The countdown box: turns of patience left, the number the row is sorted by. */
+.pp-left, .pp-in {
+  flex: none;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  background: var(--edge);
+}
+.pp-left b { font-size: 18px; line-height: 1; }
+.pp-in span { font-size: 8px; letter-spacing: 0.12em; color: var(--dim); line-height: 1.2; }
+.pp-in b { font-size: 14px; line-height: 1; color: var(--user); }
+
+.pp-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pp-l1, .pp-l2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pp-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-state { flex: none; font-size: 9px; letter-spacing: 0.1em; color: var(--dim); }
+
+/* Stops: bright = owed and live, dim = owed later (ordered lists), struck = visited. An
+   ordered list's arrows are select blue so a sequence reads differently from a set. */
+.pp-stops { flex: none; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; }
+.pp-stops .st-now { color: var(--paper); }
+.pp-stops .st-later { color: var(--dim); }
+.pp-stops .st-done { color: #4a5568; text-decoration: line-through; }
+.pp-join { color: var(--dim); font-weight: 400; margin: 0 1px; }
+.pp-stops.ordered .pp-join { color: var(--select); }
+
+/* NEXT and the stop it names. No patience bar: the panel shows where a user goes and, for the
+   stuck, when they quit, never how long they have waited so far (owner rule, 2026-11-02). */
+.pp-next { flex: none; font-size: 9px; letter-spacing: 0.12em; color: var(--dim); }
+.pp-next b { font-size: 12px; letter-spacing: 0.04em; color: var(--paper); }
+.pp-l2 .pp-stops { margin-left: auto; }
+.pp-left span { font-size: 7px; letter-spacing: 0.1em; color: var(--dim); line-height: 1.3; }
+.pp-go { background: transparent; }
+.pp-go b { color: var(--user); font-size: 16px; }
+
+.pp-row.s-queued .pp-state { color: var(--coast); }
+.pp-row.s-waiting .pp-state { color: var(--coast); }
+.pp-row.s-beta .pp-state { color: var(--ok); }
+.pp-row.s-walking { background: transparent; }
+.pp-row.s-walking .pp-state { color: var(--user); }
+
+/* Two thirds of the patience spent: the quit countdown goes red. */
+.pp-row.warn .pp-left b { color: var(--red); }
+
+/* Two turns or fewer: the whole row is the alarm. */
+.pp-row.urgent { border-color: var(--red); background: rgba(212, 64, 92, 0.2); }
+.pp-row.urgent .pp-left { background: var(--red); animation: pp-pulse 900ms ease-in-out infinite alternate; }
+.pp-row.urgent .pp-left b, .pp-row.urgent .pp-left span { color: var(--ink); }
+.pp-row.urgent .pp-state { color: var(--red); font-weight: 700; }
+@keyframes pp-pulse { to { background: #ff7a90; } }
+@media (prefers-reduced-motion: reduce) { .pp-row.urgent .pp-left { animation: none; } }
+
+/* Not here yet: a dashed outline, the arrival countdown in user yellow. */
+.pp-row.coming { border-style: dashed; background: transparent; }
+
+/* Done is one tally line. */
+.pp-tally .good { color: var(--ok); }
+.pp-tally .bad { color: var(--red); }
+
+/* The phone strip. Hidden on wide screens, where the column is the full list. */
+#pp-strip { display: none; }
+
+/* The level chip carries "03 NAME" now. Wide screens have the room for the name; the narrow
+   bands keep the measured 58px their wrap-point sums were written against. */
+#btn-levels #level-name { width: 150px; }
+@media (max-width: 899px) { #btn-levels #level-name { width: 58px; } }
+
+#btn-brief, #btn-levels-menu { justify-content: center; }
+
+/* --- goal readout on the bar ------------------------------------------------------- */
+#score.met #sc-label, #score.met #sc-served { color: var(--ok); }
+#score.missed #sc-label, #score.missed #sc-served { color: var(--red); }
+
+/* --- briefing card ------------------------------------------------------------------ */
+.brief-card { gap: 8px; text-align: left; align-items: stretch; width: min(520px, 100%); }
+.brief-chapter { font-size: 11px; letter-spacing: 0.22em; color: var(--dim); }
+.brief-name { margin: 0; font-size: clamp(20px, 6vw, 28px); font-weight: normal; letter-spacing: 0.12em; color: var(--coast); }
+.brief-story {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--paper);
+  max-height: 50vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.brief-goal { margin: 2px 0 6px; font-size: 13px; letter-spacing: 0.06em; color: var(--user); }
+.brief-card .overlay-actions { justify-content: flex-start; }
+#brief-start { border-color: var(--ok); color: var(--ok); }
+
+/* --- level select: campaign states --------------------------------------------------- */
+.level-card.next { border-color: var(--user); }
+.level-best { font-size: 10px; letter-spacing: 0.08em; color: var(--dim); }
+.level-best.cleared { color: var(--ok); }
+.level-best.next { color: var(--user); }
+
+/* --- end screens ---------------------------------------------------------------------- */
+#win-next { border-color: var(--ok); color: var(--ok); }
+.lose-score { align-self: center; font-size: 11px; letter-spacing: 0.12em; color: var(--red); text-align: center; }
+
+/* --- narrow: the panel becomes a strip ---------------------------------------------------
+   topbar · strip 40 · board · footer. The strip shows the stuck (most urgent first, the
+   number is turns until they leave), a walking count, and the next arrivals; tapping it
+   opens the full list as the #roster sheet. */
+@media (max-width: 899px) {
+  :root { --strip-h: 40px; }
+
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows:
+      var(--top-h)
+      var(--strip-h)
+      minmax(0, 1fr)
+      calc(var(--hud-h) + env(safe-area-inset-bottom, 0px));
+    grid-template-areas: "top" "strip" "board" "hud";
+  }
+  #people { grid-area: strip; border-left: 0; border-bottom: 1px solid var(--edge); }
+  #people .pp-head, #pp-list { display: none; }
+
+  #pp-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    height: 100%;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 0;
+    background: var(--chrome);
+    overflow: hidden;
+    cursor: pointer;
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+    mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .ps-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    height: 28px;
+    padding: 0 7px;
+    border: 1px solid var(--edge);
+    border-radius: 3px;
+    background: var(--void);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--paper);
+  }
+  .ps-chip b { font-size: 15px; line-height: 1; }
+  .ps-chip .pp-stops { font-size: 11px; }
+  .ps-chip.warn b { color: var(--red); }
+  .ps-chip.urgent { border-color: var(--red); background: var(--red); color: var(--ink); }
+  .ps-chip.urgent .pp-stops .st-now, .ps-chip.urgent .pp-join, .ps-chip.urgent b { color: var(--ink); }
+  .ps-chip.s-walking { color: var(--user); background: transparent; }
+  .ps-chip.coming { border-style: dashed; background: transparent; }
+  .ps-in { color: var(--user); }
+
+  /* The sheet covers the board and leaves the strip that opened it visible. */
+  #roster { padding-top: calc(var(--top-h) + var(--strip-h) + 4px); }
 }

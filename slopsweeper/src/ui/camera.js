@@ -81,8 +81,29 @@ export function fitArtPx(cam, s) {
 export function fit(cam, s) {
   cam.minArtPx = fitArtPx(cam, s);
   cam.artPx = cam.minArtPx;
-  centerOnBBox(cam, s);
+  // A wide board on a portrait phone fits at tiles too small to tap (2026-11-02). Open it at
+  // a tappable size instead, but never past the zoom where the board's height fills the
+  // screen, and start on the origin, where the first turns happen. Pinch or "−" still reaches
+  // the whole-board floor.
+  const bh = (s.bbox.y1 - s.bbox.y0 + 1) * RULES.ART_PX_PER_TILE;
+  const tappable = Math.ceil((TAP_TILE_CSS * cam.dpr) / RULES.ART_PX_PER_TILE);
+  const heightFill = Math.floor(cam.ch / bh);
+  const start = clamp(Math.min(tappable, heightFill), cam.minArtPx, cam.maxArtPx);
+  // Touch only: a mouse can hit a 16-pixel tile, and at device pixel ratio 1 the next zoom step
+  // up crops the board on a laptop screen.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  if (!touch || start <= cam.minArtPx) {
+    centerOnBBox(cam, s);
+    return;
+  }
+  cam.artPx = start;
+  const o = s.origin;
+  centerOnPoint(cam, (o % s.w) + 0.5, Math.floor(o / s.w) + 0.5);
+  clampPan(cam, s);
 }
+
+/** The smallest tile, in CSS pixels, a level opens at when the screen allows it. */
+const TAP_TILE_CSS = 24;
 
 /**
  * Re-derive the floor after a resize, keeping the view roughly where it was.

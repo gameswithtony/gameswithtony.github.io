@@ -150,7 +150,7 @@
 //     much better, and this note is not going to pretend otherwise.
 //   · **Every AI figure above is a floor**, for the same reason (`src/sim/policies.js`, top).
 
-/** @type {import('./index.js').LevelDef} */
+/** @type {import('../../../src/levels/index.js').LevelDef} */
 export const channel = {
   id: 'channel',
   name: 'The Channel',
