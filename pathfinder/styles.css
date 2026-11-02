@@ -436,6 +436,7 @@ button.hud-stat { cursor: pointer; }
 .bp-opt .pts, .bp-opt .cost { font: 700 12px var(--font-hud); color: #314454; }
 .sci-opt { align-items: stretch; text-align: left; }
 .opt.space.mars { background: var(--mars-cell-2); border-color: var(--mars-cell-line); }
+.opt .why { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
 .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .mp { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tag { font: 600 11px var(--font-hud); padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }

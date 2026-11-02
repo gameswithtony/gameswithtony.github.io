@@ -170,6 +170,12 @@ export const PromptDock = {
     <button class="btn primary wide" @click="go(true)"><Ic n="check" :s="18"/>OK</button>
   </div>
 
+  <!-- ===================== a bonus that can't be used ===================== -->
+  <div v-else-if="q==='lost'" class="dock-body">
+    <p class="hint big"><Ic :n="T_SPACE[pr.ben].ic" :s="18"/>{{ T_SPACE[pr.ben].long }}: {{ T_BLOCK[pr.why] }}</p>
+    <button class="btn primary wide" @click="go(true)"><Ic n="check" :s="18"/>OK</button>
+  </div>
+
   <!-- ===================== game over ===================== -->
   <div v-else-if="pr.kind==='over'" class="dock-body over">
     <h3 class="verdict" :class="result.win ? 'win' : 'lose'"><Ic :n="result.win ? 'trophy' : 'pf'" :s="24"/>{{ result.win ? 'You win!' : 'Pathfinder wins' }}</h3>
@@ -318,6 +324,7 @@ export const PromptDock = {
           <b class="lvlbig">{{ n }}</b>
           <span v-if="spaceBen(n)"><Ic :n="spaceBen(n).ic" :s="18"/><small>{{ spaceBen(n).long }}</small></span>
           <small v-else class="muted">no bonus</small>
+          <small v-if="pr.blocked && pr.blocked[n]" class="why"><Ic n="lock" :s="11"/>{{ T_BLOCK[pr.blocked[n]] }}</small>
         </button>
       </template>
       <template v-else>
@@ -339,3 +346,4 @@ PromptDock.computed.T_GOAL = () => T.GOAL;
 PromptDock.computed.T_GOAL_R = () => T.GOAL_R;
 PromptDock.computed.T_BLOCK = () => T.BLOCK;
 PromptDock.computed.T_TN = () => T.TECH_NAME;
+PromptDock.computed.T_SPACE = () => T.SPACE;

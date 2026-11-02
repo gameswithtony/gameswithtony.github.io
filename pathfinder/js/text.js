@@ -68,7 +68,8 @@ export const LSS_TILE = {
 export const LSS_BEN = { bots: { ic: 'bot', long: 'Bots move 2' }, mineral: { ic: 'mineral', long: '+1 mineral' }, crystal: { ic: 'crystal', long: '+1 crystal' }, retrieve: { ic: 'retrieve', long: 'Retrieve a colonist' } };
 export const SPACE = { warehouse: { ic: 'warehouse', long: 'Take 1 from warehouse' }, tech: { ic: 'tech', long: 'Take a tech (pay)' }, colonist: { ic: 'colonist', long: 'Pay water/plant: +1 colonist home' }, bots: { ic: 'bot', long: 'Bots move 2' }, blueprint: { ic: 'blueprint', long: 'Take a blueprint' } };
 export const LAB_BEN = { warehouse: 'warehouse', crystal: 'crystal', mineral: 'mineral', bots: 'bot', upgrade: 'upgrade', blueprint: 'blueprint' };
-export const BLOCK = { busy: 'Your colonist is already there', colonist: 'No colonist at home', cost: "Can't pay", none: 'Nothing possible', level: 'Ship limit = colony level', ship: 'Locked by a ship', full: 'Storage full' };
+export const BLOCK = { busy: 'Your colonist is already there', colonist: 'No colonist at home', cost: "Can't pay", none: 'Nothing possible', level: 'Ship limit = colony level', ship: 'Locked by a ship', full: 'Storage full',
+    labFull: 'Lab column 1 full', noMarker: 'No markers left', noSupply: 'No colonists in supply', lqFull: 'Living quarters full' };
 export const TITLE = {
     menu: ['play', 'Your turn'], boost: ['boost', 'Boost?'], slotCost: ['colonist', 'Slot cost'], blueprint: ['blueprint', 'Take blueprint'],
     tech: ['tech', 'Take tech'], labSpace: ['tech', 'Lab space'], develop: ['develop', 'Develop'], devTo: ['develop', 'Move to'],
@@ -80,7 +81,7 @@ export const TITLE = {
     goalReward: ['goal', 'Goal reward'], techReward: ['tech', 'Your tech was used'], travel: ['shuttle', 'Travel?'], discPick: ['discovery', 'Which tile?'],
     discHex: ['discovery', 'Place tile'], space: ['clock', 'Turn order'], movePick: ['rover', 'Move'], moveTo: ['rover', 'Move to'],
     displace: ['bot', 'Displaced: move to'], placeBot: ['bot', 'Place new bot'], produceExtra: ['production', 'Produce again'],
-    pfTurn: ['pf', 'Pathfinder'], over: ['trophy', 'Game over'],
+    pfTurn: ['pf', 'Pathfinder'], over: ['trophy', 'Game over'], lost: ['lock', 'Bonus could not be used'],
 };
 export const RES_NAME = { mineral: 'Mineral', battery: 'Battery', water: 'Water', plant: 'Plant', oxygen: 'Oxygen', crystal: 'Crystal', colonist: 'Colonist', goal: 'Goal card', any: 'Any' };
 export const TYPE_IC = { mine: 'mine', gen: 'gen', water: 'water', green: 'plant', oxy: 'oxygen', shelter: 'shelter' };

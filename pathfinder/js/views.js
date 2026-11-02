@@ -568,7 +568,7 @@ export const LogPanel = {
     },
     methods: {
         ic(e) {
-            const m = { build: 'shelter', bp: 'blueprint', tech: 'tech', develop: 'develop', ware: 'warehouse', sci: 'scientist', contract: 'contract', upgrade: 'upgrade', bots: 'bot', bot: 'bot', ship: 'ship', travel: 'travel', space: 'clock', mission: 'mission', lss: 'lss', progress: 'level', level: 'level', disc: 'discovery', research: 'research', exec: 'exec', adv: 'adv', goal: 'goal', retrieve: 'retrieve', shuttle: 'shuttle', round: 'clock', final: 'trophy', end: 'flag', start: 'flag', shuffle: 'deck', deliver: 'contract', clear: 'colonist' };
+            const m = { build: 'shelter', bp: 'blueprint', tech: 'tech', develop: 'develop', ware: 'warehouse', sci: 'scientist', contract: 'contract', upgrade: 'upgrade', bots: 'bot', bot: 'bot', ship: 'ship', travel: 'travel', space: 'clock', mission: 'mission', lss: 'lss', progress: 'level', level: 'level', disc: 'discovery', research: 'research', exec: 'exec', adv: 'adv', goal: 'goal', retrieve: 'retrieve', shuttle: 'shuttle', round: 'clock', final: 'trophy', end: 'flag', start: 'flag', shuffle: 'deck', deliver: 'contract', clear: 'colonist', lost: 'lock' };
             return m[e.k] || T.ACTION[e.k]?.ic || 'arrow';
         },
     },

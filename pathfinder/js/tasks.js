@@ -206,6 +206,35 @@ H.slot = (st, t, a) => {
     return DONE;
 };
 
+// ---------------------------------------------------------------- bonuses that can't be used
+/** Why a take-something bonus can't be used right now ('' = it can). */
+export function benBlock(st, ben) {
+    const p = you(st);
+    switch (ben) {
+        case 'tech':
+            if (p.lab['1a'] && p.lab['1b']) return 'labFull';
+            return techChoices(st).length ? '' : techChoices(st, false).length ? 'cost' : 'none';
+        case 'blueprint':
+            if (!p.ab) return 'noMarker';
+            return bpCards(st).length ? '' : 'none';
+        case 'warehouse':
+            if (D.WARE.some(w => st.ware[w] > 0 && canStore(st, YOU, w))) return '';
+            return D.WARE.some(w => st.ware[w] > 0) ? 'full' : 'none';
+        case 'colonist':
+            if (!p.col.sup) return 'noSupply';
+            if (p.col.lq >= lqCap(st, YOU)) return 'lqFull';
+            return payOptions(p, ['water']).length || payOptions(p, ['plant']).length ? '' : 'cost';
+    }
+    return '';
+}
+/** A bonus that does nothing at all: say so and wait for OK, instead of skipping silently. */
+function lost(st, t, ben) {
+    t.lost = true;
+    const why = benBlock(st, ben) || 'none';
+    log(st, 'you', 'lost', `${({ tech: 'Tech', blueprint: 'Blueprint', warehouse: 'Warehouse', colonist: 'Colonist' })[ben]} bonus could not be used`);
+    ask(st, { kind: 'ack', q: 'lost', ben, why });
+}
+
 // ---------------------------------------------------------------- blueprints
 export function bpCards(st) {
     const out = [];
@@ -223,14 +252,16 @@ export function takeBlueprint(st, pi, id) {
 }
 H.takeBp = (st, t, a) => {
     const p = you(st);
+    if (t.lost) return DONE;
     if (a) {
         if (a.v === 'done') return DONE;
         takeBlueprint(st, YOU, a.v);
         contribute(st, YOU, 'blueprint');
         log(st, 'you', 'bp', D.bp(a.v).name, { bp: a.v });
-        t.n--;
+        t.n--; t.got = true;
     }
-    if (t.n <= 0 || !p.ab || !bpCards(st).length) return DONE;
+    if (t.n <= 0) return DONE;
+    if (!p.ab || !bpCards(st).length) { if (t.got) return DONE; lost(st, t, 'blueprint'); return; }
     ask(st, { kind: 'pick', q: 'blueprint', cards: bpCards(st), left: t.n, skip: true });
 };
 
@@ -243,6 +274,7 @@ export function techChoices(st, pay = true) {
 }
 H.takeTech = (st, t, a) => {
     const p = you(st);
+    if (t.lost) return DONE;
     if (t.s === 0) {
         if (a) {
             if (a.v === 'done') return DONE;
@@ -250,7 +282,8 @@ H.takeTech = (st, t, a) => {
             if (t.pay !== false) { push(st, { t: 'pay', cost: D.GRID_COST[t.i], s: 0 }); return; }
         } else {
             const ch = techChoices(st, t.pay !== false);
-            if (t.n <= 0 || !ch.length) return DONE;
+            if (t.n <= 0) return DONE;
+            if (!ch.length) { if (t.got) return DONE; lost(st, t, 'tech'); return; }
             ask(st, { kind: 'pick', q: 'tech', techs: ch, left: t.n, skip: true });
             return;
         }
@@ -264,7 +297,7 @@ H.takeTech = (st, t, a) => {
         p.lab[pos] = tech;
         contribute(st, YOU, 'tech');
         log(st, 'you', 'tech', D.TECHS[tech].name, { tech });
-        t.n--; t.s = 0;
+        t.n--; t.s = 0; t.got = true;
         push(st, { t: 'labBen', pos, s: 0 });
         return;
     }
@@ -330,15 +363,17 @@ H.labBen = (st, t, a) => {
 
 // ---------------------------------------------------------------- warehouse
 H.ware = (st, t, a) => {
+    if (t.lost) return DONE;
     if (a) {
         if (a.v === 'done') return DONE;
         st.ware[a.v]--;
         gain(st, YOU, a.v);
         log(st, 'you', 'ware', `Warehouse: ${a.v}`, { item: a.v });
-        t.n--;
+        t.n--; t.got = true;
     }
     const items = D.WARE.filter(w => st.ware[w] > 0 && canStore(st, YOU, w));
-    if (t.n <= 0 || !items.length) return DONE;
+    if (t.n <= 0) return DONE;
+    if (!items.length) { if (t.got) return DONE; lost(st, t, 'warehouse'); return; }
     ask(st, { kind: 'pick', q: 'warehouse', items, left: t.n, skip: true });
 };
 
@@ -1274,7 +1309,10 @@ H.space = (st, t, a) => {
     const p = you(st);
     if (!a) {
         const range = t.side === 'orbit' ? [1, 2, 3, 4] : t.side === 'colony' ? [5, 6, 7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
-        ask(st, { kind: 'pick', q: 'space', spaces: range.filter(n => !spaceTaken(st, n)), first: !!t.first });
+        const spaces = range.filter(n => !spaceTaken(st, n));
+        const blocked = {};
+        for (const n of spaces) { const ben = D.TURN_SPACES[n], why = ben && ben !== 'bots' ? benBlock(st, ben) : ''; if (why) blocked[n] = why; }
+        ask(st, { kind: 'pick', q: 'space', spaces, blocked, first: !!t.first });
         return;
     }
     p.space = a.v; p.side = sideOf(a.v);
@@ -1285,16 +1323,16 @@ H.space = (st, t, a) => {
 };
 H.spaceBen = (st, t, a) => {
     const p = you(st);
+    if (t.lost) return DONE;
     switch (t.ben) {
         case 'warehouse': push(st, { t: 'ware', n: 1 }); return DONE;
         case 'tech': push(st, { t: 'takeTech', n: 1, s: 0 }); return DONE;
         case 'bots': push(st, { t: 'move', bot: 2, rover: 0, cr: true, s: 0 }); return DONE;
         case 'blueprint': push(st, { t: 'takeBp', n: 1 }); return DONE;
         case 'colonist': {
-            if (!p.col.sup || p.col.lq >= lqCap(st, YOU)) return DONE;
+            if (benBlock(st, 'colonist')) { lost(st, t, 'colonist'); return; }
             const opts = payOptions(p, ['water']).concat(payOptions(p, ['plant']));
             const uniq = opts.filter((b, i) => opts.findIndex(x => JSON.stringify(x) === JSON.stringify(b)) === i);
-            if (!uniq.length) return DONE;
             if (!a) { ask(st, { kind: 'pick', q: 'pay', bags: uniq, skip: true, why: 'colonist' }); return; }
             if (a.v === 'done') return DONE;
             for (const k in a.v) p.res[k] -= a.v[k];

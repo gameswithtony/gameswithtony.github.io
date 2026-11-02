@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { HEXES, dist, neighbors, cardOrder, step } from '../js/hex.js';
 import { newGame, answer, choices, scoreBreakdown, YOU, PF } from '../js/engine.js';
 import { buildSpots, slotCost, placeOnSlot, lqScore, colonyUpdateDue, payOptions, H } from '../js/core.js';
-import { construct } from '../js/tasks.js';
+import { construct, benBlock } from '../js/tasks.js';
 import { resupply, pfConstruct, moveBots } from '../js/pathfinder.js';
 import * as D from '../js/data.js';
 
@@ -180,6 +180,20 @@ test('Pathfinder end scoring: no blueprint penalty, quarters full, contracts kep
     assert.equal(pf.blueprints, 0); assert.equal(you.blueprints, -5);
     assert.equal(pf.contracts, 9); assert.equal(you.contracts, -4);
     assert.equal(pf.colonists, 3, '4 slots with one shelter → 3 OP');
+});
+
+test('an unusable turn-space bonus is flagged, then announced instead of skipped', () => {
+    let st = null;
+    for (let seed = 1; seed < 50 && !st; seed++) { const g = fresh({ seed }); if (g.prompt.q === 'space' && g.prompt.spaces.includes(3)) st = g; }
+    assert.ok(st, 'a game whose first prompt offers turn space 3');
+    const p = st.p[YOU];
+    p.lab['1a'] = 'rover'; p.lab['1b'] = 'upgrade';        // column 1 full: space 3's tech bonus can't be used
+    assert.equal(benBlock(st, 'tech'), 'labFull');
+    st = answer(st, 3);
+    assert.equal(st.prompt.q, 'lost');
+    assert.equal(st.prompt.why, 'labFull');
+    st = answer(st, true);
+    assert.notEqual(st.prompt.q, 'lost');
 });
 
 test('a full game is deterministic for a seed and answers', () => {

@@ -212,6 +212,7 @@ export function card({ k, id }) {
 const WHY = {
     busy: 'Your colonist is already on this action.', colonist: 'You have no colonist at home to send.', cost: "You can't pay for it.",
     none: 'There is nothing it could do right now.', level: "Ships welcomed can't exceed the colony level.", ship: 'A ship still covers this action.', full: 'Your storage is full.',
+    labFull: 'Both column 1 lab spaces are taken.', noMarker: 'You have no advanced markers left.', noSupply: 'No colonists are left in your supply.', lqFull: 'Your living quarters are full.',
 };
 const why = r => r ? (WHY[r] || `${T.BLOCK[r] || r}.`) : null;
 const lab = pos => ({ k: pos, ben: D.LAB.find(l => l.k === pos).ben, tech: null });
@@ -232,7 +233,7 @@ export function choice(st, pr, v) {
     }
     switch (q) {
         case 'boost': return { ic: 'boost', t: `Boost +${v}`, v: v ? `${plural(v, 'colonist')} to work` : 'No boost', d: [v ? 'They move from home to your working area.' : 'Your colonists stay home.', `${p.col.lq} at home.`] };
-        case 'pfTurn': return { ic: 'check', t: 'OK', v: 'Continue', d: [] };
+        case 'pfTurn': case 'lost': return { ic: 'check', t: 'OK', v: 'Continue', d: [] };
         case 'slotCost': return { ic: 'colonist', t: 'Pay the slot cost', v: lines(v.cr && plural(v.cr, 'crystal'), v.col && plural(v.col, 'colonist')).join(' + '), d: ['Colonists already here raise the cost.', 'Colonists paid go to your working area.'] };
         case 'blueprint': return { ...blueprint(v), t: `Take: ${D.bp(v).name}` };
         case 'upgradeBp': return { ...blueprint(v), t: `Upgrade with: ${D.bp(v).name}` };
@@ -270,7 +271,7 @@ export function choice(st, pr, v) {
         case 'travel': return v === 'go'
             ? { ic: pr.to === 'orbit' ? 'orbit' : 'mars', t: `Go to ${pr.to === 'orbit' ? 'Orbit' : 'Mars'}`, v: pr.free ? 'Free ride' : 'Costs a hangar ship', d: ['Your colonists there come home, then you pick a turn order space.'] }
             : { ic: 'x', t: 'Stay', v: 'Keep your turn order space', d: [] };
-        case 'space': return { ...turnSpace(st, { n: v, who: -1, done: false }), t: `Take turn order ${v}`, v: v <= 4 ? 'Orbit' : 'Mars' };
+        case 'space': { const t = turnSpace(st, { n: v, who: -1, done: false }), b = pr.blocked && pr.blocked[v]; return { ...t, t: `Take turn order ${v}`, v: v <= 4 ? 'Orbit' : 'Mars', d: b ? [...t.d, `Bonus can't be used now: ${WHY[b]}`] : t.d }; }
     }
     if (pr.kind === 'hex') {
         const b = { crBot: ['crystal', 'Extra bot move', 'Costs 1 crystal.'], crRover: ['crystal', 'Extra rover move', 'Costs 1 crystal.'], tech: ['tech', 'Rover tech', `Add ${pr.techLevel} rover moves from Faster Rovers${pr.techOwner === PF ? ' (Pathfinder\'s: it may develop it)' : ''}.`] }[v];
