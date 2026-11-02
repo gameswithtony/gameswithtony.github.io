@@ -36,7 +36,7 @@ The repository is organized as a collection of separate web applications, each i
 ### Pathfinder (On Mars vs the Pathfinder solo bot)
 - **Location**: `/pathfinder/`
 - **Purpose**: Full digital On Mars (2-player rules) against Tony's Pathfinder solo mode; mobile-first, no official art
-- **Key files**: `js/engine.js` (public API), `js/core.js` (state + task runner), `js/tasks.js` (human rules), `js/pathfinder.js` (bot), `js/data.js` (all card/board data), `js/board.js` (SVG map), `js/views.js` + `js/prompt.js` (Vue 3 components), `docs/` (COMPONENTS / RULES / PATHFINDER reference)
+- **Key files**: `js/engine.js` (public API), `js/core.js` (state + task runner), `js/tasks.js` (human rules), `js/pathfinder.js` (bot), `js/data.js` (all card/board data), `js/board.js` (SVG map), `js/views.js` + `js/prompt.js` (Vue 3 components), `docs/PATHFINDER.md` (solo rules + engine interpretations); `docs/COMPONENTS.md` and `docs/RULES.md` are local-only (gitignored)
 - **Engine model**: game flow is a stack of plain-object tasks; every decision is a `st.prompt`, answered via `answer(st, v)` (validated against `choices(prompt)`). State is pure JSON with a seeded RNG, so saves, undo and share codes are snapshots.
 - **Testing**: `node --test tests/*.test.js`; random-play fuzzing `node sim/run.js [games] [seed] [random|builder]`; `sim/repro.js` replays a failing sim game; `dev/devices.html` previews phone/tablet frames.
 - **Admin**: `loadgame.html` loads a `PATHFINDER1:` share code into localStorage.

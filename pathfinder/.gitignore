@@ -1,2 +1,5 @@
 # Source material (official rulebooks, TTS art) stays local.
 resources/
+# Rules and components summaries of the published game stay local too.
+docs/RULES.md
+docs/COMPONENTS.md
