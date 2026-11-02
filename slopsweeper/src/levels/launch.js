@@ -15,7 +15,7 @@ export const launch = {
   name: 'Day One',
   story:
     'You are the first engineer at a startup that makes invoicing software for small businesses. ' +
-    'The founder, Dana, hands you a laptop, an AI coding assistant, and a waitlist. Everyone on ' +
+    'The founder, Todd, hands you a laptop, an AI coding assistant, and a waitlist. Everyone on ' +
     'the waitlist comes in at A and needs signup (B). The assistant writes code fast, and every ' +
     'block it writes has at least two bugs. The middle is too narrow for its blocks, so you write ' +
     'that part by hand. A beta partway there gets the waitlist moving before signup is finished.',

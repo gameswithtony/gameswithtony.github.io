@@ -13,7 +13,7 @@ export const mobile = {
   id: 'mobile',
   name: 'Mobile',
   story:
-    'Dana promised the board a mobile app this month. Phone users need invoices (B), payments ' +
+    'Todd promised the board a mobile app this month. Phone users need invoices (B), payments ' +
     '(C), receipts (D) and reports (E), each at the end of its own long branch. A beta halfway ' +
     'down a branch lets users wait there while you finish it.',
   map: `
