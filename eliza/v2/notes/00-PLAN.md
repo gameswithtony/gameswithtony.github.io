@@ -15,7 +15,7 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   money/income/VP, choose the card for each action.
 
 ## Source of truth
-- `images/board.jpg` (board), `images/playerboard.webp` (tile stats),
+- `images/board.jpg` (board), `images/correctplayerboard.jpg` (tile stats; playerboard.webp is an OLD mat, wrong),
   `images/birmingham_card_counts.webp` (deck), the rulebook PDF.
 - `images/cardcounts.webp` is the **Lancashire** player aid. Ignore it.
 
@@ -50,7 +50,8 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
    that can be tuned by self-play. Several "personas" (weight sets) give strategic variety.
 6. Data fixes vs. old `data.js` (checked against the player mat image):
    - Pottery IV income +1 (old data said +5).
-   - Manufacturer II income +0 (old: +1). Manufacturer IV costs £14 and gives +7 income (old: £8, +6).
+   - Manufacturer II income +1 and Manufacturer IV £8 + 1 iron, +6 income (per images/correctplayerboard.jpg;
+     the first image, playerboard.webp, was an old mat with +0 and £14/+7).
    - Brewery IV and Pottery V are **rail-era only** (grey era icon on the mat). Old data had no rail-only concept.
 
 ## Feature requests (user)
@@ -180,3 +181,7 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   last moves, undo count; --ai re-runs the AI's choice for the current turn).
   Map: flipped band is now the tile's own top edge (path with rounded top corners); Board sheet header has
   zoom -/+ (1x, 1.5x, 2x, 3x) instead of the "Larger map" link.
+- 2026-11-02: Manufacturer II income fixed to +1 (player report; playerboard.webp is wrong there). Manufacturer IV still
+  follows the image (£14, +7) vs every code source (£8, +6): needs checking against a physical mat.
+- 2026-11-02: Tony supplied images/correctplayerboard.jpg (the first mat image was old). Checked all 45 tiles against it:
+  only Manufacturer IV differed -> now £8 + 1 iron, 3 VP, +6 income (matches every code source). Manufacturer II +1.

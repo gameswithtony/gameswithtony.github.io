@@ -1,6 +1,7 @@
 // @ts-check
 // Static game data for Brass: Birmingham.
-// Sources of truth: images/board.jpg, images/playerboard.webp, images/birmingham_card_counts.webp.
+// Sources of truth: images/board.jpg, images/correctplayerboard.jpg (tile stats), images/birmingham_card_counts.webp.
+// (An older mat photo, since removed, had wrong Manufacturer II and IV values.)
 // Location ids match the v1 data.js so "Space N" references stay the same.
 
 export const IND = { Brewery: 0, Manufacturer: 1, CottonMill: 2, Pottery: 3, CoalMine: 4, IronWorks: 5 };
@@ -122,9 +123,9 @@ TILES[B] = [
 ];
 TILES[M] = [
     T(M, 1, 1, 8, 1, 0, 1, 3, 2, 5, 0, { canalOnly: true }),
-    T(M, 2, 2, 10, 0, 1, 1, 5, 1, 0, 0),
+    T(M, 2, 2, 10, 0, 1, 1, 5, 1, 1, 0),
     T(M, 3, 1, 12, 2, 0, 0, 4, 0, 4, 0),
-    T(M, 4, 1, 14, 0, 1, 1, 3, 1, 7, 0),
+    T(M, 4, 1, 8, 0, 1, 1, 3, 1, 6, 0),
     T(M, 5, 2, 16, 1, 0, 2, 8, 2, 2, 0),
     T(M, 6, 1, 20, 0, 0, 1, 7, 1, 6, 0),
     T(M, 7, 1, 16, 1, 1, 0, 9, 0, 4, 0),
