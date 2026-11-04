@@ -67,6 +67,8 @@ const linkList = [
     L(18, 19, true, true), L(18, 21, true, true), L(19, 20, true, true), L(19, 23, false, true),
     L(19, 24, true, true), L(19, 25, true, true), L(21, 25, true, true, 22), L(23, 24, true, true),
     L(23, 26, true, true), L(25, 26, true, true),
+    // added 2026-11-04 (was missing). New links go at the END: saved games index links by position.
+    L(16, 19, true, true),
 ];
 /** @type {LinkDef[]} */
 export const LINKS = linkList.map((l, id) => ({ id, ...l }));

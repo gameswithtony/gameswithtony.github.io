@@ -10,7 +10,7 @@ import {
     newGame, doAction, finishAction, currentPlayer, incomeLevel, nextLevel, buildSpacesAt, planBuild,
     planNetwork, planDevelop, canDevelop, sellTargets, saleBeerOptions, planSale, canLoan, canScout,
     coalSources, coalPlanValid, coalCost, ironCost, networkLocs, hasTilesOnBoard, linkAllowed, components,
-    ranking, cardAllowsBuild, beerSources, distances, planCoal, topSpaceOfLevel,
+    ranking, upgradeState, cardAllowsBuild, beerSources, distances, planCoal, topSpaceOfLevel,
 } from './engine/core.js';
 import { generateActions, sellableTiles } from './engine/moves.js';
 import { chooseTurn, PERSONA_INFO } from './engine/ai.js';
@@ -72,7 +72,7 @@ const app = new Vue({
             const saved = localStorage.getItem(SAVE_KEY);
             if (saved) {
                 const d = JSON.parse(LZString.decompress(saved));
-                this.g = freeze(d.g);
+                this.g = freeze(upgradeState(d.g));
                 this.screen = d.screen;
                 this.aiTurn = d.aiTurn || null;
                 this.endLines = d.endLines || [];
@@ -298,7 +298,7 @@ const app = new Vue({
             if (!this.undoStack.length) return;
             if (!confirm('Are you sure you want to UNDO?\nThis takes back the last action.')) return;
             const u = this.undoStack.pop();
-            this.g = freeze(u.g);
+            this.g = freeze(upgradeState(copy(u.g)));
             this.screen = 'turn';
             this.endLines = u.endLines || [];
             this.aiTurn = null;
@@ -306,7 +306,7 @@ const app = new Vue({
             // if the undone action was an AI's, step back once more to the last human decision
             if (!this.isHumanTurn && this.undoStack.length) {
                 const v = this.undoStack.pop();
-                this.g = freeze(v.g);
+                this.g = freeze(upgradeState(copy(v.g)));
             }
             this.save();
             if (!this.isHumanTurn) this.runAI();

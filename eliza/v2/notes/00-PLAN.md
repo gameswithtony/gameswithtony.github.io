@@ -185,3 +185,7 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   follows the image (£14, +7) vs every code source (£8, +6): needs checking against a physical mat.
 - 2026-11-02: Tony supplied images/correctplayerboard.jpg (the first mat image was old). Checked all 45 tiles against it:
   only Manufacturer IV differed -> now £8 + 1 iron, 3 VP, +6 income (matches every code source). Manufacturer II +1.
+- 2026-11-04: Walsall-Birmingham link (canal+rail) was missing from engine/data.js LINKS (dropped when re-encoding the
+  board). Appended at the END (link ids are positions in saved games' s.links). core.upgradeState(s) pads older saves
+  with -1 (unbuilt); app applies it on load and undo, sim/inspect.js on reports. tests/board.test.js compares every
+  connection and canal/rail flag with v1/data.js, and checks the upgrade. RULE: only ever append to LINKS.

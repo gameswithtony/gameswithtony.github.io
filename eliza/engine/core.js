@@ -114,6 +114,17 @@ function dealEra(s, canal) {
     }
 }
 
+/**
+ * Bring a saved state up to date with the current board data. Links added to the board after a game was saved
+ * (appended to LINKS) are filled in as unbuilt; without this a missing entry would read as built.
+ */
+export function upgradeState(s) {
+    if (s && s.links && s.links.length < LINKS.length) {
+        s.links = s.links.concat(new Array(LINKS.length - s.links.length).fill(-1));
+    }
+    return s;
+}
+
 // ---------------------------------------------------------------------------
 // Cloning (fast, for search)
 export function clone(s) {

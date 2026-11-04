@@ -4,7 +4,7 @@
 //   and with --ai re-runs the AI's decision for the current turn.
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { incomeLevel, currentPlayer } from '../engine/core.js';
+import { incomeLevel, currentPlayer, upgradeState } from '../engine/core.js';
 import { history } from '../engine/describe.js';
 import { chooseTurn } from '../engine/ai.js';
 
@@ -17,7 +17,7 @@ const text = readFileSync(a[0], 'utf8').trim();
 const json = text.startsWith('ELIZA2:') ? LZString.decompressFromBase64(text.slice(7)) : Buffer.from(text, 'base64').toString('utf8');
 const d = JSON.parse(json);
 if (d.v !== 2) { console.log('This is a version 1 save (open it with eliza/v1/).'); process.exit(0); }
-const g = d.g;
+const g = upgradeState(d.g);
 console.log(`App ${d.appVersion || '?'} · ${g.mode} mode · ${g.n} players · ${g.era ? 'Rail' : 'Canal'} era round ${g.round} of ${g.rounds} · screen: ${d.screen}${g.over ? ' · GAME OVER' : ''}`);
 if (d.error) console.log('\nERROR SHOWN TO THE PLAYER:\n' + d.error + '\n');
 for (const p of g.players) console.log(`  ${p.name.padEnd(10)} ${p.kind.padEnd(5)} £${p.money}  income ${incomeLevel(p.inc)}  ${p.vp} VP  links ${p.links}${p.persona ? '  persona ' + (typeof p.persona === 'string' ? p.persona : 'custom') : ''}`);
