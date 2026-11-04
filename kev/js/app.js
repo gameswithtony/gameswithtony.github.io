@@ -101,7 +101,11 @@ const app = createApp({
             const write = () => localStorage.setItem(SAVE_KEY, LZString.compressToUTF16(JSON.stringify({ st: this.st, undo: this.undo })));
             try { write(); } catch (e) { this.undo = this.undo.slice(-10); try { write(); } catch (e2) { console.warn(e2); } }
         },
-        newGame() { this.confirmNew = false; this.sheet = null; this.tip = null; this.st = null; this.undo = []; localStorage.removeItem(SAVE_KEY); },
+        /** Back to setup, keeping the finished game's options. */
+        newGame() {
+            if (this.st) { const o = this.st.opts; Object.assign(this.setup, { color: o.color, nice: o.nice, planner: o.planner, expert: o.expert, delayed: o.delayed, special: o.special, charger: o.charger, addons: o.addons, diff: o.diff.slice() }); }
+            this.confirmNew = false; this.sheet = null; this.tip = null; this.st = null; this.undo = []; localStorage.removeItem(SAVE_KEY); window.scrollTo(0, 0);
+        },
         makeShare() {
             this.share = SHARE_PREFIX + LZString.compressToBase64(JSON.stringify(this.st));
             this.copied = false;

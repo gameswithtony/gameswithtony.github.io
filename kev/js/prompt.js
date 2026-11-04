@@ -8,7 +8,7 @@ import { deptOf, wsShifts, occupant, sandraDept, kanbanAdds, speakValue, partVal
 export const PromptDock = {
     components: { Ic, Tok, PartChip, CarIc, DesignTile, Ben, PgCard },
     props: ['st', 'prompt', 'canUndo'],
-    emits: ['answer', 'undo', 'tip'],
+    emits: ['answer', 'undo', 'tip', 'newgame'],
     data() { return { num: 0, explain: false, collapsed: false, readyAt: 0 }; },
     watch: { prompt: { immediate: true, handler(p) { this.explain = false; this.collapsed = false; this.readyAt = Date.now() + 350; if (p && p.kind === 'num') this.num = p.def ?? p.min; } } },
     computed: {
@@ -403,6 +403,7 @@ export const PromptDock = {
         <tr><th>Colleagues: Parts</th><td class="neg">−{{ result.bots.parts }}</td></tr>
       </table>
     </template>
+    <button class="btn primary wide" @click="$emit('newgame')"><Ic n="factory" :s="18"/>New game</button>
   </div>
 
   <div v-else class="dock-body"><div class="opts"><button v-for="(o, i) in (pr.opts || [])" :key="i" class="opt" @click="go(o)">{{ o }}</button></div></div>
