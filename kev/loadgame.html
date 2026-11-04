@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>KEV · load game state</title>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('kev.theme'); } catch (e) { /* storage blocked */ }
+            document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+        })();
+    </script>
+    <script src="lz-string.min.js"></script>
+    <style>
+        body { padding: 16px; } main { max-width: 640px; margin: 0 auto; display: grid; gap: 12px; }
+        textarea { width: 100%; min-height: 180px; font: 12px monospace; background: var(--sunken); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Load a shared game</h1>
+    <p class="muted">Paste a code from <b>Menu → Share game state</b>. This replaces the game saved in this browser.</p>
+    <textarea id="code" placeholder="KEV1:…" aria-label="Game state code"></textarea>
+    <button class="btn primary" onclick="loadCode()">Load game</button>
+    <p id="msg" role="status"></p>
+    <p><a href="index.html">Back to KEV</a></p>
+</main>
+<script>
+    function loadCode() {
+        const msg = document.getElementById('msg');
+        const text = document.getElementById('code').value.trim();
+        try {
+            if (!text.startsWith('KEV1:')) throw new Error('code should start with KEV1:');
+            const st = JSON.parse(LZString.decompressFromBase64(text.slice(5)));
+            if (!st || st.v !== 1 || !st.stack) throw new Error('not a KEV game');
+            if (!confirm('Replace the game saved in this browser?')) return;
+            localStorage.setItem('kev.v1', LZString.compressToUTF16(JSON.stringify({ st, undo: [] })));
+            msg.textContent = 'Loaded. Opening the game…';
+            location.href = 'index.html';
+        } catch (e) {
+            msg.textContent = "That doesn't look like a KEV game code: " + e.message;
+        }
+    }
+</script>
+</body>
+</html>

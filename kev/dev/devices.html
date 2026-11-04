@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KEV · device preview (dev)</title>
+<style>
+  body { margin: 0; background: #222; color: #ccc; font: 12px system-ui; display: flex; gap: 12px; padding: 8px; align-items: flex-start; }
+  figure { margin: 0; overflow: hidden; } figcaption { margin-bottom: 2px; }
+  .frame { overflow: hidden; border: 1px solid #555; border-radius: 14px; }
+  iframe { border: 0; transform-origin: 0 0; background: #000; display: block; }
+</style>
+</head>
+<body>
+  <!-- Dev-only preview. Frames share one localStorage, so they show the same game. ?s=scale -->
+  <figure><figcaption>Phone 390×844</figcaption><div class="frame" data-w="390" data-h="844"><iframe id="phone" src="../index.html" width="390" height="844"></iframe></div></figure>
+  <figure><figcaption>Small 360×740</figcaption><div class="frame" data-w="360" data-h="740"><iframe id="small" src="../index.html" width="360" height="740"></iframe></div></figure>
+  <figure><figcaption>Tablet 820×1180</figcaption><div class="frame" data-w="820" data-h="1180"><iframe id="tablet" src="../index.html" width="820" height="1180"></iframe></div></figure>
+<script>
+  const s = +(new URLSearchParams(location.search).get('s') || (innerHeight - 30) / 844);
+  document.querySelectorAll('.frame').forEach(f => {
+    const w = +f.dataset.w, h = +f.dataset.h, k = Math.min(s, (innerHeight - 30) / h);
+    f.style.width = w * k + 'px'; f.style.height = h * k + 'px';
+    f.querySelector('iframe').style.transform = `scale(${k})`;
+  });
+</script>
+</body>
+</html>

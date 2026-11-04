@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#3f3f3a">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="Play Kanban EV on your phone against the official solo Colleagues. Not affiliated with Vital Lacerda or Eagle-Gryphon Games.">
+    <title>KEV · Kanban EV solo</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        // apply the saved theme before first paint; light unless dark was chosen
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('kev.theme'); } catch (e) { /* storage blocked */ }
+            if (t !== 'dark') t = 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'dark' ? '#1e1e1b' : '#3f3f3a');
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+    <script src="lz-string.min.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+
+    <!-- ============================ setup ============================ -->
+    <main v-if="!st" class="setup">
+        <button class="icon-btn theme-corner" @click="toggleTheme" :aria-label="themeLabel" :title="themeLabel"><ic :n="theme === 'dark' ? 'sun' : 'moon'" :s="20"></ic></button>
+        <div class="setup-card">
+            <p class="brand">KEV</p>
+            <h1>Kanban EV · solo</h1>
+            <p class="lede">Keep your job against Mr Lacerda and Mr Turczi, the official solo Colleagues. Finish above 0 PP.</p>
+
+            <fieldset>
+                <legend>Your colour</legend>
+                <div class="seg colors">
+                    <label v-for="c in D.PLAYER_COLORS" :key="c" :class="{ on: setup.color === c }" :data-color="c">
+                        <input type="radio" name="color" :value="c" v-model="setup.color"><span class="swatch"></span><b>{{ c[0].toUpperCase() + c.slice(1) }}</b>
+                    </label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Variants</legend>
+                <div class="checks">
+                    <label :class="{ on: setup.nice }"><input type="checkbox" v-model="setup.nice"><b>Nice Sandra</b><small>Rewards the most trained instead of punishing the least</small></label>
+                    <label :class="{ on: setup.planner }"><input type="checkbox" v-model="setup.planner"><b>The Planner</b><small>Order your garage tiles; park left to right</small></label>
+                    <label :class="{ on: setup.expert }"><input type="checkbox" v-model="setup.expert"><b>Expert Tuning</b><small>Weaker Expert garage tiles</small></label>
+                    <label :class="{ on: setup.delayed }"><input type="checkbox" v-model="setup.delayed"><b>Delayed Tuning</b><small>Garage bonuses arrive a turn later</small></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Expansions</legend>
+                <div class="checks">
+                    <label :class="{ on: setup.special }"><input type="checkbox" v-model="setup.special"><b>Special Garage Bonuses</b><small>Pick a special 5th garage tile</small></label>
+                    <label :class="{ on: setup.charger }"><input type="checkbox" v-model="setup.charger" @change="setup.addons = setup.addons && setup.charger"><b>Speedcharger</b><small>Charger tokens with permanent abilities</small></label>
+                    <label :class="{ on: setup.addons, off: !setup.charger }"><input type="checkbox" v-model="setup.addons" :disabled="!setup.charger"><b>Speedcharger add-ons</b><small>6 Performance Goals, 4 Final Goals</small></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Difficulty cards <button class="linkish" type="button" @click="randomDiff">random 2</button> <button v-if="setup.diff.length" class="linkish" type="button" @click="setup.diff = []">none</button></legend>
+                <div class="diffs">
+                    <button v-for="c in diffNames" :key="c.id" type="button" class="diff" :class="{ on: setup.diff.includes(c.id) }" :aria-pressed="setup.diff.includes(c.id)" @click="toggleDiff(c.id)" :title="c.d"><b>{{ c.id }}</b><span>{{ c.name }}</span></button>
+                </div>
+            </fieldset>
+            <button class="btn primary wide big" @click="start"><ic n="factory" :s="20"></ic> Start</button>
+            <p class="fine">Kanban EV is designed by Vital Lacerda and published by Eagle-Gryphon Games. This site is not affiliated with either. <a href="https://www.eagle-gryphon.com/products/kanban-ev-complete-bundle-1" target="_blank" rel="noopener">Buy the game at Eagle-Gryphon Games</a>.</p>
+            <p v-if="error" class="err">{{ error }}</p>
+        </div>
+    </main>
+
+    <!-- ============================ game ============================ -->
+    <div v-else class="game" :class="{ wide, mid }" :data-color="st.opts.color">
+        <header class="hud">
+            <span class="hud-brand" aria-hidden="true">KEV</span>
+            <button class="score tip-btn" v-tip="TIP.pp(st)" aria-label="Your PP"><tok w="you" :s="16"></tok><b>{{ st.p.pp }}</b><small>PP</small></button>
+            <span class="hud-stat" v-tip="TIP.day(st)"><small>Day</small><b>{{ st.day }}</b></span>
+            <span class="hud-stat" v-tip="TIP.week(st)"><ic n="week" :s="15"></ic><b>{{ st.week }}</b><small>/3</small></span>
+            <span class="hud-stat" v-tip="TIP.cycle(st)"><ic n="cycle" :s="15"></ic><b>{{ st.cycle }}</b><small>/3</small></span>
+            <span v-if="st.meetingDue" class="hud-stat hot" v-tip="TIP.meeting(st)"><ic n="meeting" :s="15"></ic><small>tonight</small></span>
+            <span class="hud-stat" v-tip="TIP.sandra(st)"><tok w="S" :s="14"></tok><ic :n="st.pos.S === D.DESK ? 'adm' : ['rd','asm','log','des','adm'][Math.floor(st.pos.S / 2)]" :s="15"></ic></span>
+            <span class="sp"></span>
+            <button class="icon-btn" @click="toggleTheme" :aria-label="themeLabel" :title="themeLabel"><ic :n="theme === 'dark' ? 'sun' : 'moon'" :s="20"></ic></button>
+            <button class="icon-btn" @click="openSheet('menu')" aria-label="Menu" title="Menu"><ic n="menu" :s="20"></ic></button>
+        </header>
+
+        <alley-strip :st="st" @open="openPanel('stations')"></alley-strip>
+
+        <div class="stage">
+            <section class="col-main" aria-label="Factory">
+                <!-- desktop: two columns laid out like the real board; narrower screens: one stack in department order -->
+                <div class="fcol">
+                    <panel :st="st" d="rd" :open="open.rd" @toggle="open.rd = !open.rd"><rd-panel :st="st"></rd-panel></panel>
+                    <panel :st="st" d="des" :open="open.des" @toggle="open.des = !open.des"><des-panel :st="st"></des-panel></panel>
+                </div>
+                <div class="fcol">
+                    <panel :st="st" d="asm" :open="open.asm" @toggle="open.asm = !open.asm"><asm-panel :st="st"></asm-panel></panel>
+                    <panel :st="st" d="log" :open="open.log" @toggle="open.log = !open.log"><log-panel :st="st"></log-panel></panel>
+                    <panel :st="st" d="adm" :open="open.adm" @toggle="open.adm = !open.adm"><adm-panel :st="st"></adm-panel></panel>
+                </div>
+            </section>
+
+            <aside class="col-side" v-if="wide || mid">
+                <nav class="tabs" role="tablist">
+                    <button v-for="t in [['me','you','Me'],['bots','L','Colleagues'],['goals','pg','Goals'],['stations','week','Stations'],['log','log','Log']]" :key="t[0]" role="tab" :aria-selected="side===t[0]" :class="{ on: side===t[0] }" @click="side=t[0]"><ic :n="t[1]" :s="16"></ic>{{ t[2] }}</button>
+                </nav>
+                <div class="tab-body">
+                    <me-board v-if="side==='me'" :st="st"></me-board>
+                    <bots-board v-if="side==='bots'" :st="st"></bots-board>
+                    <goals-board v-if="side==='goals'" :st="st"></goals-board>
+                    <stations-board v-if="side==='stations'" :st="st"></stations-board>
+                    <log-list v-if="side==='log'" :st="st"></log-list>
+                </div>
+            </aside>
+        </div>
+
+        <prompt-dock v-if="prompt" :st="st" :prompt="prompt" :can-undo="undo.length > 0" @answer="onAnswer" @undo="doUndo" @tip="t => tip = t"></prompt-dock>
+
+        <nav class="dockbar" v-if="!wide && !mid" aria-label="Boards">
+            <button @click="openSheet('me')" :class="{ on: sheet==='me' }"><tok w="you" :s="18"></tok><span>Me</span></button>
+            <button @click="openSheet('bots')" :class="{ on: sheet==='bots' }"><ic n="L" :s="18" c="var(--c-l)"></ic><span>Colleagues</span></button>
+            <button @click="openSheet('goals')" :class="{ on: sheet==='goals' }"><ic n="pg" :s="18"></ic><span>Goals</span></button>
+            <button @click="openSheet('log')" :class="{ on: sheet==='log' }"><ic n="log" :s="18"></ic><span>Log</span></button>
+        </nav>
+
+        <div v-if="sheet" class="scrim" @click.self="sheet=null">
+            <div class="sheet" role="dialog" :aria-label="sheet">
+                <header class="sheet-head">
+                    <h2 v-if="sheet==='me'"><tok w="you" :s="20"></tok> Your board</h2>
+                    <h2 v-if="sheet==='bots'"><ic n="L" :s="20" c="var(--c-l)"></ic> The Colleagues</h2>
+                    <h2 v-if="sheet==='goals'"><ic n="pg" :s="20"></ic> Goals</h2>
+                    <h2 v-if="sheet==='stations'"><ic n="week" :s="20"></ic> Workstations</h2>
+                    <h2 v-if="sheet==='log'"><ic n="log" :s="20"></ic> History</h2>
+                    <h2 v-if="sheet==='menu'"><ic n="menu" :s="20"></ic> Menu</h2>
+                    <button class="icon-btn" @click="sheet=null" aria-label="Close"><ic n="close" :s="20"></ic></button>
+                </header>
+                <div class="sheet-body">
+                    <me-board v-if="sheet==='me'" :st="st"></me-board>
+                    <bots-board v-if="sheet==='bots'" :st="st"></bots-board>
+                    <goals-board v-if="sheet==='goals'" :st="st"></goals-board>
+                    <stations-board v-if="sheet==='stations'" :st="st"></stations-board>
+                    <log-list v-if="sheet==='log'" :st="st"></log-list>
+                    <div v-if="sheet==='menu'" class="menu">
+                        <p class="muted small">{{ [st.opts.nice && 'Nice Sandra', st.opts.planner && 'Planner', st.opts.expert && 'Expert Tuning', st.opts.delayed && 'Delayed Tuning', st.opts.special && 'Special garages', st.opts.charger && 'Speedcharger', st.opts.addons && 'add-ons'].filter(Boolean).join(' · ') || 'Base game' }}<template v-if="st.opts.diff.length"> · difficulty {{ st.opts.diff.join(', ') }}</template></p>
+                        <button class="btn wide" @click="makeShare"><ic n="share" :s="18"></ic> Share game state</button>
+                        <div v-if="share" class="share">
+                            <p class="small">{{ copied ? 'Copied. Paste it in your bug report.' : 'Copy this code for a bug report:' }}</p>
+                            <textarea readonly rows="4" @focus="$event.target.select()">{{ share }}</textarea>
+                        </div>
+                        <a class="btn wide" href="https://www.eagle-gryphon.com/products/kanban-ev-complete-bundle-1" target="_blank" rel="noopener"><ic n="help" :s="18"></ic> Kanban EV rulebook and solo rules</a>
+                        <a class="btn wide" href="https://www.eagle-gryphon.com/products/kanban-ev-complete-bundle-1" target="_blank" rel="noopener"><ic n="buy" :s="18"></ic> Buy Kanban EV</a>
+                        <button v-if="!confirmNew" class="btn wide danger" @click="confirmNew=true"><ic n="flag" :s="18"></ic> New game</button>
+                        <div v-else class="confirm">
+                            <p>Abandon this game?</p>
+                            <button class="btn danger" @click="newGame">Yes, start over</button>
+                            <button class="btn ghost" @click="confirmNew=false">Keep playing</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="popInfo" class="scrim pop-scrim" @click.self="tip = null">
+            <div class="pop" role="dialog" :aria-label="popInfo.title">
+                <header class="sheet-head"><h2><ic :n="popInfo.ic" :s="20"></ic> {{ popInfo.title }}</h2><button class="icon-btn" @click="tip = null" aria-label="Close"><ic n="close" :s="18"></ic></button></header>
+                <p v-if="popInfo.v" class="pop-v">{{ popInfo.v }}</p>
+                <ul class="card-lines"><li v-for="(l,i) in popInfo.lines" :key="i">{{ l }}</li></ul>
+            </div>
+        </div>
+
+        <div v-if="error" class="toast err" role="alert"><span>{{ error }}</span><button class="icon-btn sm" @click="error=null" aria-label="Dismiss"><ic n="close" :s="14"></ic></button></div>
+    </div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

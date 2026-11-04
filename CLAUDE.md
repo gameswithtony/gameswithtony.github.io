@@ -49,6 +49,15 @@ The repository is organized as a collection of separate web applications, each i
 - **Key files**: `images.js` (asset management), extensive image assets
 - **Features**: Lacerda/Turczi solo mode automation
 
+### KEV (Kanban EV vs the official solo Colleagues)
+- **Location**: `/kev/`
+- **Purpose**: Full digital Kanban EV against Mr Lacerda and Mr Turczi (official solo mode, ported from `/kanbanev/`); mobile-first, no official art, light theme by default
+- **Key files**: `js/data.js` (all component data), `js/core.js` (state, runner, rule queries, scoring), `js/tasks.js` (day flow, your turn, Meetings, final scoring), `js/bots.js` (Colleagues and Sandra), `js/engine.js` (public API, validated `answer`, `choices`), `js/views.js` + `js/prompt.js` (Vue 3 components), `js/tips.js` (tap-to-explain), `js/text.js`, `js/icons.js`, `docs/ENGINE.md` (numbered Engine interpretations + values read off images)
+- **Engine model**: same as Pathfinder (task stack, every decision is `st.prompt`, plain JSON state, seeded RNG). `sandbox: true` in `newGame` disables firing (tests and sims only).
+- **Testing**: `node --test tests/*.test.js`; `node sim/run.js [games] [seed] [builder|random] [fire]`; `node sim/explain.js`; `node dev/contrast.js` (WCAG AA on theme tokens); `dev/devices.html` previews phone/tablet frames
+- **Admin**: `loadgame.html` loads a `KEV1:` share code
+- **Source material**: `kev/resources/` (rulebooks, TTS images, LESSONS-FROM-PATHFINDER.md) is gitignored
+
 ## Common Patterns
 
 ### State Management
