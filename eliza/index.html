@@ -493,6 +493,7 @@
 
             <section class="report-a-bug">
                 <a href="#" v-on:click.prevent="isGameStateOpen ? (isGameStateOpen = false) : getGameState()" v-bind:aria-expanded="isGameStateOpen ? 'true' : 'false'">report a bug</a>
+                <p class="app-version">v{{ appVersion }}</p>
                 <section v-if="isGameStateOpen">
                     <p>To report a bug, <a href="https://discord.gg/7CHwh6TSsa">join my Discord</a>. Copy the text below <em>into a text file</em> and attach it to a message to me (it's too long to paste into a message). It contains the whole game so far, so I can replay exactly what happened.</p>
                     <textarea ref="gamestate" rows="10">{{ gameState }}</textarea>

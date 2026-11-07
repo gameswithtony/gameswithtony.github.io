@@ -19,7 +19,7 @@ import { IND_ABBR } from './ui/map.js';
 
 const SAVE_KEY = 'elizagamestate2';
 const V1_KEY = 'elizagamestate';
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.01'; // bump on every release: shown under 'report a bug' so players can see they have the latest
 const AI_NAMES = ['Eliza', 'Eleanor', 'Isambard'];
 const MAX_UNDO = 30;
 

@@ -196,3 +196,4 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   exists (also on Build: no more offering the market while a connected mine has coal). Engine now validates coal per
   rail link, build coal/iron, develop iron (coalPlanValid / ironPlanValid) and throws otherwise; 0 of 16k AI-generated
   candidates are rejected. Tests in rules.test.js. Verified on the reporter's save in the real app.
+- 2026-11-07: Sub-version shown under 'report a bug' (APP_VERSION in app.js, now 2.01). Bump it with every release.

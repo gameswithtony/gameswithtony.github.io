@@ -310,6 +310,7 @@ input[type="text"], select {
 .error h2 { color: var(--signal); }
 .error-text { font-size: 1.05rem; white-space: pre-wrap; }
 .report-a-bug { text-align: center; font-size: 0.8rem; }
+.app-version { margin: 0.2rem 0 0; font-size: 0.7rem; color: var(--muted); }
 .report-a-bug textarea { width: 100%; max-width: 340px; }
 
 /* ================= phone-only mode ================= */
