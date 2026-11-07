@@ -299,3 +299,40 @@ test('AI considers overbuilding a rival coal mine when coal has run out', async 
     const acts = generateActions(s).filter(a => a.t === 'build' && a.sp === sp);
     assert.equal(acts.length, 1, 'overbuild offered');
 });
+
+test('double rail: the 2nd link pays its own coal, from the closest source once both links are placed (bug report 2026-11-07)', () => {
+    // Belper mine (3 coal) is the only coal. Walsall-Tamworth reaches it only through the new Belper-Derby link
+    // plus existing rival links Tamworth-Burton and Burton-Derby.
+    const s = game();
+    s.era = 1;
+    s.coal = 0; // keep the market out of it
+    put(s, 0, space('Belper', 1), IND.CoalMine, 3, { res: 3 });
+    put(s, 0, space('Walsall', 0), IND.IronWorks, 2, { flip: true });
+    put(s, 0, space('Stafford', 0), IND.Brewery, 2, { res: 1 }); // own beer, usable anywhere
+    s.links[link('Tamworth', 'Burton')] = 1;
+    s.links[link('Burton', 'Derby')] = 1;
+    s.players[0].hand = [card('Dudley')];
+    s.players[0].money = 40;
+    const links = [link('Belper', 'Derby'), link('Walsall', 'Tamworth')];
+    const plan = planNetwork(s, 0, card('Dudley'), links);
+    assert.ok(plan, 'the pair is legal');
+    assert.deepEqual(plan.coal.map(c => c.take), [[[space('Belper', 1), 1]], [[space('Belper', 1), 1]]], 'both links take coal from Belper');
+    // the old app bug: second link with no coal. The engine must refuse it.
+    const cheat = { ...plan, coal: [plan.coal[0], { take: [], mkt: 0 }] };
+    assert.throws(() => doAction(JSON.parse(JSON.stringify(s)), cheat), /rail link needs 1 coal/);
+    doAction(s, plan);
+    assert.equal(s.spaces[space('Belper', 1)].res, 1, 'two coal consumed');
+});
+
+test('engine refuses builds and develops that skip coal or iron', () => {
+    const s = game();
+    s.players[0].hand = [card('Dudley')];
+    s.players[0].mat[IND.IronWorks] = [0, 1, 1, 1];
+    s.links[link('Dudley', 'Birmingham')] = 0;
+    s.links[link('Birmingham', 'Oxford')] = 0;
+    const b = planBuild(s, 0, card('Dudley'), IND.IronWorks, space('Dudley', 1));
+    assert.ok(b);
+    assert.throws(() => doAction(JSON.parse(JSON.stringify(s)), { ...b, coal: { take: [], mkt: 0 } }), /needs 1 coal/);
+    const d = planDevelop(s, 0, card('Dudley'), [IND.CoalMine]);
+    assert.throws(() => doAction(JSON.parse(JSON.stringify(s)), { ...d, iron: { take: [], mkt: 0 } }), /1 iron per tile/);
+});

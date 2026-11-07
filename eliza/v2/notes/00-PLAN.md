@@ -189,3 +189,10 @@ and `02-AI-DESIGN.md` (how the AI thinks). `research-strategy.md` is web researc
   board). Appended at the END (link ids are positions in saved games' s.links). core.upgradeState(s) pads older saves
   with -1 (unbuilt); app applies it on load and undo, sim/inspect.js on reports. tests/board.test.js compares every
   connection and canal/rail flag with v1/data.js, and checks the upgrade. RULE: only ever append to LINKS.
+- 2026-11-07: Bug report (double rail): 2nd link (Walsall-Tamworth) paid NO coal. Cause: app built each link's coal
+  editor from the board without the new links, found no mine for link 2, auto-skipped, and replaced the engine's plan
+  with "0 coal". Fix: app goes link by link (netWorkState(k): links 0..k placed, earlier links' coal taken; stages
+  'netres' per link and 'netbeer'); coalEditor lists only sources a legal plan can use and asks only when >1 legal plan
+  exists (also on Build: no more offering the market while a connected mine has coal). Engine now validates coal per
+  rail link, build coal/iron, develop iron (coalPlanValid / ironPlanValid) and throws otherwise; 0 of 16k AI-generated
+  candidates are rejected. Tests in rules.test.js. Verified on the reporter's save in the real app.

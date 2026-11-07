@@ -354,8 +354,8 @@ const app = new Vue({
         },
         go(stage, patch = {}) {
             const d = this.draft;
-            const snap = copy({ ...d, history: undefined });
-            d.history = (d.history || []).concat([snap]);
+            if (d.skipSnap) delete d.skipSnap; // the caller already saved the step to go Back to
+            else d.history = (d.history || []).concat([copy({ ...d, history: undefined })]);
             Object.assign(d, patch, { stage });
             this.message = null;
             this.draft = { ...d };
@@ -414,16 +414,36 @@ const app = new Vue({
         },
 
         // ---- resource editors (coal: closest-first; iron: any works)
-        coalEditor(locs, need, plan, excludeSp = -1) {
-            const src = need > 0 ? coalSources(this.g, locs) : { src: [], market: false };
-            const rows = src.src.filter(c => c.sp !== excludeSp).sort((a, b) => a.d - b.d).map(c => ({
+        /**
+         * Coal choices for `need` coal at `locs`, listing only sources a legal plan can use: connected mines in order
+         * of distance up to where they cover the need (ties included), and the market only when they can't.
+         * `choice` is true only when more than one legal plan exists, so the app asks only then.
+         */
+        coalEditor(locs, need, plan, excludeSp = -1, g = this.g) {
+            if (excludeSp >= 0 && g.spaces[excludeSp]) g = { ...g, spaces: g.spaces.map((t, i) => i === excludeSp ? null : t) };
+            const src = need > 0 ? coalSources(g, locs) : { src: [], market: false };
+            const sorted = src.src.slice().sort((a, b) => a.d - b.d);
+            let have = 0, stopD = Infinity;
+            for (const c of sorted) { have += c.res; if (have >= need) { stopD = c.d; break; } }
+            const legal = sorted.filter(c => c.d <= stopD);
+            const rows = legal.map(c => ({
                 sp: c.sp, label: `${this.possessive(c.o)} Coal Mine in ${spaceName(c.sp)} (${c.d === 0 ? 'same location' : c.d + ' link' + (c.d > 1 ? 's' : '') + ' away'})`,
                 options: range(Math.min(c.res, need)), chosen: (plan.take.find(t => t[0] === c.sp) || [0, 0])[1],
             }));
-            if (src.market) rows.push({ sp: -1, label: 'Coal market', options: range(need), chosen: plan.mkt });
-            // a real choice exists only if a different legal split is possible
-            const choice = rows.length > 1 && need > 0;
-            return { need, rows, choice, locs };
+            if (src.market && legal.reduce((a, c) => a + c.res, 0) < need) rows.push({ sp: -1, label: 'Coal market', options: range(need), chosen: plan.mkt });
+            // count legal plans (stop at 2): ask only when there is a real choice
+            let count = 0;
+            const walk = (i, left, take, mkt) => {
+                if (count > 1) return;
+                if (i === rows.length) { if (left === 0 && coalPlanValid(g, locs, need, { take, mkt })) count++; return; }
+                for (const n of rows[i].options) {
+                    if (n > left) break;
+                    if (rows[i].sp === -1) walk(i + 1, left - n, take, n);
+                    else walk(i + 1, left - n, n ? take.concat([[rows[i].sp, n]]) : take, mkt);
+                }
+            };
+            if (need > 0) walk(0, need, [], 0);
+            return { need, rows, choice: count > 1, locs };
         },
         ironEditor(need, plan, excludeSp = -1) {
             const rows = [];
@@ -496,22 +516,47 @@ const app = new Vue({
             if (d.t === 'double' && links.length < 2) { this.go('from', { links }); return; }
             const plan = planNetwork(this.g, this.cur, this.anyCard(), links);
             if (!plan) { this.message = d.t === 'double' ? 'You cannot build that pair (money, coal, or beer for the second link).' : 'You cannot build that link (money or coal).'; return; }
-            this.go('netres', { links });
-            this.draft.netPlan = plan;
-            if (this.g.era === ERA.Rail) {
-                // coal per link, editable when there is a real choice
-                this.draft.coalEdits = links.map((l, i) => {
-                    const g = this.withLinks(links.slice(0, i + 1));
-                    const ed = this.coalEditor(LINKS[l].locs, 1, plan.coal[i]);
-                    ed.g = null;
-                    return ed;
-                });
-            } else this.draft.coalEdits = [];
-            if (links.length === 2) this.draft.beerEdit = this.doubleBeerEditor(links, plan.beer);
-            this.draft = { ...this.draft };
-            const anyChoice = this.draft.coalEdits.some(e => e.choice) || (this.draft.beerEdit && this.draft.beerEdit.rows.length > 1);
-            if (!anyChoice) this.toCardOrConfirm();
+            // Back from the next step returns here, before the links were chosen
+            d.history = (d.history || []).concat([copy({ ...d, history: undefined })]);
+            d.skipSnap = true;
+            d.links = links;
+            d.netPlan = plan;
+            d.coalPlans = [];
+            if (links.length === 2) d.beerEdit = this.doubleBeerEditor(links, plan.beer);
+            this.startNetCoal(0);
         },
+        /**
+         * Board as rail link k sees it: links 0..k placed, and the coal already chosen for links before k taken.
+         * Each rail link pays 1 coal from the closest source connected to it after it is placed.
+         */
+        netWorkState(k) {
+            const d = this.draft;
+            const w = copy(this.g); w.log = null;
+            for (let j = 0; j <= k; j++) w.links[d.links[j]] = this.cur;
+            for (let j = 0; j < k; j++) {
+                for (const [sp, n] of d.coalPlans[j].take) w.spaces[sp].res -= n;
+                w.coal = Math.max(0, w.coal - d.coalPlans[j].mkt);
+            }
+            return w;
+        },
+        /** Coal for rail link k: ask only when there is a real choice, otherwise take the only legal source. */
+        startNetCoal(k) {
+            const d = this.draft;
+            if (this.g.era !== ERA.Rail || k >= d.links.length) { this.netBeerOrConfirm(); return; }
+            const w = this.netWorkState(k);
+            const locs = LINKS[d.links[k]].locs;
+            const plan = planCoal(w, this.cur, locs, 1);
+            if (!plan) { this.message = 'There is no coal connected to that link.'; return; }
+            const ed = this.coalEditor(locs, 1, plan, -1, w);
+            if (!ed.choice) { d.coalPlans[k] = { take: plan.take, mkt: plan.mkt }; this.startNetCoal(k + 1); return; }
+            this.go('netres', { coalK: k, coalEdit: ed });
+        },
+        netBeerOrConfirm() {
+            const d = this.draft;
+            if (d.beerEdit && d.beerEdit.rows.length > 1) this.go('netbeer');
+            else this.toCardOrConfirm();
+        },
+        linkLabel(l) { return LINKS[l].locs.slice(0, 2).map(x => LOCATIONS[x].name).join(' to '); },
         withLinks(links) { const l = this.g.links.slice(); for (const x of links) l[x] = this.cur; return { ...this.g, links: l }; },
         doubleBeerEditor(links, chosen) {
             const g = this.withLinks(links);
@@ -519,12 +564,12 @@ const app = new Vue({
             return { rows: src.map(b => ({ sp: b.sp, label: `${this.possessive(b.o)} Brewery in ${spaceName(b.sp)}` })), chosen };
         },
         netResourcesDone() {
-            const d = this.draft;
-            for (const ed of d.coalEdits) {
-                const plan = this.planFromEditor(ed);
-                if (plan.mkt + plan.take.reduce((a, t) => a + t[1], 0) !== 1) { this.message = 'Each rail link needs exactly 1 coal.'; return; }
-            }
-            this.toCardOrConfirm();
+            const d = this.draft, k = d.coalK;
+            const plan = this.planFromEditor(d.coalEdit);
+            if (plan.mkt + plan.take.reduce((a, t) => a + t[1], 0) !== 1) { this.message = 'Each rail link needs exactly 1 coal.'; return; }
+            if (!coalPlanValid(this.netWorkState(k), LINKS[d.links[k]].locs, 1, plan)) { this.message = 'Coal must come from the closest connected coal mine first, and from the market only when no connected mine has coal left.'; return; }
+            d.coalPlans[k] = plan;
+            this.startNetCoal(k + 1);
         },
 
         // ---- sell
@@ -648,7 +693,7 @@ const app = new Vue({
                 }
                 case 'network': case 'double': {
                     const plan = { ...d.netPlan, card };
-                    if (d.coalEdits.length) plan.coal = d.coalEdits.map(ed => this.planFromEditor(ed));
+                    if (this.g.era === ERA.Rail) plan.coal = d.coalPlans.map(c => ({ take: c.take, mkt: c.mkt }));
                     if (d.beerEdit) plan.beer = d.beerEdit.chosen;
                     return plan;
                 }

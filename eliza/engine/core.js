@@ -291,6 +291,19 @@ export function coalPlanValid(s, locs, need, plan) {
     return true;
 }
 
+/** Is a given iron plan legal? Exactly `need` iron, each from an unflipped Iron Works that has it (anywhere), rest from the market. */
+export function ironPlanValid(s, need, plan) {
+    if (!plan) return need === 0;
+    let total = plan.mkt || 0;
+    if (total < 0) return false;
+    for (const [sp, n] of plan.take) {
+        const t = s.spaces[sp];
+        if (!t || t.ind !== IND.IronWorks || n < 1 || t.res < n) return false;
+        total += n;
+    }
+    return total === need;
+}
+
 /** Beer sources for selling a tile at `loc` to merchant entry index `mi` (or for a double rail link when mi === -1). */
 export function beerSources(s, p, locs, mi) {
     const dist = distances(s, locs);
@@ -462,6 +475,8 @@ function doBuild(s, p, a) {
         emit(s, { t: 'overbuild', p, sp: a.sp, victim: old.o, ind: old.ind, lvl: old.lvl });
         s.spaces[a.sp] = null;
     }
+    if (!coalPlanValid(s, [loc], def.coal, a.coal || { take: [], mkt: 0 })) throw new Error(`building needs ${def.coal} coal, from the closest connected coal first`);
+    if (!ironPlanValid(s, def.iron, a.iron)) throw new Error(`building needs ${def.iron} iron`);
     pay(s, p, def.cost);
     applyCoal(s, p, a.coal);
     applyIron(s, p, a.iron);
@@ -553,7 +568,11 @@ function doNetwork(s, p, a) {
         s.links[l] = p;
         pl.links--;
         emit(s, { t: 'link', p, link: l });
-        if (s.era === ERA.Rail) applyCoal(s, p, a.coal[i]);
+        if (s.era === ERA.Rail) {
+            // each rail link pays 1 coal from the closest source connected to it, with this link placed
+            if (!a.coal || !a.coal[i] || !coalPlanValid(s, LINKS[l].locs, 1, a.coal[i])) throw new Error('each rail link needs 1 coal, from the closest connected coal first');
+            applyCoal(s, p, a.coal[i]);
+        }
     });
     if (a.links.length === 2) {
         const t = s.spaces[a.beer];
@@ -593,6 +612,7 @@ function removeFromMat(s, p, ind) {
 }
 
 function doDevelop(s, p, a) {
+    if (!ironPlanValid(s, a.inds.length, a.iron)) throw new Error('developing needs 1 iron per tile');
     applyIron(s, p, a.iron);
     for (const ind of a.inds) {
         const lvl = removeFromMat(s, p, ind);

@@ -248,16 +248,19 @@
                             </ul>
                         </template>
                         <template v-if="draft.stage === 'netres'">
-                            <section class="consume-section" v-for="(ed, i) in draft.coalEdits" :key="i" v-if="ed.choice">
-                                <p class="action-header">Link {{ i + 1 }} consumes <span class="important">1 Coal</span>.<br /><span class="small">Where are you taking it from?</span></p>
+                            <section class="consume-section">
+                                <p class="action-header"><span v-if="draft.links.length > 1">Link {{ draft.coalK + 1 }}, </span>{{ linkLabel(draft.links[draft.coalK]) }}, consumes <span class="important">1 Coal</span>.<br /><span class="small">Where are you taking it from?</span></p>
                                 <ul class="cards">
-                                    <li v-for="row in ed.rows" :key="row.sp" class="card">
+                                    <li v-for="row in draft.coalEdit.rows" :key="row.sp" class="card">
                                         <p class="card__name">{{ row.label }}</p>
-                                        <div class="card__area"><label v-for="n in row.options" :key="n"><input type="radio" :value="n" :name="'ncoal' + i + '-' + row.sp" v-model="row.chosen" /><span>{{ n }}</span></label></div>
+                                        <div class="card__area"><label v-for="n in row.options" :key="n"><input type="radio" :value="n" :name="'ncoal-' + row.sp" v-model="row.chosen" /><span>{{ n }}</span></label></div>
                                     </li>
                                 </ul>
                             </section>
-                            <section class="consume-section" v-if="draft.beerEdit && draft.beerEdit.rows.length > 1">
+                            <button class="button" v-on:click="netResourcesDone()">Continue</button>
+                        </template>
+                        <template v-if="draft.stage === 'netbeer'">
+                            <section class="consume-section">
                                 <p class="action-header">The double link consumes <span class="important">1 Beer</span>.<br /><span class="small">Which brewery are you taking it from?</span></p>
                                 <ul class="cards">
                                     <li v-for="row in draft.beerEdit.rows" :key="row.sp" class="card">
@@ -265,7 +268,7 @@
                                     </li>
                                 </ul>
                             </section>
-                            <button class="button" v-on:click="netResourcesDone()">Continue</button>
+                            <button class="button" v-on:click="toCardOrConfirm()">Continue</button>
                         </template>
 
                         <!-- sell -->
