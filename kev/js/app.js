@@ -8,7 +8,7 @@ import * as D from './data.js';
 const { createApp, markRaw } = Vue;
 
 /** Bump on every push (1.01, 1.02, ...) so a player can check they have the latest. Shown in the menu. */
-export const VERSION = '1.01';
+export const VERSION = '1.02';
 export const SAVE_KEY = 'kev.v1';
 export const SHARE_PREFIX = 'KEV1:';
 const THEME_KEY = 'kev.theme';
@@ -34,7 +34,7 @@ const app = createApp({
             sheet: null, side: 'me',
             open: { rd: true, asm: true, log: true, des: true, adm: true },
             tip: null, shownPP: null, version: VERSION,
-            setup: { color: 'blue', nice: false, planner: false, expert: false, delayed: false, special: false, charger: false, addons: false, diff: [] },
+            setup: { color: 'blue', nice: false, planner: false, expert: false, delayed: false, special: false, charger: false, addons: false, noFire: false, diff: [] },
             share: '', copied: false, confirmNew: false, error: null,
             w: window.innerWidth,
             theme: document.documentElement.getAttribute('data-theme') || 'light',
@@ -127,7 +127,7 @@ const app = createApp({
         },
         /** Back to setup, keeping the finished game's options. */
         newGame() {
-            if (this.st) { const o = this.st.opts; Object.assign(this.setup, { color: o.color, nice: o.nice, planner: o.planner, expert: o.expert, delayed: o.delayed, special: o.special, charger: o.charger, addons: o.addons, diff: o.diff.slice() }); }
+            if (this.st) { const o = this.st.opts; Object.assign(this.setup, { color: o.color, nice: o.nice, planner: o.planner, expert: o.expert, delayed: o.delayed, special: o.special, charger: o.charger, addons: o.addons, noFire: !!o.noFire, diff: o.diff.slice() }); }
             this.confirmNew = false; this.sheet = null; this.tip = null; this.st = null; this.undo = []; localStorage.removeItem(SAVE_KEY); window.scrollTo(0, 0);
         },
         makeShare() {
@@ -143,8 +143,9 @@ const app = createApp({
             document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.theme === 'dark' ? '#1e1e1b' : '#3f3f3a');
             try { localStorage.setItem(THEME_KEY, this.theme); } catch (e) { /* not saved; still applies */ }
         },
-        toggleDiff(id) { const d = this.setup.diff, i = d.indexOf(id); if (i >= 0) d.splice(i, 1); else d.push(id); },
-        randomDiff() { const ids = D.DIFFICULTY.map(x => x.id).sort(() => Math.random() - .5); this.setup.diff = ids.slice(0, 2); },
+        toggleDiff(id) { if (id === 9 && this.setup.noFire) return; const d = this.setup.diff, i = d.indexOf(id); if (i >= 0) d.splice(i, 1); else d.push(id); },
+        setNoFire() { if (this.setup.noFire) this.setup.diff = this.setup.diff.filter(id => id !== 9); },
+        randomDiff() { const ids = D.DIFFICULTY.map(x => x.id).filter(id => !(this.setup.noFire && id === 9)).sort(() => Math.random() - .5); this.setup.diff = ids.slice(0, 2); },
     },
 });
 /** v-tip="{ ic, t, v, d }": hover title on desktop; click, tap or Enter opens the explain popup. */

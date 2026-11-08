@@ -124,6 +124,21 @@ legend { font: 600 13px var(--font-h); letter-spacing: .12em; text-transform: up
 [data-color="orange"] .swatch { background: #f47a2a; } [data-color="purple"] .swatch { background: #95499c; }
 .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .checks label { position: relative; }
+.checks.one { grid-template-columns: 1fr; }
+/* visible checkboxes on setup toggles: a square that fills with a tick when on */
+.checks label { padding-left: 38px; }
+.checks label::before, .diff::before { content: ""; position: absolute; left: 11px; top: 12px; width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--muted); background: var(--surface); box-sizing: border-box; }
+.checks label.on::before, .diff.on::before { background: var(--teal); border-color: var(--teal); }
+.checks label::after, .diff::after { content: ""; position: absolute; left: 17px; top: 14px; width: 5px; height: 10px; border: solid var(--surface); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); opacity: 0; }
+.checks label.on::after, .diff.on::after { opacity: 1; }
+.checks label.off::before, .diff.off::before { border-style: dashed; background: transparent; }
+.checks label:has(input:focus-visible) { outline: 2px solid var(--teal); outline-offset: 2px; }
+.diffs .diff { position: relative; padding-left: 36px; }
+.diff::before { top: 50%; margin-top: -9px; }
+.diff::after { top: 50%; margin-top: -7px; }
+.diff.on::before { background: var(--accent); border-color: var(--accent); }
+.diff.off { color: var(--muted); border-style: dashed; background: transparent; cursor: default; }
+.diff.off b { color: var(--muted); }
 .checks label.off { opacity: 1; color: var(--muted); border-style: dashed; cursor: default; }
 .checks small { color: var(--muted); }
 .diffs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }

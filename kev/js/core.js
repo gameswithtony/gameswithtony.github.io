@@ -15,12 +15,13 @@ export const NAME = { you: 'You', L: 'Mr Lacerda', T: 'Mr Turczi', S: 'Sandra' }
 // ================================================================ new game
 /**
  * @param {{seed?:number, color?:string, nice?:boolean, planner?:boolean, expert?:boolean, delayed?:boolean,
- *   special?:boolean, charger?:boolean, addons?:boolean, diff?:number[], sandbox?:boolean}} o
+ *   special?:boolean, charger?:boolean, addons?:boolean, diff?:number[], noFire?:boolean, sandbox?:boolean}} o
  */
 export function newGame(o = {}) {
     const opts = {
         color: o.color || 'blue', nice: !!o.nice, planner: !!o.planner, expert: !!o.expert, delayed: !!o.delayed,
-        special: !!o.special, charger: !!o.charger, addons: !!(o.addons && o.charger), sandbox: !!o.sandbox, diff: (o.diff || []).slice().sort((a, b) => a - b),
+        special: !!o.special, charger: !!o.charger, addons: !!(o.addons && o.charger), sandbox: !!o.sandbox, noFire: !!(o.noFire || o.sandbox),
+        diff: (o.diff || []).filter(id => !(o.noFire && id === 9)).slice().sort((a, b) => a - b),
     };
     const st = {
         v: 1, rng: (o.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0, opts,
@@ -138,7 +139,7 @@ export function run(st) {
     let guard = 0;
     while (!st.prompt && st.stack.length) {
         if (++guard > 50000) throw new Error('runaway task loop at ' + JSON.stringify(top(st)));
-        if (st.fired && st.opts.sandbox) st.fired = false; // tests and sims only
+        if (st.fired && (st.opts.noFire || st.opts.sandbox)) st.fired = false; // house rule: no firing (and tests)
         if (st.fired && !st.over && top(st).t !== 'over') { st.stack = [{ t: 'over' }]; continue; }
         const t = top(st);
         const h = H[t.t];

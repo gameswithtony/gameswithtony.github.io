@@ -50,7 +50,7 @@ export const PromptDock = {
                 eod: ['week', 'End of day'],
                 eodRecycle: ['recycle', 'End of day: pick the Recycling swap'],
                 avoid: ['sandra', "Avoid Sandra's penalty?"],
-                over: [st.result?.win ? 'trophy' : 'fired', st.result?.win ? 'You keep your job!' : 'You are fired'],
+                over: [st.result?.win ? 'trophy' : 'fired', st.result?.win ? 'You keep your job!' : st.result?.noFire ? 'Below 0 PP at the end' : 'You are fired'],
             }[this.q] || ['help', this.q];
             return { ic: t[0], txt: t[1] };
         },
@@ -393,6 +393,7 @@ export const PromptDock = {
     </template>
     <template v-else-if="result">
       <p class="verdict" :class="result.win ? 'win' : 'lose'"><Ic :n="result.win ? 'trophy' : 'fired'" :s="22"/> {{ result.pp }} PP<template v-if="result.rank"> · {{ D.RANKS[result.rank - 1].name }}</template></p>
+      <p v-if="result.noFire" class="hint small">House rule: no firing.</p>
       <table class="score-table">
         <tr><th>Final Goal</th><td class="pos">+{{ result.you.final }} PP</td></tr>
         <tr><th>Banked Shifts</th><td class="pos">+{{ result.you.shifts }} PP</td></tr>

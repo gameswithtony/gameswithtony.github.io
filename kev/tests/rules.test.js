@@ -238,6 +238,19 @@ test('a full game finishes with legal answers only', () => {
     assert.ok(st.result);
 });
 
+test('house rule no firing: below 0 PP the game keeps going; without it you are fired', () => {
+    for (const noFire of [true, false]) {
+        let st = newGame({ seed: 5, noFire, diff: [9, 2] });
+        assert.deepEqual(st.opts.diff, noFire ? [2] : [2, 9], 'Immediate Termination dropped under the house rule');
+        st = play(st, 0);
+        st.p.pp = -4; st.fired = true; // as if End of Week or a Meeting left you below 0
+        // firing takes effect once the summary on screen is acknowledged
+        for (let k = 0; k < 4 && !st.over; k++) st = play(st, choices(st.prompt)[0]);
+        assert.equal(st.over, !noFire, noFire ? 'keeps playing' : 'fired');
+        if (!noFire) assert.equal(st.result.fired, true);
+    }
+});
+
 test('invalid answers are rejected', () => {
     const st = fresh();
     assert.throws(() => answer(st, 9));

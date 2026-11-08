@@ -14,7 +14,8 @@ const tip = (ic, t, v, d) => ({ ic, t, v: v === undefined ? '' : String(v), d: [
 // ================================================================ status
 export const pp = st => tip('pp', 'Your PP', st.p.pp, [
     'Production Points. You start at 15.', 'Colleagues never score: what they gain, you lose.',
-    `At 0 or below after End of Week, a Meeting or final scoring, you are fired.${st.opts.diff.includes(9) ? ' Immediate Termination: at any time.' : ''}`,
+    st.opts.noFire ? 'House rule: no firing. The game runs to its end; finish above 0 PP to keep your job.'
+        : `At 0 or below after End of Week, a Meeting or final scoring, you are fired.${st.opts.diff.includes(9) ? ' Immediate Termination: at any time.' : ''}`,
     `Highest so far: ${st.p.maxPP}.`]);
 export const day = st => tip('week', 'Day', st.day, ['Each day: pick a workstation, then everyone works top to bottom.', 'Sandra moves one department down each day.']);
 export const week = st => tip('week', 'Week marker', `${st.week} of 3`, [
