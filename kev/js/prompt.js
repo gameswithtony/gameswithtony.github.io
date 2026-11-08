@@ -2,11 +2,11 @@
 import * as D from './data.js';
 import * as T from './text.js';
 import * as TIP from './tips.js';
-import { Ic, Tok, PartChip, CarIc, DesignTile, Ben, PgCard } from './views.js';
+import { Ic, Tok, PartChip, CarIc, DesignTile, Ben, PgCard, PlanColumn, PPBadge } from './views.js';
 import { deptOf, wsShifts, occupant, sandraDept, kanbanAdds, speakValue, partValue, botLine, pgSlot, pgCount } from './engine.js';
 
 export const PromptDock = {
-    components: { Ic, Tok, PartChip, CarIc, DesignTile, Ben, PgCard },
+    components: { Ic, Tok, PartChip, CarIc, DesignTile, Ben, PgCard, PlanColumn, PPBadge },
     props: ['st', 'prompt', 'canUndo'],
     emits: ['answer', 'undo', 'tip', 'newgame'],
     data() { return { num: 0, explain: false, collapsed: false, readyAt: 0 }; },
@@ -65,6 +65,7 @@ export const PromptDock = {
             for (let i = 0; i < bankUsable; i++) out.push({ k: 'bank', used: false });
             return out;
         },
+        ppTotal() { return (this.pr.pp || []).reduce((a, x) => a + x.pp, 0); },
         recent() { const t = this.st.turn; return t && t.log0 !== undefined ? this.st.log.slice(t.log0).slice(-4) : []; },
         trains() { return this.pr.acts.filter(a => a.k === 'train' || a.k === 'book'); },
         tasks() { return this.pr.acts.filter(a => !['train', 'book', 'recycle', 'sg', 'flip', 'end'].includes(a.k)); },
@@ -114,20 +115,21 @@ export const PromptDock = {
             switch (l.k) {
                 case 'notYou': return { ic: 'check', t: `You are not the ${this.st.opts.nice ? 'most' : 'least'} trained here: no evaluation.` };
                 case 'pass': return { ic: 'check', t: `Evaluated: ${l.val} ${T.SANDRA_CRIT[d]}. No penalty.` };
-                case 'penalty': return { ic: 'x', t: `Evaluated: ${l.val} ${T.SANDRA_CRIT[d]}. Penalty −${l.pp} PP.`, bad: true };
+                case 'penalty': return { ic: 'x', t: `Evaluated: ${l.val} ${T.SANDRA_CRIT[d]} (2 or fewer): penalty.`, bad: true };
                 case 'avoided': return { ic: 'star', t: `Penalty of ${l.pp} PP avoided with your special garage.` };
-                case 'reward': return { ic: l.pp ? 'pp' : 'check', t: `Evaluated: ${l.val} ${T.SANDRA_CRIT[d]}. ${l.pp ? `Reward +${l.pp} PP.` : 'No reward.'}` };
+                case 'reward': return { ic: l.pp ? 'pp' : 'check', t: `Evaluated: ${l.val} ${T.SANDRA_CRIT[d]}. ${l.pp ? 'Reward.' : 'No reward.'}` };
                 case 'pace': return { ic: 'pace', t: `Pace Car +1${l.stripe ? ': Meeting tonight.' : '.'}` };
                 case 'clearAsm': return { ic: 'asm', t: `Assembly spaces cleared (${l.n} Parts).` };
                 case 'clearWare': return { ic: 'warehouse', t: `Warehouses cut to 1 each (${l.n} Parts out).` };
                 case 'clearDesign': return { ic: 'design', t: `${l.n} rightmost Designs returned; display refilled.` };
-                case 'week': return { ic: 'week', t: `End of Week ${l.n}: you +${l.you} PP. Colleagues' Designs −${l.L + l.T}${l.keep ? `, Keeping Up −${l.keep}` : ''}.` };
+                case 'week': return { ic: 'week', t: `End of Week ${l.n} scored.` };
             }
             return { ic: 'help', t: l.k };
         },
         lineIc(l) {
             return { train: 'train', cert: 'cert', expert: 'expert', upgrade: 'upgraded', claim: 'garage', provide: 'asm', kanban: 'kanban', collect: 'warehouse', designs: 'design', cleaned: 'asm', overtime: 'bank' }[l.k] || 'x';
         },
+        ppText(x) { const pre = T.WHO[this.pr.who] + ': '; const t = x.text.startsWith(pre) ? x.text.slice(pre.length) : x.text; return t[0].toUpperCase() + t.slice(1); },
         noteTxt(n) { return `${T.WHO[n.w]} → ${T.wsName(n.ws)}`; },
         sel(id) { return id ? D.sel(id) : null; },
         plan(id) { return id ? D.plan(id) : null; },
@@ -138,7 +140,7 @@ export const PromptDock = {
   <header class="dock-head">
     <h2 class="dock-title">
       <button type="button" class="dock-toggle" @click="collapsed = !collapsed" :aria-expanded="!collapsed" aria-controls="dock-main">
-        <Ic :n="title.ic" :s="20" :c="tint"/><span>{{ title.txt }}</span><span class="chev"><Ic n="chev" :s="18"/></span>
+        <Ic :n="title.ic" :s="20" :c="tint"/><span>{{ title.txt }}</span><p-p-badge v-if="ppTotal" :n="ppTotal"/><span class="chev"><Ic n="chev" :s="18"/></span>
       </button>
     </h2>
     <span class="sp"></span>
@@ -154,7 +156,7 @@ export const PromptDock = {
       <span v-for="(x, i) in pips" :key="i" class="pip" :class="[x.k, { used: x.used }]"></span>
       <small><b>{{ pr.left }}</b> Shift{{ pr.left === 1 ? '' : 's' }} left · max {{ pr.cap }}</small>
     </div>
-    <ul v-if="recent.length" class="notes recent"><li v-for="(l, i) in recent" :key="i" :class="{ pos: l.pp > 0, neg: l.pp < 0 }"><Ic n="check" :s="12"/>{{ l.text }}</li></ul>
+    <ul v-if="recent.length" class="notes recent"><li v-for="(l, i) in recent" :key="i"><Ic n="check" :s="12"/>{{ l.text }}<p-p-badge v-if="l.pp" :n="l.pp"/></li></ul>
     <div class="tiles">
       <button v-for="a in trains" :key="a.k + a.d" class="tile" :class="{ off: a.why }" :disabled="!!a.why && !explain" @click="go(menuV(a))">
         <Ic :n="a.k === 'book' ? 'book' : a.d" :s="22"/><span class="nm">{{ actName(a) }}</span>
@@ -175,6 +177,7 @@ export const PromptDock = {
 
   <!-- ============ workstation ============ -->
   <div v-else-if="q==='station'" class="dock-body">
+    <plan-column :st="st" compact/>
     <ul v-if="pr.notes.length" class="notes"><li v-for="(n, i) in pr.notes" :key="i"><Tok :w="n.w" :s="13"/>{{ noteTxt(n) }}</li></ul>
     <div class="stgrid">
       <div v-for="r in stationGrid" :key="r.d" class="strow" :class="{ off: r.why }">
@@ -328,12 +331,12 @@ export const PromptDock = {
 
   <!-- ============ meeting ============ -->
   <div v-else-if="q==='meet'" class="dock-body">
-    <ul v-if="pr.notes.length" class="notes"><li v-for="(n, i) in pr.notes" :key="i"><Tok :w="n.w" :s="13"/>{{ T.WHO[n.w] }} spoke on goal {{ n.id }}: <span class="neg">−{{ n.pts }}</span></li></ul>
+    <ul v-if="pr.notes.length" class="notes"><li v-for="(n, i) in pr.notes" :key="i"><Tok :w="n.w" :s="13"/>{{ T.WHO[n.w] }} spoke on goal {{ n.id }}<p-p-badge :n="-n.pts"/></li></ul>
     <p class="hint small">Tokens: <b>{{ st.p.sp + st.p.sgSpeech }}</b><Ic n="speech" :s="12"/> · Lacerda {{ pr.bot.L }} · Turczi {{ pr.bot.T }} left</p>
     <template v-if="meetGroups.speak.length">
       <h4>Speak on a goal</h4>
       <div class="opts">
-        <button v-for="o in meetGroups.speak" :key="'s' + o.id" class="opt pgopt" @click="go(o)"><pg-card :st="st" :id="o.id" mini/><b class="pos">+{{ speak(o.id) }}</b></button>
+        <button v-for="o in meetGroups.speak" :key="'s' + o.id" class="opt pgopt" @click="go(o)"><pg-card :st="st" :id="o.id" mini/><b class="pos">+{{ speak(o.id) }} PP</b></button>
       </div>
     </template>
     <template v-if="handCards.length">
@@ -343,7 +346,7 @@ export const PromptDock = {
           <pg-card :st="st" :id="id" mini/>
           <span class="hand-btns">
             <button class="btn sm" @click="go({ a: 'play', id, tok: false })">Play</button>
-            <button v-if="meetGroups.play.some(o => o.id === id && o.tok)" class="btn sm" @click="go({ a: 'play', id, tok: true })">Play + speak <b class="pos">+{{ speakHand(id) }}</b></button>
+            <button v-if="meetGroups.play.some(o => o.id === id && o.tok)" class="btn sm" @click="go({ a: 'play', id, tok: true })">Play + speak <b class="pos">+{{ speakHand(id) }} PP</b></button>
           </span>
         </div>
       </div>
@@ -351,7 +354,7 @@ export const PromptDock = {
     <button v-if="meetGroups.pass" class="btn wide" @click="go(meetGroups.pass)"><Ic n="skip" :s="18"/>Pass</button>
   </div>
   <div v-else-if="q==='nextPG'" class="dock-body">
-    <p class="hint" v-if="pr.n === 0">Meeting over: you +{{ pr.scored.you }}, Lacerda −{{ pr.scored.L }}, Turczi −{{ pr.scored.T }}. Two of your goals join two from the deck for the next Meeting.</p>
+    <p class="hint" v-if="pr.n === 0">Meeting over: you <p-p-badge :n="pr.scored.you"/> Lacerda <p-p-badge :n="-pr.scored.L"/> Turczi <p-p-badge :n="-pr.scored.T"/>. Two of your goals join two from the deck for the next Meeting.</p>
     <div class="opts"><button v-for="id in pr.opts" :key="id" class="opt pgopt" @click="go(id)"><pg-card :st="st" :id="id" mini/></button></div>
   </div>
 
@@ -359,10 +362,12 @@ export const PromptDock = {
   <div v-else-if="q==='botTurn'" class="dock-body bot-turn">
     <p class="hint small" v-if="pr.cert"><Ic n="cert" :s="13"/> Certified here: actions twice.</p>
     <ul class="lines"><li v-for="(l, i) in pr.lines" :key="i"><Ic :n="lineIc(l)" :s="16"/><span>{{ line(l) }}</span></li></ul>
+    <ul v-if="pr.pp && pr.pp.length" class="pplist"><li v-for="(x, i) in pr.pp" :key="i"><p-p-badge :n="x.pp"/><span>{{ ppText(x) }}</span></li></ul>
     <button class="btn primary wide" @click="go(true)"><Ic n="check" :s="18"/>OK</button>
   </div>
   <div v-else-if="q==='sandra'" class="dock-body">
     <ul class="lines"><li v-for="(l, i) in pr.lines" :key="i" :class="{ bad: sandraLine(l).bad }"><Ic :n="sandraLine(l).ic" :s="16"/><span>{{ sandraLine(l).t }}</span></li></ul>
+    <ul v-if="pr.pp && pr.pp.length" class="pplist"><li v-for="(x, i) in pr.pp" :key="i"><p-p-badge :n="x.pp"/><span>{{ ppText(x) }}</span></li></ul>
     <button class="btn primary wide" @click="go(true)"><Ic n="check" :s="18"/>OK</button>
   </div>
   <div v-else-if="q==='avoid'" class="dock-body">
@@ -389,18 +394,18 @@ export const PromptDock = {
     <template v-else-if="result">
       <p class="verdict" :class="result.win ? 'win' : 'lose'"><Ic :n="result.win ? 'trophy' : 'fired'" :s="22"/> {{ result.pp }} PP<template v-if="result.rank"> · {{ D.RANKS[result.rank - 1].name }}</template></p>
       <table class="score-table">
-        <tr><th>Final Goal</th><td class="pos">+{{ result.you.final }}</td></tr>
-        <tr><th>Banked Shifts</th><td class="pos">+{{ result.you.shifts }}</td></tr>
-        <tr><th>Tokens, Books, Vouchers</th><td class="pos">+{{ result.you.tokens }}</td></tr>
-        <tr><th>Cars</th><td class="pos">+{{ result.you.cars }}</td></tr>
-        <tr><th>Training leads</th><td class="pos">+{{ result.you.training }}</td></tr>
-        <tr><th>Tested Designs</th><td class="pos">+{{ result.you.tested }}</td></tr>
-        <tr v-if="result.you.chargers"><th>Chargers</th><td class="pos">+{{ result.you.chargers }}</td></tr>
-        <tr v-if="result.you.special"><th>Special garage</th><td class="pos">+{{ result.you.special }}</td></tr>
-        <tr><th>Colleagues: training leads</th><td class="neg">−{{ result.bots.training }}</td></tr>
-        <tr><th>Colleagues: Designs</th><td class="neg">−{{ result.bots.designs }}</td></tr>
-        <tr><th>Colleagues: cars</th><td class="neg">−{{ result.bots.cars }}</td></tr>
-        <tr><th>Colleagues: Parts</th><td class="neg">−{{ result.bots.parts }}</td></tr>
+        <tr><th>Final Goal</th><td class="pos">+{{ result.you.final }} PP</td></tr>
+        <tr><th>Banked Shifts</th><td class="pos">+{{ result.you.shifts }} PP</td></tr>
+        <tr><th>Tokens, Books, Vouchers</th><td class="pos">+{{ result.you.tokens }} PP</td></tr>
+        <tr><th>Cars</th><td class="pos">+{{ result.you.cars }} PP</td></tr>
+        <tr><th>Training leads</th><td class="pos">+{{ result.you.training }} PP</td></tr>
+        <tr><th>Tested Designs</th><td class="pos">+{{ result.you.tested }} PP</td></tr>
+        <tr v-if="result.you.chargers"><th>Chargers</th><td class="pos">+{{ result.you.chargers }} PP</td></tr>
+        <tr v-if="result.you.special"><th>Special garage</th><td class="pos">+{{ result.you.special }} PP</td></tr>
+        <tr><th>Colleagues: training leads</th><td class="neg">−{{ result.bots.training }} PP</td></tr>
+        <tr><th>Colleagues: Designs</th><td class="neg">−{{ result.bots.designs }} PP</td></tr>
+        <tr><th>Colleagues: cars</th><td class="neg">−{{ result.bots.cars }} PP</td></tr>
+        <tr><th>Colleagues: Parts</th><td class="neg">−{{ result.bots.parts }} PP</td></tr>
       </table>
     </template>
     <button class="btn primary wide" @click="$emit('newgame')"><Ic n="factory" :s="18"/>New game</button>

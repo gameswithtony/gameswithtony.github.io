@@ -6,7 +6,7 @@ import * as D from './data.js';
 import {
     H, DONE, ask, log, NAME, deptOf, posOf, occupant, sandraDept, di, isCert, addPP, botPP, hasDiff,
     fromSupply, toSupply, canAssemble, cleanFullLines, refillDesigns, takeFO, advancePace, partValue,
-    weekScore, evaluated, certCount, myCars, shuffle, pick, rand,
+    weekScore, evaluated, certCount, myCars, shuffle, pick, rand, ppSince,
 } from './core.js';
 import { rollSync, applyKanban } from './tasks.js';
 
@@ -41,16 +41,50 @@ export function botSelect(st, who) {
     const pid = s.take === 't' ? st.plan.col.shift() : st.plan.col.pop();
     st.plan.card[who] = pid;
     const want = D.plan(pid).d;
-    const pos = who === 'L' ? 1 : 0; // Mr Lacerda bottom, Mr Turczi top
+    const ws = resolveStation(st, who, want);
+    if (ws === null) return;
+    st.pos[who] = ws;
+    const d = deptOf(ws);
+    log(st, who, 'move', `${NAME[who]} → ${D.DEPT_NAME[d]} (${posOf(ws)})${d !== want ? ` · Plan said ${D.DEPT_NAME[want]}` : ''}`, { plan: pid, sel: sid });
+}
+/**
+ * Where a Colleague lands for a Plan card's department, with the workstations as they are now:
+ * Mr Lacerda takes bottom workstations, Mr Turczi top ones; a taken workstation or the department
+ * they are already in sends them to the next department down (Admin, then R&D again).
+ */
+export function resolveStation(st, who, want) {
+    const pos = who === 'L' ? 1 : 0;
     const cur = deptOf(st.pos[who]);
     let i = di(want);
     for (let k = 0; k < 5; k++, i = (i + 1) % 5) {
-        const d = D.DEPTS[i], ws = i * 2 + pos;
-        if (d === cur || occupant(st, ws)) continue;
-        st.pos[who] = ws;
-        log(st, who, 'move', `${NAME[who]} → ${D.DEPT_NAME[d]} (${posOf(ws)})${d !== want ? ` · Plan said ${D.DEPT_NAME[want]}` : ''}`, { plan: pid, sel: sid });
-        return;
+        const ws = i * 2 + pos;
+        if (D.DEPTS[i] === cur || occupant(st, ws)) continue;
+        return ws;
     }
+    return null;
+}
+/** Colleagues still to pick in this Department Selection, in order (empty outside it). */
+export function pickQueue(st) {
+    const t = st.stack.find(x => x.t === 'selRound');
+    return t ? t.order.slice(t.i).filter(w => w === 'L' || w === 'T') : [];
+}
+/**
+ * What the Plan column says about the Colleagues still to pick. The next one takes the top or
+ * bottom card; the one after could end up with any card, depending on the first pick.
+ */
+export function planOutlook(st) {
+    const col = st.plan.col, q = pickQueue(st);
+    return q.map((w, k) => {
+        if (k > 0 || !col.length) return { w, after: q[0] };
+        const top = col[0], bot = col[col.length - 1];
+        return { w, opts: [{ take: 't', id: top, ws: resolveStation(st, w, D.plan(top).d) }, { take: 'b', id: bot, ws: resolveStation(st, w, D.plan(bot).d) }] };
+    });
+}
+/** Selection cards left in the deck by what they take (the discards are face up). */
+export function selCounts(st) {
+    const n = { t: 0, b: 0 };
+    st.sel.deck.forEach(id => n[D.sel(id).take]++);
+    return n;
 }
 /** Sandra: next empty workstation in the next department down; Admin means her desk. */
 export function sandraMove(st) {
@@ -218,7 +252,7 @@ function botDesigns(st, who, lines) {
 // ================================================================ a Colleague's turn
 H.botTurn = (st, t, a) => {
     if (a) return DONE;
-    const who = t.who, d = deptOf(st.pos[who]), lines = [], ctx = {};
+    const who = t.who, d = deptOf(st.pos[who]), lines = [], ctx = {}, log0 = st.log.length;
     botTrain(st, who, d, lines);
     const cert = who === 'L' && lacerdaCert(st, d);
     const twice = cert ? 2 : 1;
@@ -244,8 +278,9 @@ H.botTurn = (st, t, a) => {
         }
     }
     refillDemand(st);
+    const pp = ppSince(st, log0);
     lines.forEach(l => log(st, who, 'bot', botLine(l)));
-    return ask(st, { q: 'botTurn', who, d, cert, lines, plan: st.plan.card[who], sel: st.sel.card[who] });
+    return ask(st, { q: 'botTurn', who, d, cert, lines, pp, plan: st.plan.card[who], sel: st.sel.card[who] });
 };
 /** Short log text for one Colleague step. */
 export function botLine(l) {
@@ -256,7 +291,7 @@ export function botLine(l) {
         case 'overtime': return `${N[l.d]} full: you lose a Banked Shift`;
         case 'cert': return `Certified in ${N[l.d]}`;
         case 'expert': return `Expert in ${N[l.d]}`;
-        case 'upgrade': return `Upgraded ${M[D.dModel(l.id)]} ${P[D.dPart(l.id)]} (−${l.pp})`;
+        case 'upgrade': return `Upgraded ${M[D.dModel(l.id)]} ${P[D.dPart(l.id)]}`;
         case 'noUpgrade': return l.why === 'stack' ? 'Upgrade lost: no Design in their stack' : `Upgrade lost: no ${P[l.part]} in the supply`;
         case 'claim': return `Claimed ${M[l.m]} (car ${l.pos + 1})`;
         case 'noClaim': return 'Claim lost: test track empty';
@@ -275,7 +310,7 @@ export function botLine(l) {
 H.sandraTurn = (st, t, a) => {
     const p = st.p, d = sandraDept(st), i = di(d), nice = st.opts.nice;
     if (!t.s) {
-        t.lines = [];
+        t.lines = []; t.log0 = st.log.length;
         const ev = evaluated(st, i, nice);
         t.evaluated = ev;
         if (ev.includes('you')) {
@@ -307,7 +342,7 @@ H.sandraTurn = (st, t, a) => {
         sandraTask(st, d, t.lines);
         t.s = 'ack';
         if (st.over) return DONE;
-        return ask(st, { q: 'sandra', d, lines: t.lines, evaluated: t.evaluated });
+        return ask(st, { q: 'sandra', d, lines: t.lines, evaluated: t.evaluated, pp: ppSince(st, t.log0) });
     }
     if (t.s === 'ack' && a) return DONE;
 };

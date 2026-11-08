@@ -41,6 +41,8 @@ function statusTips(st) {
     st.p.kanban.forEach(k => ok(TIP.kanbanCard(k), 'kanban'));
     if (st.p.chargers) [0, 1, 2, 3, 4].forEach(i => ok(TIP.charger(st, i), 'charger'));
     st.opts.diff.forEach(id => ok(TIP.diffCard(id), 'diff'));
+    ok(TIP.planColumn(st), 'planColumn');
+    st.plan.col.forEach((id, i, a) => ok(TIP.planCard(st, id, a.length === 1 ? 'only' : i === 0 ? 'top' : i === a.length - 1 ? 'bottom' : 'middle'), 'planCard'));
     D.PG.forEach(c => { if (!T.pgText(c.id)) throw new Error('pg text ' + c.id); });
     D.FINAL.forEach(f => f.a.forEach(a => { if (!T.finalText(a) || T.finalText(a) === a.c) throw new Error('final text ' + a.c); }));
 }

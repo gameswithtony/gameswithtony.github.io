@@ -6,6 +6,7 @@ import * as TIP from './tips.js';
 import {
     deptOf, di, isCert, certCount, deskCap, storeCap, slotCap, myCars, tested, partValue, upgCount, trackLeader,
     pgCount, pgSlot, finalMet, sandraDept, weekScore, occupant, garageOpen, tableCards, endTriggered,
+    planOutlook,
 } from './engine.js';
 
 export const Ic = {
@@ -44,6 +45,11 @@ export const DesignTile = {
       <small v-if="label" class="dlabel">{{ T.M[m] + (pt ? ' ' + T.P[pt] : ' blank') }}</small>
     </span>`,
 };
+/** A PP change: red pill for a loss, green for a gain. */
+export const PPBadge = {
+    props: { n: Number },
+    template: `<b class="ppb" :class="n < 0 ? 'down' : 'up'" :aria-label="(n < 0 ? 'lose ' : 'gain ') + Math.abs(n) + ' PP'">{{ n < 0 ? '−' : '+' }}{{ Math.abs(n) }} PP</b>`,
+};
 export const Ben = {
     components: { Ic },
     props: { b: String, s: { type: Number, default: 16 }, txt: Boolean },
@@ -76,20 +82,28 @@ export const AlleyStrip = {
     emits: ['open'],
     computed: {
         cols() {
-            return D.DEPTS.map((d, i) => ({ d, slots: (d === 'adm' ? [8, 9, D.DESK] : [i * 2, i * 2 + 1]).map(ws => ({ ws, who: occupant(this.st, ws) })), sandra: sandraDept(this.st) === d }));
+            const st = this.st;
+            return D.DEPTS.map((d, i) => {
+                // one tiny track: who stands on each space; later arrivals drawn on top (they win ties)
+                const who = ['you', 'L', 'T'].map(w => { const b = w === 'you' ? st.p : st.bots[w]; return { w, n: b.tr[i], ts: b.ts[i] }; }).sort((a, b) => a.ts - b.ts);
+                const cells = [0, 1, 2, 3, 4, 5].map(n => who.filter(x => x.n === n).map(x => x.w));
+                return { d, cells, label: who.map(x => T.WHO[x.w] + ' ' + x.n).join(', '), slots: (d === 'adm' ? [8, 9, D.DESK] : [i * 2, i * 2 + 1]).map(ws => ({ ws, who: occupant(st, ws) })), sandra: sandraDept(st) === d };
+            });
         },
     },
     methods: { shifts(ws) { return ws === D.DESK ? '' : D.WS_SHIFTS[deptOf(ws)][ws % 2]; } },
-    template: `<div class="alley" role="group" aria-label="Workstations">
+    template: `<div class="alley" role="button" tabindex="0" aria-label="Workstations and training: open the full view" @click="$emit('open')" @keydown.enter.prevent="$emit('open')" @keydown.space.prevent="$emit('open')">
       <div v-for="c in cols" :key="c.d" class="alley-col" :class="{ sandra: c.sandra }">
-        <span class="alley-h" v-tip="TIP.track(st, c.d)"><Ic :n="c.d" :s="16"/><small>{{ T.DN[c.d] }}</small></span>
+        <span class="alley-h"><Ic :n="c.d" :s="16"/><small>{{ T.DN[c.d] }}</small></span>
+        <span class="atrain" :aria-label="T.DN[c.d] + ' training: ' + c.label">
+          <span v-for="(ws, n) in c.cells" :key="n" class="atc" :class="{ cert: n === 3, exp: n === 5 }"><Tok v-for="(w, k) in ws" :key="w" :w="w" :s="9" :style="{ left: (k * 3) + 'px', top: (k * 2) + 'px' }"/></span>
+        </span>
         <span class="alley-slots">
-          <span v-for="s in c.slots" :key="s.ws" class="ws" :class="{ desk: s.ws === D.DESK, mine: s.who === 'you' }" v-tip="TIP.ws(st, s.ws)">
-            <Tok v-if="s.who" :w="s.who" :s="15"/><small v-else-if="s.ws !== D.DESK" class="wsn">{{ shifts(s.ws) }}</small><small v-else class="wsn">desk</small>
+          <span v-for="s in c.slots" :key="s.ws" class="ws" :class="{ desk: s.ws === D.DESK, mine: s.who === 'you' }">
+            <Tok v-if="s.who" :w="s.who" :s="15"/><small v-else-if="s.ws !== D.DESK" class="wsn">{{ shifts(s.ws) }}</small><Ic v-else n="sandra" :s="13" label="Sandra's desk"/>
           </span>
         </span>
       </div>
-      <button class="alley-more icon-btn sm" @click="$emit('open')" aria-label="Workstations and training"><Ic n="chev" :s="16"/></button>
     </div>`,
 };
 export const StationsBoard = {
@@ -100,7 +114,6 @@ export const StationsBoard = {
             const st = this.st;
             return D.DEPTS.map((d, i) => ({ d, i, slots: (d === 'adm' ? [8, 9] : [i * 2, i * 2 + 1]).map(ws => ({ ws, who: occupant(st, ws), n: D.WS_SHIFTS[d][ws % 2] })) }));
         },
-        col() { return this.st.plan.col.map(id => D.plan(id)); },
     },
     template: `<div class="board-sec">
       <table class="stations">
@@ -111,9 +124,6 @@ export const StationsBoard = {
         </tr>
       </table>
       <p class="line" v-tip="TIP.sandra(st)"><Ic n="S" :s="16" c="var(--c-s)"/> Sandra: {{ st.pos.S === D.DESK ? 'her desk' : T.DN[T_sd] }} · {{ T.SANDRA_TASK[T_sd] }}</p>
-      <h4>Plan cards left in the column</h4>
-      <p class="line" v-if="!col.length">None</p>
-      <p class="line" v-for="(c, i) in col" :key="c.id"><Ic n="plan" :s="16"/> {{ i === 0 ? 'Top' : i === col.length - 1 ? 'Bottom' : 'Middle' }}: {{ T.DN[c.d] }}<template v-if="c.parts.length"> · end of day: <part-chip v-for="p in c.parts" :key="p" :p="p" :s="14"/></template></p>
     </div>`,
 };
 StationsBoard.computed.T_sd = function () { return sandraDept(this.st); };
@@ -374,8 +384,43 @@ export const MeBoard = {
 };
 MeBoard.methods.isCert = isCert;
 
+/** The face-up Plan cards the Colleagues pick from, and what they say about the picks still to come. */
+export const PlanColumn = {
+    components: { Ic, Tok, PartChip },
+    props: { st: Object, compact: Boolean },
+    computed: {
+        cards() {
+            const col = this.st.plan.col;
+            return col.map((id, i) => ({ id, i, p: D.plan(id), pos: col.length === 1 ? 'only' : i === 0 ? 'top' : i === col.length - 1 ? 'bottom' : 'middle' }));
+        },
+        outlook() { return planOutlook(this.st); },
+        picked() {
+            const st = this.st;
+            return ['L', 'T'].filter(w => st.plan.card[w]).map(w => ({ w, p: D.plan(st.plan.card[w]), take: D.sel(st.sel.card[w]).take, part: D.sel(st.sel.card[w]).part, ws: st.pos[w] }));
+        },
+    },
+    template: `<div class="plancol" :class="{ compact }">
+      <h4 v-if="!compact" class="plan-h"><Ic n="plan" :s="16"/> Plan cards <button class="info-dot tip-btn" v-tip="TIP.planColumn(st)" aria-label="How the Colleagues pick"><Ic n="help" :s="16"/></button></h4>
+      <div class="pcards">
+        <span v-for="c in cards" :key="c.id" class="pcard" :class="'pos-' + c.pos" v-tip="TIP.planCard(st, c.id, c.pos)">
+          <small>{{ c.pos === 'only' ? 'left' : c.pos }}</small><Ic :n="c.p.d" :s="compact ? 16 : 20"/><b>{{ T.DN[c.p.d] }}</b>
+          <span v-if="!compact && c.p.parts.length" class="pparts"><part-chip v-for="p in c.p.parts" :key="p" :p="p" :s="12"/></span>
+        </span>
+        <span v-if="!cards.length" class="muted small">No Plan cards</span>
+      </div>
+      <ul class="outlook">
+        <li v-for="o in outlook" :key="o.w">
+          <Tok :w="o.w" :s="13"/>
+          <template v-if="o.opts">{{ compact ? T.WHO[o.w].replace('Mr ', '') : T.WHO[o.w] + ' picks next' }}: <span v-for="(x, k) in o.opts" :key="x.take">{{ k ? ' or ' : '' }}<b>{{ x.ws === null ? 'nowhere' : T.wsName(x.ws) }}</b><small v-if="!compact"> ({{ x.take === 't' ? 'top' : 'bottom' }} card)</small></span></template>
+          <template v-else>{{ compact ? T.WHO[o.w].replace('Mr ', '') : T.WHO[o.w] }}{{ compact ? ': ' : ' picks after ' + T.WHO[o.after] + ': ' }}any card left</template>
+        </li>
+        <li v-for="x in picked" :key="'p' + x.w"><Tok :w="x.w" :s="13"/>{{ compact ? T.WHO[x.w].replace('Mr ', '') : T.WHO[x.w] }} took the {{ x.take === 't' ? 'top' : 'bottom' }} card ({{ T.DN[x.p.d] }})<template v-if="!compact"> → {{ T.wsName(x.ws) }}</template></li>
+      </ul>
+    </div>`,
+};
+
 export const BotsBoard = {
-    components: { Ic, Tok, PartChip, DesignTile, CarIc },
+    components: { Ic, Tok, PartChip, DesignTile, CarIc, PlanColumn },
     props: ['st'],
     computed: {
         bots() {
@@ -385,9 +430,10 @@ export const BotsBoard = {
     },
     methods: { certCount },
     template: `<div class="bots board-sec">
+      <plan-column :st="st"/>
       <div v-for="x in bots" :key="x.w" class="botc">
-        <h4 v-tip="TIP.bot(st, x.w)"><Tok :w="x.w" :s="18"/> {{ T.WHO[x.w] }} <span class="neg">−{{ x.b.pts }}</span></h4>
-        <p class="line small">{{ x.ws === null ? 'Not placed' : T.wsName(x.ws) }}<template v-if="x.plan"> · Plan {{ T.DN[x.plan.d] }}</template><template v-if="x.sel"> · Selection <part-chip :p="x.sel.part" :s="13"/> {{ x.sel.take === 't' ? 'top' : 'bottom' }}</template></p>
+        <h4 v-tip="TIP.bot(st, x.w)"><Tok :w="x.w" :s="18"/> {{ T.WHO[x.w] }} <span class="neg">−{{ x.b.pts }} PP</span></h4>
+        <p class="line small">{{ x.ws === null ? 'No workstation yet' : T.wsName(x.ws) }}<template v-if="x.sel"> · Part this turn <part-chip :p="x.sel.part" :s="13"/></template></p>
         <p class="line small">Training <span v-for="(n, i) in x.b.tr" :key="i" class="tl"><Ic :n="D.DEPTS[i]" :s="13"/>{{ n }}</span> · certified {{ certCount(st, x.w) }}</p>
         <p class="line small"><Ic n="garage" :s="14"/> Cars <car-ic v-for="(m, i) in x.b.cars" :key="i" :m="m" :s="18"/><span v-if="!x.b.cars.length" class="muted">none</span></p>
         <p class="line small"><Ic n="upgraded" :s="14"/> Upgraded this week <design-tile v-for="id in x.b.upgd" :key="id" :id="id" up :s="14"/><span v-if="!x.b.upgd.length" class="muted">none</span></p>
@@ -421,11 +467,11 @@ export const GoalsBoard = {
 };
 
 export const LogList = {
-    components: { Tok },
+    components: { Tok, PPBadge },
     props: ['st'],
     computed: { rows() { return this.st.log.slice(-150).reverse(); } },
     template: `<ol class="log">
-      <li v-for="(l, i) in rows" :key="i" :class="['w-' + l.w, { pos: l.pp > 0, neg: l.pp < 0 }]"><small>D{{ l.d }}</small><Tok v-if="['you','L','T','S'].includes(l.w)" :w="l.w" :s="11"/>{{ l.text }}</li>
+      <li v-for="(l, i) in rows" :key="i" :class="['w-' + l.w, { hasPP: l.pp }]"><small>D{{ l.d }}</small><Tok v-if="['you','L','T','S'].includes(l.w)" :w="l.w" :s="11"/><span class="lt">{{ l.text }}</span><p-p-badge v-if="l.pp" :n="l.pp"/></li>
     </ol>`,
 };
 

@@ -13,7 +13,7 @@ export function answer(st, v) {
 }
 export * from './core.js';
 export { menuPrompt, shiftsLeft, active, stationOpts, designOpts, provideOpts, claimOpts, recycleOpts, kanbanAdds, speakValue, tableCards, meetOpts, partSources, canDouble, openGarages, upgradeDesigns, endTriggered } from './tasks.js';
-export { sandraValue, botLine } from './bots.js';
+export { sandraValue, botLine, resolveStation, pickQueue, planOutlook, selCounts } from './bots.js';
 
 /**
  * Every valid answer to a prompt (tests and sims use this; the UI renders from the prompt itself).

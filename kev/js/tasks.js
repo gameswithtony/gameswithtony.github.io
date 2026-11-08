@@ -780,7 +780,7 @@ H.final = (st, t) => {
     addPP(st, sum(you), 'Final scoring');
     const bots = botFinalScore(st);
     st.p.pp -= sum(bots);
-    log(st, 'sys', 'final', `Colleagues' final scoring −${sum(bots)}`);
+    log(st, 'sys', 'final', "Colleagues' final scoring", { pp: -sum(bots) });
     const win = st.p.pp > 0;
     st.result = { win, pp: st.p.pp, you: { final: spent.reduce((s, i) => s + fg.a[i].pp, 0), ...you }, bots, spent, rank: win ? rankOf(st) : null };
     push(st, { t: 'over' });

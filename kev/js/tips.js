@@ -5,7 +5,7 @@ import * as T from './text.js';
 import {
     deptOf, di, isCert, certCount, deskCap, storeCap, slotCap, myCars, tested, partValue, upgCount, trackLeader,
     pgCount, pgSlot, finalMet, sandraDept, weekScore, wsShifts, occupant, canAssemble, endTriggered,
-    kanbanAdds, speakValue, canDouble, sandraValue,
+    kanbanAdds, speakValue, canDouble, sandraValue, selCounts, planOutlook,
 } from './engine.js';
 
 const N = T.WHO;
@@ -170,6 +170,21 @@ export function bot(st, who) {
         who === 'L' ? 'Bottom workstations. Certified where he works: actions twice.' : 'Top workstations. Acts once; claims the most valuable car.',
         `Certifications: ${certCount(st, who)}. Cars: ${b.cars.length}. Upgraded Designs this week: ${b.upgd.length}.`]);
 }
+export function planColumn(st) {
+    const n = selCounts(st);
+    return tip('plan', 'How the Colleagues pick', `Selection deck: ${n.t} top · ${n.b} bottom`, [
+        'Each Colleague flips a Selection card and takes the top or bottom Plan card.',
+        "Mr Lacerda goes to that department's bottom workstation, Mr Turczi the top. If it is taken or is his current department, he tries the next department down.",
+        'Where he lands depends on what is free when he picks: your move or Sandra’s can push him on. Colleagues ignore Sandra otherwise.',
+        'Two Plan cards are dealt each morning. The one left over can swap Recycling at the end of the day.']);
+}
+export function planCard(st, id, pos) {
+    const p = D.plan(id);
+    return tip(p.d, `Plan card: ${T.DN[p.d]}`, pos === 'only' ? 'Left over' : pos[0].toUpperCase() + pos.slice(1), [
+        pos === 'top' ? 'A Colleague whose Selection card says top takes this.' : pos === 'bottom' ? 'A Colleague whose Selection card says bottom takes this.'
+            : pos === 'middle' ? 'Not takeable until the first pick moves it to an end.' : 'Nobody takes it today.',
+        p.parts.length ? `If it is left over tonight, a Selection card can swap Recycling with: ${p.parts.map(x => T.P[x]).join(', ')}.` : 'No end-of-day Recycling swap.']);
+}
 export function diffCard(id) { const c = D.DIFFICULTY.find(x => x.id === id); return tip('difficulty', `Difficulty ${id}: ${c.name}`, '', [c.d]); }
 export function charger(st, i) { return tip('charger', `Charging space ${i + 1}`, st.p.chargers?.[i] ? 'Charger token' : 'Empty', [T.CHARGER[i] + '.', 'Each Charger token scores 1 PP per car at the end.']); }
 export function garage(st, g) {
@@ -213,7 +228,9 @@ export function choice(st, pr, v) {
     switch (q) {
         case 'station': {
             const d = deptOf(v);
-            return tip(d, T.wsName(v), `${wsShifts(v)} Shift${wsShifts(v) > 1 ? 's' : ''}`, [`Work in ${T.DN[d]} today.`, 'Higher workstations act earlier and choose earlier tomorrow.']);
+            const pushes = planOutlook(st).filter(o => o.opts).flatMap(o => o.opts.filter(x => x.ws === v).map(x =>
+                `${N[o.w]} lands here if he gets the ${x.take === 't' ? 'top' : 'bottom'} Plan card (${T.DN[D.plan(x.id).d]}). Taking it pushes him to the next department.`));
+            return tip(d, T.wsName(v), `${wsShifts(v)} Shift${wsShifts(v) > 1 ? 's' : ''}`, [`Work in ${T.DN[d]} today.`, ...pushes, 'Higher workstations act earlier and choose earlier tomorrow.']);
         }
         case 'certStart': case 'certSpace': {
             const sec = q === 'certStart' ? 0 : pr.sec;

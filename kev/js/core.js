@@ -196,7 +196,7 @@ export function addPP(st, n, why) {
     if (!n) return;
     st.p.pp += n;
     if (st.phase !== 'final') st.p.maxPP = Math.max(st.p.maxPP, st.p.pp);
-    if (why) log(st, n > 0 ? 'you' : 'sys', 'pp', `${n > 0 ? '+' : ''}${n} PP · ${why}`, { pp: n });
+    log(st, n > 0 ? 'you' : 'sys', 'pp', why ? why[0].toUpperCase() + why.slice(1) : 'PP', { pp: n });
     if (hasDiff(st, 9) && st.p.pp <= 0 && st.phase !== 'setup') st.fired = true;
 }
 /** A Colleague "gains" PP: you lose it. */
@@ -204,10 +204,14 @@ export function botPP(st, who, n, why) {
     if (!n) return;
     st.bots[who].pts += n;
     st.p.pp -= n;
-    log(st, who, 'pp', `${NAME[who]} +${n} · ${why}`, { pp: -n });
+    log(st, who, 'pp', `${NAME[who]}: ${why[0].toUpperCase() + why.slice(1)}`, { pp: -n });
     if (hasDiff(st, 9) && st.p.pp <= 0) st.fired = true;
 }
 export const hasDiff = (st, id) => st.opts.diff.includes(id);
+/** Every PP change logged since log index `from`: [{ text, pp, w }]. */
+export function ppSince(st, from) {
+    return st.log.slice(from).filter(l => l.pp).map(l => ({ text: l.text, pp: l.pp, w: l.w }));
+}
 
 /** Books, Vouchers and Banked Shifts gained during your turn wait beside the board. */
 export function gain(st, item, n = 1) {

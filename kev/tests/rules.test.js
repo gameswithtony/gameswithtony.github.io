@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newGame, answer, choices, canAssemble, cleanFullLines, refillDesigns, advancePace, toTestTrack, certOrder, weekScore, finalScore, botFinalScore, partCount, carCount, kanbanAdds, H, pgCount, trackLeader } from '../js/engine.js';
 import { rollSync, stationOpts } from '../js/tasks.js';
-import { botSelect, sandraMove, dealPlans, endOfWeek, botTrain } from '../js/bots.js';
+import { botSelect, sandraMove, dealPlans, endOfWeek, botTrain, planOutlook, resolveStation } from '../js/bots.js';
 import * as D from '../js/data.js';
 
 const fresh = (o = {}) => newGame({ seed: 5, sandbox: true, ...o });
@@ -129,6 +129,23 @@ test('Sandra: next empty workstation in the next department; Admin means her des
     st.pos.S = 6; // Design
     sandraMove(st);
     assert.equal(st.pos.S, D.DESK);
+});
+
+test('Plan outlook: both ends for the next Colleague, any card for the later one, never the Selection deck', () => {
+    let st = fresh();
+    st = play(st, 1); // starting space 2: Turczi (space 3) picks first, then you, then Lacerda
+    assert.equal(st.prompt.q, 'station');
+    const o = planOutlook(st);
+    assert.equal(o.length, 1, 'Turczi already picked; only Lacerda is still to come');
+    assert.equal(o[0].w, 'L');
+    assert.deepEqual(o[0].opts.map(x => x.take), ['t', 'b']);
+    // the outlook is the same whatever order the Selection deck is in
+    const st2 = JSON.parse(JSON.stringify(st)); st2.sel.deck.reverse();
+    assert.deepEqual(planOutlook(st2), o);
+    // Lacerda wants the bottom workstation; if it is taken he moves on
+    const want = D.plan(st.plan.col[0]).d, i = D.DEPTS.indexOf(want);
+    st.pos.you = i * 2 + 1;
+    assert.notEqual(resolveStation(st, 'L', want), i * 2 + 1);
 });
 
 test('stations: never your department or Sandra\'s, never occupied', () => {

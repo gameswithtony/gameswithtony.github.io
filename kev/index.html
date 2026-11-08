@@ -78,12 +78,12 @@
     <div v-else class="game" :class="{ wide, mid }" :data-color="st.opts.color">
         <header class="hud">
             <span class="hud-brand" aria-hidden="true">KEV</span>
-            <button class="score tip-btn" v-tip="TIP.pp(st)" aria-label="Your PP"><tok w="you" :s="16"></tok><b>{{ st.p.pp }}</b><small>PP</small></button>
+            <button class="score tip-btn" v-tip="TIP.pp(st)" aria-label="Your PP"><tok w="you" :s="16"></tok><b>{{ shownPP ?? st.p.pp }}</b><small>PP</small></button>
             <span class="hud-stat" v-tip="TIP.day(st)"><small>Day</small><b>{{ st.day }}</b></span>
             <span class="hud-stat" v-tip="TIP.week(st)"><ic n="week" :s="15"></ic><b>{{ st.week }}</b><small>/3</small></span>
             <span class="hud-stat" v-tip="TIP.cycle(st)"><ic n="cycle" :s="15"></ic><b>{{ st.cycle }}</b><small>/3</small></span>
             <span v-if="st.meetingDue" class="hud-stat hot" v-tip="TIP.meeting(st)"><ic n="meeting" :s="15"></ic><small>tonight</small></span>
-            <span class="hud-stat" v-tip="TIP.sandra(st)"><tok w="S" :s="14"></tok><ic :n="st.pos.S === D.DESK ? 'adm' : ['rd','asm','log','des','adm'][Math.floor(st.pos.S / 2)]" :s="15"></ic></span>
+            <span class="hud-stat hud-sandra" v-tip="TIP.sandra(st)"><tok w="S" :s="14"></tok><ic :n="st.pos.S === D.DESK ? 'adm' : ['rd','asm','log','des','adm'][Math.floor(st.pos.S / 2)]" :s="15"></ic></span>
             <span class="sp"></span>
             <button class="icon-btn" @click="toggleTheme" :aria-label="themeLabel" :title="themeLabel"><ic :n="theme === 'dark' ? 'sun' : 'moon'" :s="20"></ic></button>
             <button class="icon-btn" @click="openSheet('menu')" aria-label="Menu" title="Menu"><ic n="menu" :s="20"></ic></button>
@@ -160,6 +160,7 @@
                             <button class="btn danger" @click="newGame">Yes, start over</button>
                             <button class="btn ghost" @click="confirmNew=false">Keep playing</button>
                         </div>
+                        <p class="ver">v{{ version }}</p>
                     </div>
                 </div>
             </div>

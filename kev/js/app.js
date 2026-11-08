@@ -1,12 +1,14 @@
 // KEV: Kanban EV against the official solo Colleagues. Vue 3 (global build), no build step.
 import { newGame, answer } from './engine.js';
-import { Ic, Tok, AlleyStrip, StationsBoard, Panel, RdPanel, AsmPanel, LogPanel, DesPanel, AdmPanel, MeBoard, BotsBoard, GoalsBoard, LogList, installGlobals } from './views.js';
+import { Ic, Tok, PPBadge, AlleyStrip, StationsBoard, Panel, RdPanel, AsmPanel, LogPanel, DesPanel, AdmPanel, MeBoard, BotsBoard, GoalsBoard, LogList, installGlobals } from './views.js';
 import { PromptDock } from './prompt.js';
 import * as D from './data.js';
 
 /* global Vue, LZString */
 const { createApp, markRaw } = Vue;
 
+/** Bump on every push (1.01, 1.02, ...) so a player can check they have the latest. Shown in the menu. */
+export const VERSION = '1.01';
 export const SAVE_KEY = 'kev.v1';
 export const SHARE_PREFIX = 'KEV1:';
 const THEME_KEY = 'kev.theme';
@@ -25,13 +27,13 @@ function loadSaved() {
 }
 
 const app = createApp({
-    components: { Ic, Tok, AlleyStrip, StationsBoard, Panel, RdPanel, AsmPanel, LogPanel, DesPanel, AdmPanel, MeBoard, BotsBoard, GoalsBoard, LogList, PromptDock },
+    components: { Ic, Tok, PPBadge, AlleyStrip, StationsBoard, Panel, RdPanel, AsmPanel, LogPanel, DesPanel, AdmPanel, MeBoard, BotsBoard, GoalsBoard, LogList, PromptDock },
     data() {
         return {
             st: null, undo: [],
             sheet: null, side: 'me',
             open: { rd: true, asm: true, log: true, des: true, adm: true },
-            tip: null,
+            tip: null, shownPP: null, version: VERSION,
             setup: { color: 'blue', nice: false, planner: false, expert: false, delayed: false, special: false, charger: false, addons: false, diff: [] },
             share: '', copied: false, confirmNew: false, error: null,
             w: window.innerWidth,
@@ -47,7 +49,29 @@ const app = createApp({
         diffNames() { return D.DIFFICULTY; },
     },
     watch: {
-        prompt(p) { const k = p && PANEL_FOR[p.q]; if (k) this.open[k] = true; },
+        /** The score counts to its new value instead of jumping. */
+        'st.p.pp': {
+            immediate: true,
+            handler(to, from) {
+                cancelAnimationFrame(this._ppAnim);
+                if (to === undefined) { this.shownPP = null; return; }
+                const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+                if (from === undefined || this.shownPP === null || reduce || to === this.shownPP) { this.shownPP = to; return; }
+                const start = this.shownPP, t0 = performance.now();
+                const dur = Math.min(900, 250 + 40 * Math.abs(to - start));
+                const step = now => {
+                    const k = Math.min(1, (now - t0) / dur);
+                    this.shownPP = Math.round(start + (to - start) * (1 - Math.pow(1 - k, 3)));
+                    if (k < 1) this._ppAnim = requestAnimationFrame(step);
+                    else this.shownPP = to;
+                };
+                this._ppAnim = requestAnimationFrame(step);
+            },
+        },
+        prompt(p) {
+            const k = p && PANEL_FOR[p.q]; if (k) this.open[k] = true;
+            if (p && p.q === 'station' && (this.wide || this.mid)) this.side = 'bots'; // the Plan cards drive this choice
+        },
     },
     created() {
         const saved = loadSaved();

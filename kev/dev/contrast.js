@@ -31,6 +31,7 @@ const PAIRS = [
     ['copper', 'bg', 4.5, 'wordmark'],
     ...['motor', 'autopilot', 'battery', 'drivetrain', 'body', 'electronics'].map(p => ['#ffffff', 'part-' + p, 3, 'icon on ' + p]),
     ...['concept', 'sports', 'truck', 'suv', 'city'].flatMap(m => [['car-' + m, 'floor', 3, m + ' on floor'], ['car-' + m, 'surface', 3, m + ' on surface']]),
+    ['on-ppb', 'bad', 4.5, 'PP loss badge'], ['on-ppb', 'good', 4.5, 'PP gain badge'],
     ['c-you', 'surface', 3, 'you outline'], ['c-l', 'surface', 3, 'Lacerda outline'], ['c-t', 'surface', 3, 'Turczi outline'], ['c-s', 'surface', 3, 'Sandra outline'],
 ];
 let fails = 0;
