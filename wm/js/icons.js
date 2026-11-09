@@ -1,6 +1,6 @@
 // Original SVG vocabulary. Shapes, initials, and labels carry meaning independently of color.
 const P = {
-  rain: '<path d="M6 13a4 4 0 0 1 0-8 6 6 0 0 1 11 2 3 3 0 0 1 0 6H6"/><path d="M7 16l-2 4M12 16l-2 4M17 16l-2 4"/>',
+  rain: '<path d="M6 13a4 4 0 0 1 0-8 6 6 0 0 1 11 2 3 3 0 0 1 0 6H6"/><path d="M6 16l-2 4M11 16l-2 4M16 16l-2 4"/>',
   wind: '<path d="M3 8h12a3 3 0 1 0-3-3M3 12h16a2 2 0 1 1-2 2M3 16h8a3 3 0 1 1-3 3"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>',
   fog: '<path d="M5 8a4 4 0 0 1 3-5 5 5 0 0 1 9 3 3 3 0 0 1 3 3M3 12h14m-9 4h13M3 20h13M3 16h1m17-4h1"/>',
@@ -25,7 +25,7 @@ const P = {
   funding: '<path d="M3 20h18M5 17v-4h4v-4h4V5h4V2m-4 0h4v4"/>',
   initiative: '<path d="M5 21V3m0 0h14l-4 5 4 5H5"/>',
   security: '<path d="m12 2 9 4v7c0 5-9 9-9 9s-9-4-9-9V6l9-4Z"/><path d="m8 12 3 3 5-6"/>',
-  saboteurs: '<path d="M3 12h18M6 12l2-8h8l2 8m-13 6a3 3 0 0 0 6 0 3 3 0 0 0 6 0M3 16h8m2 0h8"/>',
+  saboteurs: '<path d="m6 10 2-6 4 1.5L16 4l2 6Z" fill="currentColor" stroke="none"/><path d="M2 11h20M10 15h4"/><path d="M4 14h6v2a3 3 0 0 1-6 0v-2Zm10 0h6v2a3 3 0 0 1-6 0v-2Z" fill="currentColor" stroke="none"/>',
   you: '<circle cx="12" cy="6" r="3"/><path d="M5 22v-7a7 7 0 0 1 14 0v7M8 22v-6m8 6v-6"/>',
   lativ: '<circle cx="12" cy="7" r="4.5"/><circle cx="10" cy="7" r="1.5"/><circle cx="14" cy="7" r="1.5"/><path d="M11.5 7h1M5 22v-4a7 5 0 0 1 14 0v4M9 14l3 4 3-4M12 18v4"/>',
   cp: '<path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-6Z"/>',

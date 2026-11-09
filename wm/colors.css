@@ -1,0 +1,163 @@
+/* Board-inspired color, drawn with CSS only. See docs/COLORS.md. */
+:root {
+  --bg: #edf1ee;
+  --paper: #fffdf7;
+  --ink: #263d43;
+  --muted: #53666b;
+  --line: #c8d2ce;
+  --accent: #256674;
+  --accent-soft: #e1eff0;
+  --on-accent: #ffffff;
+  --accent-strong: #1c535f;
+  --gov: #4e537e;
+  --gov-soft: #eeeef6;
+  --on-gov: #ffffff;
+  --lab: #53643c;
+  --lab-soft: #eef1e3;
+  --on-lab: #ffffff;
+  --rd: #795671;
+  --rd-soft: #f5eaf1;
+  --on-rd: #ffffff;
+  --copper: #8d542d;
+  --copper-soft: #f7ecdd;
+  --danger: #a73e36;
+  --danger-soft: #fcece5;
+  --on-danger: #ffffff;
+  --focus: #92501d;
+  --header-bg: #263d4b;
+  --header-ink: #f9f5e9;
+  --disabled-bg: #eff0e9;
+  --shadow: 0 10px 30px #263d4310;
+  --rain: #3e527b;
+  --rain-soft: #edf0f7;
+  --wind: #686653;
+  --wind-soft: #f1f0e5;
+  --sun: #a84b23;
+  --sun-soft: #fff0e3;
+  --fog: #6e5848;
+  --fog-soft: #f3ece5;
+  --snow: #2c6b7b;
+  --snow-soft: #e7f2f3;
+}
+:root[data-theme="dark"] {
+  --bg: #17292e;
+  --paper: #22383d;
+  --ink: #f0f2e9;
+  --muted: #b5c5c5;
+  --line: #496066;
+  --accent: #9bd4d9;
+  --accent-soft: #2c494f;
+  --on-accent: #172f35;
+  --accent-strong: #bce8e9;
+  --gov: #c1c7ef;
+  --gov-soft: #333d54;
+  --on-gov: #242b41;
+  --lab: #c4d2a1;
+  --lab-soft: #374533;
+  --on-lab: #29351e;
+  --rd: #dfbbd5;
+  --rd-soft: #49394a;
+  --on-rd: #3a2638;
+  --copper: #e3bb8b;
+  --copper-soft: #493c30;
+  --danger: #ffb3a0;
+  --danger-soft: #4b3532;
+  --on-danger: #472722;
+  --focus: #f1c685;
+  --header-bg: #1c303b;
+  --header-ink: #f9f5e9;
+  --disabled-bg: #2b3b3e;
+  --shadow: 0 10px 30px #07181e30;
+  --rain: #b7c9ed;
+  --rain-soft: #2b3b51;
+  --wind: #d8d2b5;
+  --wind-soft: #3c4136;
+  --sun: #ffba88;
+  --sun-soft: #4a392e;
+  --fog: #dcc0a6;
+  --fog-soft: #423c35;
+  --snow: #a2dce4;
+  --snow-soft: #29474d;
+}
+
+/* Location color follows the printed tracks, vouchers, and research. */
+[data-section] { --section-tone: var(--accent); --section-wash: var(--accent-soft); }
+[data-section="government"] { --section-tone: var(--gov); --section-wash: var(--gov-soft); }
+[data-section="lab"] { --section-tone: var(--lab); --section-wash: var(--lab-soft); }
+[data-section="rd"] { --section-tone: var(--rd); --section-wash: var(--rd-soft); }
+[data-section="supply"], [data-section="workshop"], [data-section="bot"], [data-section="office"], [data-section="subsidy"] {
+  --section-tone: var(--copper); --section-wash: var(--copper-soft);
+}
+.panel > .panel-head { background: var(--section-wash); box-shadow: inset 0 3px var(--section-tone); }
+.panel-head h2 { color: var(--ink); }
+.panel-head h2 > svg { color: var(--section-tone); }
+.panel-head .inspect { color: var(--muted); }
+.space-actions { color: var(--section-tone); }
+.scientists .occupied { background: var(--section-wash); border-color: var(--section-tone); }
+.person.lativ { color: var(--lab); }
+
+/* Indigo / sage / mauve are repeated in each reading of the same resource. */
+.funding-track.government, .goal-government { --track-color: var(--gov); --track-soft: var(--gov-soft); --track-ink: var(--on-gov); }
+.funding-track.lab, .goal-lab { --track-color: var(--lab); --track-soft: var(--lab-soft); --track-ink: var(--on-lab); }
+.funding-track.rd, .goal-rd { --track-color: var(--rd); --track-soft: var(--rd-soft); --track-ink: var(--on-rd); }
+.funding-track .track .reached { background: var(--track-soft); color: var(--ink); }
+.funding-track .track .here { background: var(--track-color); color: var(--track-ink); outline-color: var(--track-color); }
+.funding-label b small { opacity: 1; }
+.goal-card { box-shadow: inset 0 3px var(--track-color); }
+.goal-card .goal-top { color: var(--track-color); }
+.goal-card.set { background: var(--track-soft); }
+.office-head > span:nth-child(2) { color: var(--gov); }
+.office-head > span:nth-child(3) { color: var(--lab); }
+.office-head > span:nth-child(4) { color: var(--rd); }
+.office-slot.filled.government { background: var(--gov-soft); border-color: var(--gov); }
+.office-slot.filled.lab { background: var(--lab-soft); border-color: var(--lab); }
+.office-slot.filled.rd { background: var(--rd-soft); border-color: var(--rd); }
+.office-slot.filled.award { background: var(--copper-soft); border-color: var(--copper); }
+.voucher.supply { color: var(--copper); }
+.decision .voucher small { opacity: 1; }
+.market-stock .taken { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* The five branch colors echo the board's weather bands. */
+[data-weather="rain"], .experiment-card.rain { --weather-color: var(--rain); --weather-soft: var(--rain-soft); }
+[data-weather="wind"], .experiment-card.wind { --weather-color: var(--wind); --weather-soft: var(--wind-soft); }
+[data-weather="sun"], .experiment-card.sun { --weather-color: var(--sun); --weather-soft: var(--sun-soft); }
+[data-weather="fog"], .experiment-card.fog { --weather-color: var(--fog); --weather-soft: var(--fog-soft); }
+[data-weather="snow"], .experiment-card.snow { --weather-color: var(--snow); --weather-soft: var(--snow-soft); }
+.machine-branch { background: var(--weather-soft); box-shadow: inset 0 3px var(--weather-color); }
+.machine-branch.active { background: var(--weather-soft); border-color: var(--accent); box-shadow: inset 0 3px var(--weather-color), 0 0 0 1px var(--accent); }
+.machine-branch .bot-slot { background: var(--paper); }
+.branch-weather > svg, .rd-weather > svg, .branch-name > svg { color: var(--weather-color); }
+.rd-weather { background: var(--weather-soft); box-shadow: inset 0 3px var(--weather-color); border-radius: 6px 6px 0 0; }
+.experiment-card { background: var(--weather-soft); box-shadow: inset 0 2px var(--weather-color); color: var(--ink); }
+.experiment-card > svg { color: var(--weather-color); }
+.experiment-card b small { color: var(--muted); opacity: 1; }
+.weather-level.level3 { background: var(--danger); color: var(--on-danger); }
+
+/* Chemical identity retains its shape and letter as well as its hue. */
+.material[data-color="green"] { --color: #7ea650; color: #18250f; }
+.material[data-color="white"] { --color: #eee8d6; color: #303c38; border-color: #72807b; }
+.material[data-color="pink"] { --color: #d99585; color: #361d18; }
+.material[data-color="magenta"] { --color: #9c2752; color: #ffffff; }
+.material[data-color="blue"] { --color: #66a8c3; color: #122e3c; }
+
+/* Navigation and decisions stay visually distinct from board identity. */
+.topbar { background: var(--header-bg); color: var(--header-ink); }
+.your-score { color: #c8ece4; }
+.target-score { color: #ffd0ab; }
+.topbar .header-actions .icon-button { border-color: #a5bec4; }
+.tabs button.on { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 -3px var(--accent); }
+.primary, .choice.primary-choice { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.primary:hover, .choice.primary-choice:not(:disabled):hover { background: var(--accent-strong); color: var(--on-accent); }
+.choice.primary-choice .choice-icon, .choice.primary-choice small { color: inherit; }
+.choice:disabled { opacity: 1; color: var(--muted); background: var(--disabled-bg); border-style: dashed; }
+.choice:disabled .choice-icon { color: var(--muted); }
+.choice:disabled .unavailable { color: var(--danger); }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.topbar button:focus-visible, .topbar a:focus-visible { outline-color: #f1c685; }
+.personal-rail { top: 82px; }
+
+@media (forced-colors: active) {
+  .panel > .panel-head, .goal-card, .machine-branch, .rd-weather, .experiment-card { box-shadow: none; }
+  .tabs button.on, .machine-branch.active, .track .here { outline: 2px solid Highlight; }
+  .material { forced-color-adjust: none; }
+}

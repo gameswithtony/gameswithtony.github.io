@@ -1,0 +1,18 @@
+/* Position, action allowance, and occupancy are separate readings. */
+.scientist-area { background: var(--bg); border-bottom: 1px solid var(--line); }
+.space-actions { padding: 7px 11px 0; color: var(--muted); font: 500 12px/1.2 var(--body); }
+.scientists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 11px; border: 0; }
+.scientists[data-location="1"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.scientists .scientist-space { flex-direction: column; justify-content: flex-start; min-width: 0; min-height: 0; gap: 3px; padding: 5px 4px; border-radius: 6px; }
+.scientists .space-position { color: var(--muted); font: 500 12px/1.2 var(--body); }
+.scientists .space-allowance { font: 600 15px/1.2 var(--display); }
+.scientists .scientist-space .space-occupant { display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: auto; color: var(--muted); font: 400 12px/1.2 var(--body); }
+.scientists .space-occupant svg { width: 14px; height: 14px; }
+.scientists[data-location="1"] .scientist-space { min-height: 0; }
+.scientists .occupied .space-occupant { color: var(--ink); }
+.scientists[data-location="1"] .lativ-space { grid-column: 1 / -1; flex-direction: row; gap: 7px; min-height: 34px; border: 0; background: transparent; }
+.scientists .lativ-space > span { font-size: 13px; }
+
+@media (max-width: 650px) {
+  .scientists { padding-inline: 10px; gap: 6px; }
+}

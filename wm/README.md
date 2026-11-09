@@ -19,6 +19,7 @@ Open **http://127.0.0.1:8078/**. The development server deliberately refuses to 
 - Choose any of the 12 official Challenges, optionally enter a setup seed, and start.
 - Orient the starting Workshop tile, then take the initial Supply round.
 - The decision panel offers validated actions and payments. Inspect any board item for its rules and current values.
+- The sticky header shows round, scores, and Workshop totals. Vouchers sit below the decision heading and remain visible when collapsed. Tap any metric for details; the Workshop tab keeps the full inventory breakdown.
 - Phone views keep the Table, Workshop, Office, Saboteurs, and Journal tabs fixed at the bottom. The full-width current action sits flush against the top of the tabs; tap its header to collapse or expand it. The collapsed title stays visible while inspecting the board or changing tabs. Wide screens expose a personal rail and simultaneous board panels.
 - Autosave uses `localStorage` under `wm.v1`, with up to 40 undo steps. Undo includes hidden decks and the random seed.
 - Export a JSON file or a `WM1:` share code from the menu. Load through the menu or `loadgame.html`. Codes are local data; the app does not upload games.
@@ -32,13 +33,15 @@ node wm/sim/run.js 1000 2200 challenges
 node wm/dev/headless.mjs
 ```
 
-`dev/devices.html` places the app in 320px, 375px, 820px, and 1600px frames for visual review. These frames share browser storage; use one active game tab when playing. `dev/icons.html` previews the Rain, Lativ, and distinct owner Bot icons at their small on-board sizes.
+`dev/devices.html` places the app in 320px, 375px, 820px, and 1600px frames for visual review. These frames share browser storage; use one active game tab when playing. `dev/icons.html` previews the Rain, Saboteur agent, Lativ, and distinct owner Bot icons at their small on-board sizes.
 
 The rule tests include a publication-to-prototype sequence, use of a marker-space Part in the prototype, covered weather layers, official solo timing, payments, conservation, final scoring, and both victory routes. Random legal games are a robustness check, not proof of complete rules fidelity.
 
 `dev/headless.mjs` drives the locally installed Chrome through its DevTools protocol, with no npm dependency. It starts its own local server and uses a separate test profile under ignored `resources/browser-qa/`; it does not use your normal Chrome profile or saved games. The default Chrome path is Windows-specific; set `WM_CHROME` for another installation. The script closes its browser and server when finished.
 
-Headless Chrome verification passed 414 checks on November 8, 2026: all five views at 320, 375, 430, 650, 820, 1280, and 1600 pixels; actual UI purchases and Workshop placement; Lab contribution and official Saboteur resolution; undo, reload, share/import; detail dialogs; dark mode; and a complete game through the result screen. Mobile checks cover fixed bottom tabs, drawer collapse/expand, scrolling, tab switching, safe-area spacing, and controls remaining unobstructed. Typography checks verify local font loading, equal current/max metric sizes, readable labels and action text, and text fitting its controls. No runtime errors or horizontal overflow were found. Representative phone, tablet, desktop, dark-mode, and icon-size screenshots were visually reviewed. The report and 20 screenshots remain in `resources/browser-qa/`, excluded from Git. This verifies the browser interactions and sampled layouts; it does not establish complete rules fidelity or replace testing on physical touch devices.
+Headless Chrome verification passed 491 checks on November 9, 2026: all five views at 320, 375, 430, 650, 820, 1280, and 1600 pixels; actual UI purchases and Workshop placement; Lab contribution and official Saboteur resolution; undo, reload, share/import; detail dialogs; both themes; and a complete game through the result screen. Mobile checks cover fixed bottom tabs, drawer collapse/expand, scrolling, tab switching, safe-area spacing, and controls remaining unobstructed. Typography checks verify local font loading, equal current/max metric sizes, readable labels and action text, and text fitting its controls. No runtime errors or horizontal overflow were found.
+
+The visual pass uses the board's indigo, sage, mauve, copper, and weather colors through CSS. [Palette notes](docs/COLORS.md) explain the mapping. `dev/contrast.mjs` measures rendered text against layered backgrounds, waits for entrance animations, and skips hidden content. Across 177 sampled screens (both themes, all tabs, setup, detail dialogs, and results), 30,189 text measurements passed, with a minimum measured contrast of 5.12:1. The report, contrast measurements, and 25 screenshots remain under ignored `resources/browser-qa/`. These are browser interaction and sampled visual checks; they do not establish complete rules fidelity, full accessibility conformance, or replace physical touch-device testing.
 
 ## Sources and implementation
 

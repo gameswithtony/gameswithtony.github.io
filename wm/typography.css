@@ -172,7 +172,6 @@ h1, h2, h3 { letter-spacing: .005em; }
   .tabs button { font-size: 12px; }
   .dock-title small { font: 500 12px/1.2 var(--body); letter-spacing: .04em; }
   .dock-title strong { font-size: 19px; }
-  .dock-toggle-state { font-size: 12px; }
   .decision-body .decision-text { font-size: 14px; }
   .choice strong { font-size: 16px; }
   .choice small { font-size: 13px; }

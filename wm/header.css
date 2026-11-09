@@ -1,0 +1,93 @@
+﻿/* Scores and Workshop totals stay in reach; vouchers live with the decision. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 64px;
+  padding: 8px 20px;
+  gap: 20px;
+  box-shadow: 0 2px 10px #001e331a;
+}
+.topbar .brand { flex-shrink: 0; font-size: 26px; }
+.header-metrics { display: flex; align-items: center; flex: 1; min-width: 0; gap: 20px; }
+.topbar .round { flex-shrink: 0; margin: 0; gap: 0; }
+.topbar .round button { flex-direction: row; align-items: center; gap: 4px; min-height: 40px; padding: 4px; white-space: nowrap; }
+.topbar .round small { font: 500 14px/1 var(--display); letter-spacing: 0; }
+.topbar .round b { font: 600 20px/1 var(--display); }
+.topbar .round .round-end { color: #ffcaad; font-size: 20px; }
+.topbar .score-pair { flex-shrink: 0; margin: 0; gap: 10px; }
+.topbar .score-pair button { padding: 6px 8px; min-height: 42px; }
+.topbar .score-pair span { align-items: center; gap: 7px; padding: 0; }
+.topbar .score-pair b { font: 600 26px/1 var(--display); }
+.topbar .score-pair svg { width: 20px; height: 20px; }
+.topbar .header-actions { flex-shrink: 0; }
+.header-inventory { display: flex; align-items: center; gap: 18px; margin-left: auto; }
+.header-inventory button { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px; }
+.header-inventory b { font: 600 19px/1 var(--display); font-variant-numeric: tabular-nums; }
+.decision:not(.result) { top: 82px; }
+
+.decision > .voucher-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  flex-shrink: 0;
+  height: auto;
+  margin: 0 0 12px;
+  padding: 6px 0;
+  gap: 6px;
+  border-block: 1px solid var(--line);
+  background: transparent;
+}
+.decision .voucher { min-width: 0; min-height: 36px; padding: 4px 1px; gap: 3px; }
+.decision .voucher svg { width: 18px; height: 18px; }
+.decision .voucher b, .decision .voucher small { font-size: 18px; }
+.decision .voucher small { position: static; margin-left: -2px; }
+
+/* The Workshop keeps its detailed color breakdown. */
+.main-view .hand-bar { display: flex; justify-content: flex-start; flex-wrap: wrap; gap: 10px; padding: 10px 14px; min-height: 42px; }
+.main-view .hand-bar button { min-height: 32px; }
+.main-view .hand-bar .material { width: 21px; height: 21px; font-size: 12px; }
+
+@media (max-width: 950px) {
+  .topbar { gap: 12px; padding-inline: 12px; }
+  .header-metrics { gap: 12px; }
+  .header-inventory { gap: 12px; }
+}
+
+@media (max-width: 650px) {
+  .topbar { height: 60px; padding: 7px 4px 7px 8px; gap: 5px; }
+  .topbar .brand { font-size: 22px; margin-right: 4px; }
+  .header-metrics { gap: 6px; }
+  .topbar .round { margin-right: 2px; }
+  .topbar .round button { gap: 2px; padding: 3px 0; }
+  .topbar .round b, .topbar .round .round-end { font-size: 18px; }
+  .topbar .score-pair { gap: 4px; }
+  .topbar .score-pair button { padding: 4px 2px; }
+  .topbar .score-pair span { gap: 3px; }
+  .topbar .score-pair b { font-size: 22px; }
+  .topbar .score-pair svg { width: 17px; height: 17px; }
+  .header-inventory { gap: 9px; }
+  .header-inventory button { padding: 3px 0; gap: 3px; }
+  .header-inventory svg { width: 17px; height: 17px; }
+  .header-inventory b { font-size: 17px; }
+  .topbar .header-actions { gap: 5px; margin-left: 4px; }
+  .topbar .header-actions .icon-button { width: 30px; height: 38px; }
+  .topbar .header-actions svg { width: 18px; height: 18px; }
+  .decision:not(.result) { top: auto; }
+  .decision > .decision-top { display: none; }
+  .decision > .voucher-bar { margin-bottom: 0; padding: 4px 10px; column-gap: 10px; border-top: 0; }
+  .decision .voucher { padding-block: 3px; }
+  .main-view .hand-bar { gap: 5px; padding: 8px 12px; }
+  .game-footer { padding-bottom: calc(190px + var(--mobile-safe-bottom)); }
+}
+
+/* Give the smallest phones room rather than reducing the number sizes. */
+@media (max-width: 360px) {
+  .topbar { display: grid; grid-template-columns: auto auto 1fr auto; grid-template-rows: 40px 32px; height: 90px; gap: 4px 12px; padding: 6px 12px; }
+  .header-metrics { display: contents; }
+  .topbar .brand { grid-column: 1; grid-row: 1; }
+  .topbar .round { grid-column: 2; grid-row: 1; }
+  .topbar .score-pair { grid-column: 3; grid-row: 1; justify-content: center; }
+  .topbar .header-actions { grid-column: 4; grid-row: 1; }
+  .header-inventory { grid-column: 1 / -1; grid-row: 2; justify-content: center; gap: 28px; margin: 0; }
+  .header-inventory button { min-height: 32px; gap: 6px; }
+}
