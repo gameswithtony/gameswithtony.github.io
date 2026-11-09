@@ -1,0 +1,95 @@
+/* The phone's two persistent layers: action drawer above bottom navigation. */
+.decision-dock-header { display: none; }
+
+@media (max-width: 650px) {
+  :root {
+    --mobile-tab-height: 60px;
+    --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tabs {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    height: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom));
+    max-width: none;
+    margin: 0;
+    padding: 6px 8px calc(6px + var(--mobile-safe-bottom));
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+    box-shadow: 0 -2px 12px #001e3310;
+  }
+
+  .tabs button { flex: 1; min-width: 0; min-height: 48px; font-size: 9px; }
+  .tabs button.on { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+
+  .layout { padding-bottom: 18px; }
+  .game-footer { padding-bottom: calc(144px + var(--mobile-safe-bottom)); }
+  .game-over .game-footer { padding-bottom: calc(76px + var(--mobile-safe-bottom)); }
+
+  .decision:not(.result) {
+    position: fixed;
+    top: auto;
+    bottom: calc(var(--mobile-tab-height) + var(--mobile-safe-bottom));
+    left: 0;
+    right: 0;
+    z-index: 25;
+    width: auto;
+    max-height: min(56dvh, calc(100dvh - var(--mobile-tab-height) - var(--mobile-safe-bottom) - 24px));
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-inline: 0;
+    border-bottom: 0;
+    border-top: 3px solid var(--accent);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -6px 30px #001e332b, 0 3px 10px #001e331a;
+  }
+
+  .decision-dock-header { display: flex; align-items: center; flex-shrink: 0; }
+  .decision-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    min-height: 58px;
+    text-align: left;
+    padding: 10px 3px 10px 13px;
+    border-radius: 10px;
+  }
+  .dock-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .dock-title small { color: var(--accent); font: 8px var(--mono); letter-spacing: .09em; }
+  .dock-title strong { font: 600 16px/1.2 var(--display); }
+  .dock-toggle-state { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--muted); font-size: 8px; }
+  .decision-dock-help.icon-button { width: 38px; height: 44px; margin-right: 5px; border: 0; background: transparent; }
+  .decision[data-collapsed="true"] .dock-chevron { transform: rotate(180deg); }
+  .decision[data-collapsed="true"] .decision-body { display: none; }
+  .decision[data-collapsed="false"] .decision-dock-header { border-bottom: 1px solid var(--line); }
+
+  .decision-body { display: flex; flex-direction: column; min-height: 0; padding: 9px 12px 0; }
+  .decision-body .decision-top, .decision-body #decision-title { display: none; }
+  .decision-body .decision-text { flex-shrink: 0; font-size: 11px; line-height: 1.45; margin-bottom: 8px; }
+  .decision-body .choice-list,
+  .decision-body .choice-list:has(.choice:nth-child(8)) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .decision-body .choice { min-height: 50px; }
+  .decision-body .decision-footer { flex-shrink: 0; }
+
+  #notice { top: 12px; bottom: auto; z-index: 40; }
+}
