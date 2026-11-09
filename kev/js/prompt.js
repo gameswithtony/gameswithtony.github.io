@@ -236,7 +236,7 @@ export const PromptDock = {
   <div v-else-if="q==='kanbanCard'" class="dock-body">
     <div class="opts">
       <button v-for="k in pr.opts" :key="k" class="opt kopt" @click="go(k)">
-        <span class="kcard"><span v-for="(r, j) in D.KANBAN[k]" :key="j" class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="15"/></span></span>
+        <span class="kcard"><span v-for="(r, j) in D.KANBAN[k]" :key="j" class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="26"/></span></span>
       </button>
     </div>
   </div>
@@ -246,7 +246,7 @@ export const PromptDock = {
       <button v-for="k in pr.opts" :key="k" class="opt kopt" @click="go(k)">
         <span class="kcard">
           <template v-for="(r, j) in layout(k).rows" :key="j">
-            <span class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="13"/></span>
+            <span class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="22"/></span>
             <span v-if="(layoutInfo(k).up && j === 1) || (!layoutInfo(k).up && j === 0)" class="kline-s"></span>
           </template>
         </span>

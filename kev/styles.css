@@ -334,9 +334,9 @@ h4 { font-size: 14px; color: var(--accent); display: flex; align-items: center; 
 .crt { display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px; border-radius: 6px; background: var(--floor); }
 .crt.on { background: var(--good-bg); }
 .crt b { font: 700 15px var(--font-h); }
-.kcard { display: inline-grid; gap: 2px; padding: 4px; border-radius: 6px; background: var(--raised); border: 1px solid var(--border); }
-.krow { display: flex; gap: 2px; justify-content: center; }
-.kline-s { height: 0; border-top: 2px dashed var(--accent); margin: 1px -2px; }
+.kcard { display: inline-grid; gap: 4px; padding: 6px; border-radius: 6px; background: var(--raised); border: 1px solid var(--border); }
+.krow { display: flex; gap: 4px; justify-content: center; }
+.kline-s { height: 0; border-top: 2px dashed var(--accent); margin: 1px -3px; }
 .chg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .chs { display: grid; justify-items: center; padding: 4px; border-radius: 6px; background: var(--floor); border: 1px dashed var(--floor-line); }
 .chs.on { background: var(--teal-bg); border: 1px solid var(--teal); }

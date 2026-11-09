@@ -373,7 +373,7 @@ export const MeBoard = {
       <div class="certs"><span v-for="c in certs" :key="c.d" class="crt" :class="{ on: c.c }" v-tip="TIP.track(st, c.d)"><Ic :n="c.d" :s="16"/><b>{{ c.n }}</b><Ic v-if="c.c" n="check" :s="12"/></span></div>
       <p class="line small" v-if="isCert(st, 'you', 'rd')"><Ic n="upgraded" :s="14"/> Double-Upgrade {{ p.dblUsed ? 'used' : 'ready' }}</p>
       <h4><Ic n="kanban" :s="16"/> Kanban cards</h4>
-      <div class="row"><span v-for="k in p.kanban" :key="k" class="kcard" v-tip="TIP.kanbanCard(k)"><span v-for="(r, j) in D.KANBAN[k]" :key="j" class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="13"/></span></span></div>
+      <div class="row"><span v-for="k in p.kanban" :key="k" class="kcard" v-tip="TIP.kanbanCard(k)"><span v-for="(r, j) in D.KANBAN[k]" :key="j" class="krow"><part-chip v-for="(x, n) in r" :key="n" :p="x" :s="24"/></span></span></div>
       <h4><Ic n="hand" :s="16"/> Performance Goals in hand</h4>
       <div class="pg-row"><pg-card v-for="id in p.hand" :key="id" :st="st" :id="id"/></div>
       <template v-if="p.chargers">

@@ -8,7 +8,7 @@ import * as D from './data.js';
 const { createApp, markRaw } = Vue;
 
 /** Bump on every push (1.01, 1.02, ...) so a player can check they have the latest. Shown in the menu. */
-export const VERSION = '1.02';
+export const VERSION = '1.03';
 export const SAVE_KEY = 'kev.v1';
 export const SHARE_PREFIX = 'KEV1:';
 const THEME_KEY = 'kev.theme';
