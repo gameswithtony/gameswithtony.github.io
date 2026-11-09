@@ -46,23 +46,23 @@ export const GOAL_SPACES = Object.fromEntries(['government','lab','rd'].map(k=>[
 export const SECURE_COLUMNS = {rain:[voucher('lab')],wind:[voucher('science')],sun:[voucher('supply')],fog:[voucher('science')],snow:[voucher('rd')]};
 export const SECURE_ROWS = [[voucher('science')],[voucher('rd')],[voucher('lab')]];
 export const FUNDING = {
- government:Array.from({length:10},(_,p)=>({cp:p>=8?7:p>=6?5:p>=4?3:p>=2?1:0,benefits:[voucher(),...p>=2?[b('chemical')]:[],...p>=4?[voucher()]:[],...p>=7?[b('bot')]:[],...p>=9?[b('cp',3)]:[]]})),
+ government:Array.from({length:10},(_,p)=>({cp:p>=8?7:p>=6?5:p>=4?3:p>=2?1:0,benefits:[voucher(),...p>=2?[b('chemical')]:[],...p>=4?[funding()]:[],...p>=7?[b('bot')]:[],...p>=9?[b('cp',3)]:[]]})),
  lab:Array.from({length:10},(_,p)=>({cp:p>=8?4:p>=6?3:p>=4?2:p>=2?1:0,science:Number(p>=2)+Number(p>=4)+Number(p>=7),modifier:[0,1,1,2,2,3,3,4,4,5][p],benefits:[]})),
  rd:Array.from({length:10},(_,p)=>({cp:p>=9?7:p>=7?6:p>=5?5:p>=3?4:p>=1?3:0,benefits:[],alternatives:[...p>=1?[[b('part')]]:[],...p>=3?[[b('cp',3),b('part')]]:[],...p>=5?[[b('part',2)]]:[],...p>=7?[[b('cp',5),b('part')]]:[],...p>=9?[[b('cp',7)]]:[]]}))
 };
 export const REPORTS = [
  ['pink',2,'snow','top'],['pink',3,'rain','top'],['pink',4,'wind','top'],['pink',2,'wind','bottom'],['pink',3,'sun','bottom'],['pink',4,'fog','bottom'],['pink','lativ','rain','bottom'],
  ['pink',3,'sun','top'],['pink','lativ','snow','bottom'],['pink',1,'fog','top'],['white',2,'rain','top'],['white',3,'snow','top'],['white',4,'sun','top'],['white',2,'sun','bottom'],
- ['white',3,'wind','bottom'],['white',4,'fog','bottom'],['white','lativ','snow','top'],['white',3,'wind','bottom'],['white','lativ','rain','top'],['white',1,'wind','top']
+ ['white',3,'wind','bottom'],['white',4,'fog','bottom'],['white','lativ','snow','top'],['white',3,'wind','bottom'],['white','lativ','rain','top'],['white',1,'wind','bottom']
 ].map(([agent,location,weather,priority],id)=>({id,agent,location,weather,priority}));
 export const EXPERIMENTS = [
  ...WEATHER.map((weather,i)=>({id:i,stage:1,weather,cost:1,cp:[5,2,5,2,5][i],rewards:[[i===1||i===3?action('work'):b('part',2)],[b('investment')]]})),
  ...WEATHER.map((weather,i)=>({id:5+i,stage:2,weather,cost:2,cp:[6,3,6,3,6][i],rewards:[[i===0?action('research',true):i===2?b('bot'):i===4?action('sell'):b('part',2)],[b('investment')]]})),
- ...WEATHER.map((weather,i)=>({id:10+i,stage:3,weather,cost:1,cp:[7,4,7,4,7][i],rewards:[[action(i===1||i===3?'publish':'breakthrough')],[b('investment')]]}))
+ ...WEATHER.map((weather,i)=>({id:10+i,stage:3,weather,cost:2,cp:[7,4,7,4,7][i],rewards:[[action(i===1||i===3?'publish':'breakthrough')],[b('investment')]]}))
 ];
 const extraParts={rain:[['blue'],['blue','blue']],wind:[['magenta'],['green','magenta']],sun:[['pink'],['pink','pink']],fog:[['green'],['green','magenta']],snow:[['white'],['white','white']]};
 export const EXTREME = Object.fromEntries(WEATHER.map(w=>[w,[
- {cost:0,parts:[],spaces:[[b('part')],[b('cp',2)],[w==='rain'||w==='sun'?b('chemical'):w==='wind'||w==='snow'?funding():voucher()]]},
+ {cost:0,parts:[],spaces:[[b('part')],[b('cp',2)],[{rain:b('chemical'),wind:b('workshop'),sun:b('part'),fog:voucher(),snow:funding()}[w]]]},
  {cost:1,parts:extraParts[w][0],spaces:[[b('part')],[b('cp',2)]]},
  {cost:2,parts:extraParts[w][1],spaces:[[b('investment')]]}
 ]]));

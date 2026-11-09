@@ -85,9 +85,12 @@ export function consumePlan(st, plan) {
   }
   repack(st);
 }
+/** Bots constructed and Office tokens: what unlocks the lower Assembly sections. */
+export function assemblyProgress(st) {
+  return { built: st.p.assembly.filter(x => !x).length, tokens: st.p.office.reduce((n, r) => n + r.tokens.filter(Boolean).length, 0) + st.p.pending.length + st.p.awards };
+}
 export function constructible(st) {
-  const built = st.p.assembly.filter(x => !x).length;
-  const tokens = st.p.office.reduce((n, r) => n + r.tokens.filter(Boolean).length, 0) + st.p.pending.length + st.p.awards;
+  const { built, tokens } = assemblyProgress(st);
   return st.p.assembly.map((present, i) => ({ present, i })).filter(({ present, i }) => present && (i < 6 || i < 9 && (built >= 6 || tokens >= 5) || i >= 9 && (built >= 9 || tokens >= 8))).map(x => x.i);
 }
 export function benefits(st, list) { add(st, ...list.map(b => ({ t: 'benefit', benefit: b }))); }

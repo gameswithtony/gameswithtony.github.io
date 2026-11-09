@@ -1,6 +1,6 @@
 import * as D from './data.js';
 import { H, DONE, add, ask, takeAnswer, log } from './runner.js';
-import { benefits, canPay, funding, cp } from './economy.js';
+import { benefits, canPay, funding, cp, assemblyProgress } from './economy.js';
 import { challenge, unlock, botCount } from './state.js';
 
 export const OFFICE_KINDS = ['government', 'lab', 'rd'];
@@ -79,6 +79,24 @@ export function immediateVictory(st) {
 }
 export function finalVictory(st) {
   return !challenge(st, 12) && st.p.cp > st.target && (!challenge(st, 4) || st.p.nobel) && (!challenge(st, 5) || metGoals(st) >= 5);
+}
+
+const fundingValues = st => Object.values(st.p.funding);
+const papers = st => st.p.office.filter(r => r.published).length;
+const boardBots = st => ['government', 'lab', 'rd'].reduce((n, k) => n + D.WEATHER.reduce((m, w) => m + botCount(st, 'you', k, w), 0), 0);
+/** Solo rank titles for a win, best first. */
+export const RANKS = [
+  { name: 'Terraformer', needs: [['120+ CP', st => st.p.cp >= 120], ['lowest Funding at space 4+', st => Math.min(...fundingValues(st)) >= 4], ['a Funding track at its last space', st => Math.max(...fundingValues(st)) >= 9], ['6+ Workshop tiles', st => st.p.workshop.length >= 6], ['2 or fewer Vouchers left', st => Object.values(st.p.vouchers).reduce((n, v) => n + v, 0) <= 2]] },
+  { name: 'Climatologist', needs: [['110+ CP', st => st.p.cp >= 110], ['the Nobel Prize', st => st.p.nobel], ['4+ Goals met', st => metGoals(st) >= 4], ['all Bots unlocked', st => { const a = assemblyProgress(st); return a.built >= 9 || a.tokens >= 8; }]] },
+  { name: 'Meteorologist', needs: [['100+ CP', st => st.p.cp >= 100], ['3+ Papers', st => papers(st) >= 3], ['a Funding track at space 8+', st => Math.max(...fundingValues(st)) >= 8], ['3+ Goals met', st => metGoals(st) >= 3], ['2+ Awards', st => st.p.totalAwards >= 2]] },
+  { name: 'Forecaster', needs: [['3+ Papers', st => papers(st) >= 3], ['7+ Bots on the board', st => boardBots(st) >= 7], ['3+ Goals met', st => metGoals(st) >= 3], ['1+ Award', st => st.p.totalAwards >= 1]] },
+  { name: 'Stormchaser', needs: [['2+ Goals met', st => metGoals(st) >= 2], ['1+ Award', st => st.p.totalAwards >= 1]] },
+];
+/** The best rank earned, and what the next one up still needs. Only a win earns a rank. */
+export function rankOf(st) {
+  if (!st.result?.won) return { rank: null, next: null };
+  const i = RANKS.findIndex(r => r.needs.every(([, ok]) => ok(st))), up = i === -1 ? RANKS.at(-1) : RANKS[i - 1];
+  return { rank: i === -1 ? null : RANKS[i].name, next: up ? { name: up.name, missing: up.needs.filter(([, ok]) => !ok(st)).map(([text]) => text) } : null };
 }
 
 H.placeResearch = (st, t) => {

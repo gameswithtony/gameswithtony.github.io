@@ -61,7 +61,7 @@ Bots, Parts, and Chemicals must fit immediately when gained. A Workshop tile sto
 | Government | Secure Subsidy | Two Government; choose an unflipped board Subsidy; gain its column reward, row reward, and tile effect; flip it. |
 | Lab | Work on Experiment | One Lab; advance Lab funding; place Bot in empty Lab space (or displace a Lativ Bot); return matching Chemical to Supply. |
 | Lab | Publish Paper | Two Lab; complete eligible Office row, optionally citing; gain row publication benefit, 2 CP per research, 4 CP per Award, and one Investment. Citation tokens score zero. Unlock that weather; may pay one Science for 3 CP if newly unlocked. |
-| R&D | Research | One R&D; advance R&D funding; place Bot and matching Chemical in empty R&D slot; pay bottom-slot extra Chemical/Part if applicable; gain slot benefit and research. If the branch becomes full, gain Investment instead and unlock its citation, optionally paying Science for 3 CP. |
+| R&D | Research | One R&D; advance R&D funding; place Bot and matching Chemical in empty R&D slot; pay bottom-slot extra Chemical/Part if applicable; gain slot benefit and research. If the branch becomes full, or no token remains, gain Investment instead and unlock its citation, optionally paying Science for 3 CP. |
 | R&D | Breakthrough | Two R&D; use published row with unspent Breakthrough marker; pay weather's Science cost; choose empty marker space and gain benefit; build prototype; take Award. Third Award also takes Nobel and triggers game end. |
 
 Base pp. 13–19. A benefit granting a Location action removes its voucher cost, but material costs remain unless its icon expressly waives the Chemical. (Base p. 23.)

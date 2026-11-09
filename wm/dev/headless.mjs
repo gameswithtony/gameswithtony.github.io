@@ -45,6 +45,7 @@ async function answer(wanted) {
   if(await evaluate('document.querySelector(".decision-body") && getComputedStyle(document.querySelector(".decision-body")).display === "none"'))await click('[data-do="toggleDecision"]');
   const index = await evaluate(`WM.state.prompt.options.findIndex(o=>!o.disabled&&(${wanted}))`);
   assert.ok(index >= 0, 'Expected legal option: ' + wanted);
+  await waitFor('WM.ready');
   await click(`[data-do="answer"][data-choice="${index}"]`);
   assert.equal(await evaluate('document.querySelector("dialog[open] #sheet-title")?.textContent || ""'), '', 'No action failure modal');
 }
@@ -76,6 +77,7 @@ async function screenshot(name, full = false) {
   const r = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full, ...(full ? { clip: { x: 0, y: 0, ...bounds, scale: 1 } } : {}) });
   fs.writeFileSync(path.join(out, name + '.png'), Buffer.from(r.data, 'base64')); screenshots.push(name + '.png');
 }
+const FITS=`(()=>{const list=document.querySelector('.choice-list');if(!list)return true;const cells=[...list.querySelectorAll('.seat-cell,.seat-off,.slot-cell,.act-tile,.act-free,.choice')];return list.scrollWidth<=list.clientWidth+1&&!cells.some(c=>{if(!c.getClientRects().length)return false;const b=c.getBoundingClientRect();return c.scrollWidth>c.clientWidth+1||[...c.querySelectorAll('*')].some(e=>{const r=e.getBoundingClientRect();return r.width&&(r.left<b.left-1||r.right>b.right+1)})})})()`;
 async function openTab(tab) { await click(`.tabs [data-do="tab"][data-tab="${tab}"]`); }
 async function mobileDock(width) {
   const before = await evaluate('JSON.stringify(WM.state)');
@@ -139,6 +141,11 @@ try {
   test('Chemical acquired through UI', await evaluate('WM.state.p.items.some(i=>i.type==="chemical"&&i.color==="green")'));
   await answer('o.v === "extend"'); await answerFirst(); await reachMenu();
   test('Workshop extension placed through UI', await evaluate('WM.state.p.workshop.length===2'));
+  for (const [w,h] of [[320,568],[320,812],[375,812],[430,932],[650,800],[820,700],[1280,640],[1600,1000]]) {
+    await viewport(w,h);
+    test(`End turn stays in view without scrolling the options: ${w}x${h}`,await evaluate('(()=>{const b=document.querySelector(".choice-pinned .primary-choice").getBoundingClientRect(),t=document.querySelector(".tabs"),limit=getComputedStyle(t).position==="fixed"?t.getBoundingClientRect().top:innerHeight;return WM.state.prompt.kind==="menu"&&!document.querySelector(".choice-list .primary-choice")&&b.top>=0&&b.bottom<=limit+1})()'));
+  }
+  await viewport(375,812);
   const saved = await evaluate('JSON.stringify(WM.state)');
   await answer('o.v === "done"'); test('Round one movement offered', await evaluate('WM.state.prompt.task==="move"'));
   await click('[data-do="toggleDecision"]');
@@ -163,15 +170,26 @@ try {
   for (const width of [320, 375, 430, 650, 820, 1280, 1600]) {
     await viewport(width, width < 650 ? 812 : 1000);
     test('Top bar has a single icon-only theme button and no Undo: '+width,await evaluate('document.querySelectorAll(".topbar [data-do=theme]").length===1&&!document.querySelector(".topbar [data-do=theme]").textContent.trim()&&!document.querySelector(".topbar [data-do=undo]")'));
-    test('Visible decision Undo sits left of info: '+width,await evaluate('(()=>{const groups=[...document.querySelectorAll(".decision-controls")].filter(e=>e.getClientRects().length);return groups.length===1&&groups.every(e=>{const u=e.querySelector("[data-do=undo]").getBoundingClientRect(),h=e.querySelector("[data-do=help]").getBoundingClientRect();return u.width>=36&&u.height>=38&&u.right<=h.left&&u.top===h.top})})()'));
-    test('Current and maximum voucher values share a font size: '+width,await evaluate('[...document.querySelectorAll(".voucher")].every(e=>getComputedStyle(e.querySelector("b")).fontSize===getComputedStyle(e.querySelector("small")).fontSize)'));
+    test('Visible decision Undo sits left of explain: '+width,await evaluate('(()=>{const groups=[...document.querySelectorAll(".decision-controls")].filter(e=>e.getClientRects().length);return groups.length===1&&groups.every(e=>{const u=e.querySelector("[data-do=undo]").getBoundingClientRect(),h=e.querySelector("[data-do=explain]").getBoundingClientRect();return u.width>=36&&u.height>=38&&u.right<=h.left&&u.top===h.top})})()'));
+    test('A maximum never renders taller than its current value: '+width,await evaluate('[...document.querySelectorAll(".voucher")].every(e=>Math.abs(parseFloat(getComputedStyle(e.querySelector("small")).fontSize)/parseFloat(getComputedStyle(e.querySelector("b")).fontSize)-.95)<.01)'));
     test('Header gives readable scores room: '+width,await evaluate('(()=>{const h=document.querySelector(".topbar").getBoundingClientRect();return h.height<=90&&document.querySelector(".brand").textContent==="WM"&&[...document.querySelectorAll(".topbar .inspect,.topbar .icon-button")].every(e=>{const r=e.getBoundingClientRect();return r.top>=h.top&&r.bottom<=h.bottom&&r.left>=h.left&&r.right<=h.right})&&[...document.querySelectorAll(".score-pair b")].every(e=>parseFloat(getComputedStyle(e).fontSize)>=22)})()'));
     test('Vouchers belong to the decision, with inventory repeated in the header: '+width,await evaluate('!document.querySelector(".topbar .voucher")&&document.querySelectorAll(".decision .voucher").length===5&&[...document.querySelectorAll(".header-inventory b")].every((e,i)=>Number(e.textContent)===WM.state.p.items.filter(t=>t.type===["bot","part","chemical"][i]).length)'));
     await evaluate('window.scrollTo(0,document.documentElement.scrollHeight)');
     test('Header remains at the top while scrolling: '+width,await evaluate('Math.abs(document.querySelector(".topbar").getBoundingClientRect().top)<1'));
+    test('Defeat clocks stay directly under the header while scrolling: '+width,await evaluate('(()=>{const g=document.querySelector(".weather-gauge").getBoundingClientRect(),h=document.querySelector(".topbar").getBoundingClientRect();return Math.abs(g.top-h.bottom)<1.5&&document.querySelectorAll(".gauge-cell").length===5&&Number(document.querySelector(".gauge-reports b").textContent)===WM.state.reportDeck.length})()'));
     await evaluate('window.scrollTo(0,0)');
+    test('Subsidies name their benefit: '+width,await evaluate('![...document.querySelectorAll(".subsidy-pips button")].some(e=>e.textContent.trim()==="blue")'));
     test('Action text stays readable: '+width,await evaluate('[...document.querySelectorAll(".choice-content strong,.choice-content small")].every(e=>parseFloat(getComputedStyle(e).fontSize)>=13)'));
     if(width<=650)await mobileDock(width);
+    if(width===375){
+      const beforeExplain=await evaluate('JSON.stringify(WM.state)');
+      await click('.decision-dock-header [data-do="explain"]');
+      test('Explain mode says what to do',await evaluate('!!document.querySelector(".explain-bar")'));
+      await click('[data-do="answer"][data-choice="0"]');
+      test('Explain mode opens the option, not the move',await evaluate('!!document.querySelector("dialog[open] .tip-lines")')&&await evaluate('JSON.stringify(WM.state)')===beforeExplain);
+      contrastReports.push({tab:'explain',width,...await evaluate('('+contrastAudit.toString()+')()')});
+      await click('dialog [data-do="close"]');await click('.decision-dock-header [data-do="explain"]');
+    }
     for (const tab of ['table', 'workshop', 'office', 'reports', 'history']) {
       await openTab(tab); await layout(`${tab}-${width}`);
       if(width===375||width===1600)contrastReports.push({tab,width,...await evaluate('('+contrastAudit.toString()+')()')});
@@ -182,6 +200,22 @@ try {
   for (const width of [320,375]) {
     await viewport(width,812);
     test('Late-game scores and final-round flag fit the header: '+width,await evaluate('(async()=>{const {header}=await import("./js/views.js"),s=structuredClone(WM.state),original=document.querySelector(".topbar").outerHTML;s.p.cp=125;s.target=160;s.round=9;s.endRound=9;document.querySelector(".topbar").outerHTML=header(s);const h=document.querySelector(".topbar").getBoundingClientRect(),groups=[...document.querySelectorAll(".topbar .brand,.topbar .round,.topbar .score-pair,.header-inventory,.header-actions")].map(e=>e.getBoundingClientRect()),fits=groups.every((r,i)=>r.left>=h.left&&r.right<=h.right&&groups.every((other,j)=>i===j||r.right<=other.left||other.right<=r.left||r.bottom<=other.top||other.bottom<=r.top));document.querySelector(".topbar").outerHTML=original;return fits})()'));
+  }
+  for (const [w,h] of [[1280,640],[1440,900],[820,700]]) {
+    await viewport(w,h);
+    test(`Decision panel fits the first screen, options scroll inside it: ${w}x${h}`,await evaluate('(()=>{window.scrollTo(0,0);const d=document.querySelector(".decision").getBoundingClientRect(),l=document.querySelector(".choice-list"),r=l.getBoundingClientRect();return d.bottom<=innerHeight&&r.bottom<=d.bottom&&getComputedStyle(l).overflowY==="auto"&&r.height>=90})()'));
+  }
+  await viewport(1440,900);await openTab('table');
+  const belowLab=()=>evaluate('document.querySelector("[data-panel=supply]").getBoundingClientRect().top');
+  const openTop=await belowLab();
+  await click('.panel-toggle[data-panel="lativ-s-lab"]');
+  test('A collapsed block lets the rest of its column close up',await evaluate('document.querySelector("section[data-panel=lativ-s-lab]").dataset.closed==="true"')&&await belowLab()<openTop-100);
+  await click('.panel-toggle[data-panel="lativ-s-lab"]');
+  test('A collapsed block reopens',await evaluate('document.querySelector("section[data-panel=lativ-s-lab]").dataset.closed==="false"'));
+  for (const w of [320,360,375,430,651,700,950,1100,1280,1400,1401,1500,1650,1920]) {
+    await viewport(w,900);
+    const fitted=await evaluate(`(async()=>{const {decision}=await import("./js/views.js"),{run}=await import("./js/runner.js"),s=structuredClone(WM.state);Object.assign(s.positions,{you:{location:3,space:1},lativ:{location:1,space:-1},white:{location:1,space:0},pink:{location:2,space:1}});for(const k of Object.keys(s.p.vouchers))s.p.vouchers[k]=3;s.stack=[{t:'move'}];s.prompt=null;s.over=false;run(s);const old=document.querySelector(".decision"),keep=old.outerHTML;old.outerHTML=decision(s);await new Promise(r=>requestAnimationFrame(r));const ok=${FITS};document.querySelector(".decision").outerHTML=keep;return ok&&s.prompt.task==="move"})()`);
+    test('Worst-case move grid fits without side scrolling: '+w,fitted);
   }
   await viewport(375,812);
   if(await evaluate('document.querySelector(".decision").dataset.collapsed!=="true"'))await click('[data-do="toggleDecision"]');
@@ -213,10 +247,14 @@ try {
   test('Dark theme applied', await evaluate('document.documentElement.dataset.theme==="dark"')); await screenshot('dark-phone',true); await layout('dark-phone');
   await viewport(1600,1000); await screenshot('dark-desktop',true); await layout('dark-desktop');
   await viewport(375,812);
+  const overflowed=[],sweptShapes=new Set();
   for(let i=0;i<180&&!await evaluate('WM.state.over');i++){
+    const shape=await evaluate('WM.state.prompt?.task+":"+WM.state.prompt?.options.length');
+    if(!sweptShapes.has(shape)){sweptShapes.add(shape);for(const w of [320,700,1280,1500]){await viewport(w,900);if(!await evaluate(FITS))overflowed.push(w+': '+await evaluate('WM.state.prompt?.title'));}await viewport(375,812);}
     const menu=await evaluate('WM.state.prompt?.kind === "menu"');
     await answer(menu?'o.v === "done"':'o.v !== "cancel"');
   }
+  test('No decision in a whole game overflows its panel: '+overflowed.slice(0,6).join('; '),overflowed.length===0);
   test('A complete game reaches its result screen through UI controls',await evaluate('WM.state.over && !!document.querySelector(".decision.result")'));
   await screenshot('game-result-phone');await layout('game-result-phone');
   contrastReports.push({tab:'result',width:375,...await evaluate('('+contrastAudit.toString()+')()')});

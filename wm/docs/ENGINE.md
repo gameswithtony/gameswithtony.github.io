@@ -12,7 +12,7 @@ The engine follows the existing Pathfinder and KEV architecture: plain JSON stat
 - `bots.js`: the official Saboteurs' movement, printed priorities, Hideout, and havoc. No custom opponent scoring or planning function.
 - `flow.js`: initial Supply, rounds, human turns, experiments, income, and final scoring.
 - `saves.js`: save validation, compression, and physical conservation checks.
-- `views.js`, `icons.js`, `app.js`, `styles.css`, `mobile-dock.css`, and `typography.css`: dependency-free browser interface and original graphics. The fonts in `fonts/` are the same Barlow / Barlow Semi Condensed families used by KEV, served locally. Current/max values share their size and baseline. Mobile action-drawer expansion is UI state, separate from the game snapshot, and persists across view changes.
+- `views.js`, `icons.js`, `app.js`, `styles.css`, `mobile-dock.css`, and `typography.css`: dependency-free browser interface and original graphics. The fonts in `fonts/` are the same Barlow / Barlow Semi Condensed families used by KEV, served locally. In an X/Y value the maximum is 95% of the current value, on one baseline. Mobile action-drawer expansion is UI state, separate from the game snapshot, and persists across view changes.
 
 ## Rules applied
 
@@ -37,6 +37,9 @@ These points deserve comparison with an experienced physical-game playthrough; t
 7. **Bot returns:** Workshop storage is used when it fits. Overflow offers the player every empty space in the top two Assembly sections, since the choice changes income. Assembly Bot identities have no distinct abilities.
 8. **Combined Challenges:** separate starting extra-Chemical or Award effects add independently when multiple corresponding Challenges are selected.
 9. **Funding position zero:** Government funding gives the printed initial voucher; Lab funding gives zero Science and then the other chosen track at modifier zero. Zero benefits remain zero.
+10. **Breakthrough gained as a benefit:** costs no Vouchers at all, including the tile's Science, because the rulebook says a benefit never pays Vouchers. Parts are still required.
+11. **Research with no token left:** when an R&D branch has no Research token but is not full, you gain an Investment and unlock its Citations, following the rulebook's pointer from step 5 to the branch-completion paragraph.
+12. **Bot return with nowhere to go:** when the Workshop and both top Assembly sections are full, the Bot may return to any empty Assembly space. The rulebook does not cover this state; without it the game cannot continue.
 
 The app does not expose hidden Report order or offer a nonofficial opponent. The discard pile, Current and Previous Reports, visible Experiment display, next Experiment, and all normal public board information remain inspectable.
 

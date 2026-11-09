@@ -7,8 +7,8 @@ import { publishOptions } from './office.js';
 
 export const ACTIONS = {
   extend: { name: 'Extend Workshop', icon: 'workshop', text: 'Add permanent storage · 1 Supply' },
-  construct: { name: 'Construct a Bot', icon: 'bot', text: 'Build from your Assembly Line · 1–3 Supply' },
-  buyChemical: { name: 'Acquire a Chemical', icon: 'chemical', text: 'Take the leftmost Chemical · 1–3 Supply' },
+  construct: { name: 'Construct a Bot', icon: 'bot', text: 'Build from your Assembly Line · 1 to 3 Supply' },
+  buyChemical: { name: 'Acquire a Chemical', icon: 'chemical', text: 'Take the leftmost Chemical · 1 to 3 Supply' },
   returnChemical: { name: 'Return a Chemical', icon: 'chemical', text: 'Gain Supply vouchers for its return space' },
   initiative: { name: 'Take the Initiative', icon: 'initiative', text: 'Choose who acts first next round · 1 Supply' },
   sell: { name: 'Sell a Part', icon: 'government', text: 'Bot + Machine Part → research + Subsidy · 1 Government' },
@@ -35,7 +35,7 @@ export function prototypeOptions(st, row, free = false, paid = false) {
   const tile = tileData(st, w);
   const cacheKey = JSON.stringify([row,free,paid,r,st.p.vouchers,st.p.items,st.p.workshop,st.rd[w],st.extreme[w],st.challenges]);
   if (prototypeCache.has(cacheKey)) return prototypeCache.get(cacheKey);
-  const base = paid ? [] : [...baseCost('breakthrough', free), ...Array(tile.cost).fill('science')];
+  const base = paid || free ? [] : [...baseCost('breakthrough', false), ...Array(tile.cost).fill('science')];
   const eligible = st.rd[w].map((s, i) => s.owner && !(challenge(st, 10) && s.owner === 'saboteurs') ? i : -1).filter(i => i >= 0);
   for (let mask = 0; mask < 2 ** eligible.length; mask++) {
     const providers = eligible.filter((_, j) => mask & 1 << j);
@@ -72,6 +72,7 @@ export function actionOptions(st, kind, free = false, noChemical = false, noPart
     const result = [], key = kind === 'sell' ? 'government' : kind === 'work' ? 'lab' : 'rd';
     for (const weather of D.WEATHER) st[key][weather].forEach((s, space) => {
       if (s.owner && !(kind === 'work' && s.owner === 'lativ')) return;
+      if (kind === 'research' && noChemical && !st.supply[D.RD[weather][space].color]) return;
       const plans = materialPlans(st, placementRequirements(st, kind, weather, space, noChemical, noPart)).filter(p => canPay(st, [...baseCost(kind, free), ...p.extra]));
       if (plans.length) result.push({ weather, space });
     });
@@ -99,12 +100,28 @@ export function actionReason(st, kind) {
   if (kind==='subsidy') return 'No blue Subsidy remains';
   return 'No matching available space, or required exchange is unaffordable';
 }
+/** What a turn-menu tile shows in its corner, from the current board. */
+export function actionPrice(st, kind) {
+  const range = list => { if (!list.length) return null; const lo = Math.min(...list), hi = Math.max(...list); return lo === hi ? String(lo) : `${lo}-${hi}`; };
+  if (ACTION_COST[kind]) { const [k, n] = Object.entries(ACTION_COST[kind])[0]; return { kind: k, n: String(n) }; }
+  if (kind === 'extend' || kind === 'initiative') return { kind: 'supply', n: '1' };
+  if (kind === 'construct') return { kind: 'supply', n: range(constructible(st).map(i => D.ASSEMBLY[i].cost)) || '1-3' };
+  if (kind === 'buyChemical') return { kind: 'supply', n: range(D.COLORS.filter(c => st.supply[c]).map(c => chemicalPrice(st, c))) || '1-3' };
+  if (kind === 'returnChemical') return { kind: 'supply', n: range(items(st, 'chemical').map(i => D.CHEMICAL_PRICES[4 - st.supply[i.color]])) || '1-3', gain: true };
+  return null;
+}
+const SHORT_REASON = [[/^Need (\d \S+(?: \+ \d \S+)*) \(/, '$1'], [/^Action allowance used/, 'Already used'], [/^Construct an available Bot/, 'Need a Bot'], [/^Need a Machine Part/, 'Need a Part'], [/^Need a Chemical/, 'Need a Chemical'], [/^Need a complete research row/, 'No row ready'], [/^Need payable Science/, 'Need Science, Parts'], [/^Publish an eligible paper/, 'Publish first'], [/^Extend Workshop for Bot/, 'No Bot space'], [/^Need Supply vouchers/, 'Need Supply'], [/^No Workshop tiles/, 'No tiles left'], [/^No Chemical in/, 'No Chemical'], [/^Need Chemical storage/, 'No room or Supply'], [/^No blue Subsidy/, 'None left'], [/^No matching available/, 'No space fits']];
+/** The few words that fit on a tile. The full reason stays in the explanation. */
+export function shortReason(text) {
+  for (const [from, to] of SHORT_REASON) if (from.test(text)) return to.startsWith('$') ? `Need ${text.match(from)[1]}` : to;
+  return text;
+}
 // Marker-space benefits happen before building. Enumerate only benefit/payment
 // combinations that leave a legal prototype, including using the Part just gained.
 export function breakthroughOffers(st, row, free = false) {
   const r = st.p.office[row];
   if (!r.published || r.breakthrough || !r.weather || !st.extreme[r.weather].level || st.extreme[r.weather].markers.some(m => String(m).startsWith('you:'))) return [];
-  const d = tileData(st, r.weather), cost = [...baseCost('breakthrough', free), ...Array(d.cost).fill('science')], out = [];
+  const d = tileData(st, r.weather), cost = free ? [] : [...baseCost('breakthrough', false), ...Array(d.cost).fill('science')], out = [];
   d.spaces.forEach((list, space) => {
     if (st.extreme[r.weather].markers[space]) return;
     const b = list[0];
@@ -141,7 +158,7 @@ H.breakthrough = (st, t) => {
   if(t.stage==='pay'){
     const offers=breakthroughOffers(st,t.row,t.free).filter(o=>o.space===t.space&&JSON.stringify(o.benefit)===JSON.stringify(t.benefit));
     if(!offers.length)throw new Error('Breakthrough no longer affordable');
-    t.stage='reward';add(st,{t:'pay',cost:offers[0].cost,allowed:offers.map(o=>o.payment),reason:'Breakthrough'});return;
+    t.stage='reward';if(offers[0].cost.length)add(st,{t:'pay',cost:offers[0].cost,allowed:offers.map(o=>o.payment),reason:'Breakthrough'});return;
   }
   if(t.stage==='reward'){t.stage='prototype';benefits(st,[t.benefit]);return;}
   if(t.stage==='prototype'){
@@ -175,7 +192,7 @@ function choiceText(st, kind, v) {
 }
 
 H.finishResearch = (st, t) => {
-  if (st.rd[t.weather].every(x => x.owner)) { st.p.investments++; unlock(st, t.weather, 'you'); }
+  if (st.rd[t.weather].every(x => x.owner) || !st.research.rd[t.weather]) { st.p.investments++; unlock(st, t.weather, 'you'); }
   else takeResearch(st, 'you', 'rd', t.weather);
   checkEnd(st); return DONE;
 };
@@ -228,6 +245,7 @@ H.action = (st, t) => {
       if (st.government[v.weather].every(x => x.owner)) activateGovernment(st, v.weather);
     }
     if (kind === 'research') {
+      if (t.noChemical) { const c = D.RD[v.weather][v.space].color; st.supply[c]--; st.rd[v.weather][v.space].chemical = c; }
       add(st, ...D.RD[v.weather][v.space].reward.map(benefit => ({ t: 'benefit', benefit })), { t: 'finishResearch', weather: v.weather });
     }
   }

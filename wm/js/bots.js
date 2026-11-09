@@ -54,6 +54,19 @@ function botToken(st, kind, w) {
   if (st.research[kind][w]) takeResearch(st, 'saboteurs', kind, w);
   else { target(st, 5, 'Research unavailable'); if (kind === 'rd') unlock(st, w, 'saboteurs'); }
 }
+/** Where the Current Report sends its Agent, as the board stands. */
+export function saboteurMove(st) {
+  const c = report(st), old = st.positions[c.agent];
+  let desired = c.location === 'lativ' ? st.positions.lativ.location : c.location;
+  const canMove = loc => loc <= 4 && old.location !== loc && freeSpaces(st, loc, c.agent).length;
+  if (!canMove(desired)) {
+    desired = desired === 1 ? 2 : desired === 5 ? 2 : desired % 4 + 1;
+    if (desired === 1) desired = 2;
+    while (!canMove(desired)) desired = desired === 4 ? 2 : desired + 1;
+  }
+  const free = freeSpaces(st, desired, c.agent);
+  return { agent: c.agent, location: desired, space: desired === 1 ? free[0] : [0, 2, 1].find(s => free.includes(s)) };
+}
 export function nefariousPlan(st, location, space) {
   const prev = report(st, true), order = weatherOrder(prev.weather);
   if (location === 1) {
@@ -128,15 +141,7 @@ H.botTurn = (st, t) => {
     ask(st, t, `${c.agent === 'pink' ? 'Agent Pink' : 'Agent White'} acts`, [{ v: true, label: 'Resolve Saboteurs', icon: 'saboteurs' }], `Current Report: ${c.location === 'lativ' ? 'follow Lativ' : D.LOCATION_NAME[c.location]}. Previous Report: ${D.WEATHER_NAME[prev.weather]} · ${prev.priority} priority.`, 'bot'); return;
   }
   if (t.stage === 'move') {
-    const c = report(st), old = st.positions[c.agent];
-    let desired = c.location === 'lativ' ? st.positions.lativ.location : c.location;
-    const canMove = loc => loc <= 4 && old.location !== loc && freeSpaces(st, loc, c.agent).length;
-    if (!canMove(desired)) {
-      desired = desired === 1 ? 2 : desired === 5 ? 2 : desired % 4 + 1;
-      if (desired === 1) desired = 2;
-      while (!canMove(desired)) desired = desired === 4 ? 2 : desired + 1;
-    }
-    const free = freeSpaces(st, desired, c.agent), space = desired === 1 ? free[0] : [0, 2, 1].find(s => free.includes(s));
+    const c = report(st), { location: desired, space } = saboteurMove(st);
     st.positions[c.agent] = { location: desired, space };
     log(st, 'saboteurs', `Agent ${c.agent} moved to ${D.LOCATION_NAME[desired]}, space ${space + 1}.`);
     if (desired !== 1) {

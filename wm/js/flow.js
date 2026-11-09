@@ -1,6 +1,6 @@
 import * as D from './data.js';
 import { H, DONE, ask, add, takeAnswer, log } from './runner.js';
-import { ACTIONS, LOCATION_ACTIONS, actionAvailable, actionReason } from './actions.js';
+import { ACTIONS, LOCATION_ACTIONS, actionAvailable, actionReason, actionPrice, shortReason } from './actions.js';
 import { canPay, benefits, cp, target, voucher } from './economy.js';
 import { items, repack, canStore, store } from './workshop.js';
 import { challenge, occupied, freeSpaces, locationKind, moveLativ, endGame, triggerEnd, checkEnd, returnBot, takeResearch, worsen, saboteurBots } from './state.js';
@@ -30,13 +30,14 @@ export function humanMenu(st, setup = false) {
   const options = LOCATION_ACTIONS[location].map(kind => {
     const used = !setup && location !== 1 && (turn.used.includes(kind) || turn.used.length >= turn.limit);
     const available = actionAvailable(st, kind);
-    return { v: kind, label: ACTIONS[kind].name, text: ACTIONS[kind].text, icon: ACTIONS[kind].icon, disabled: used ? 'Action allowance used' : available ? false : actionReason(st,kind) };
+    const reason = used ? 'Action allowance used' : available ? false : actionReason(st, kind);
+    return { v: kind, label: ACTIONS[kind].name, text: ACTIONS[kind].text, icon: ACTIONS[kind].icon, pay: actionPrice(st, kind), why: reason ? shortReason(reason) : '', disabled: reason };
   });
   if (!setup) {
-    if (st.currentReport !== null && st.reportDeck.length >= 2) options.push({ v: 'security', label: 'Call Security', text: '1 local or Science voucher · rearrange 3 Reports', icon: 'security', disabled: !canPay(st, { [locationKind(location)]: 1 }) && 'Need a matching voucher' });
+    if (st.currentReport !== null && st.reportDeck.length >= 2) options.push({ v: 'security', label: 'Call Security', text: '1 local or Science voucher · rearrange 3 Reports', icon: 'security', pay: { kind: locationKind(location), n: '1' }, why: 'Need a voucher', disabled: !canPay(st, { [locationKind(location)]: 1 }) && 'Need a matching voucher' });
     if (st.p.awards && officeSpaces(st, { kind: 'award' }).length) options.push({ v: 'award', label: 'Place an Award', text: `${st.p.awards} available · free action`, icon: 'award' });
   }
-  options.push({ v: 'done', label: setup ? 'Finish initial Supply round' : 'End your turn', text: setup ? 'Begin round 1' : 'Record research, then continue the round', icon: 'next', primary: true });
+  options.push({ v: 'done', label: setup ? 'Finish initial Supply round' : 'End turn', text: setup ? 'Begin round 1' : 'Record research, then continue the round', icon: 'next', primary: true });
   return options;
 }
 H.setupWorkshop = (st,t) => {
@@ -107,7 +108,7 @@ H.move = (st, t) => {
     if (selected.toll) tasks.push({ t: 'pay', cost: Array(selected.toll).fill('any'), reason: 'Supply entry toll' });
     add(st, ...tasks); return;
   }
-  ask(st, t, 'Move your Scientist', opts.map(o => ({ v: { location: o.location, space: o.space }, label: `${D.LOCATION_NAME[o.location]} · ${o.space === 0 ? 'left' : o.space === 1 ? 'middle' : o.space === 2 ? 'right' : 'space 4'}`, text: `+${o.n} ${o.kind === 'any' ? 'any voucher' : D.VOUCHER_NAME[o.kind]}${o.science ? ' + 1 Science' : ''}${o.toll ? ' · pay ' + o.toll + ' any' : ''}`, icon: locationKind(o.location), detail: o.location === 1 ? 'Any number of actions' : o.space === 0 ? 'Both actions available' : 'Choose one action' })), st.round === 1 ? 'Round 1: use the middle space when free, otherwise the right. The left space opens in round 2.' : 'Choose an empty space at a different Location. Vouchers are gained before Lativ moves.', 'move');
+  ask(st, t, 'Move your Scientist', opts.map(o => ({ v: { location: o.location, space: o.space }, label: `${D.LOCATION_NAME[o.location]} · ${o.space === 0 ? 'left' : o.space === 1 ? 'middle' : o.space === 2 ? 'right' : 'space 4'}`, text: `+${o.n} ${o.kind === 'any' ? 'any voucher' : D.VOUCHER_NAME[o.kind]}${o.science ? ' + 1 Science' : ''}${o.toll ? ' · pay ' + o.toll + ' any' : ''}`, icon: locationKind(o.location), seat: { kind: o.kind, n: o.n, science: o.science, toll: o.toll }, detail: o.location === 1 ? 'Any number of actions' : o.space === 0 ? 'Both actions available' : 'Choose one action' })), st.round === 1 ? 'Round 1: use the middle space when free, otherwise the right. The left space opens in round 2.' : 'Choose an empty space at a different Location. Vouchers are gained before Lativ moves.', 'move');
 };
 H.menu = (st, t) => {
   const a = takeAnswer(t);
@@ -213,10 +214,11 @@ H.returnYourBot = (st,t) => {
   const slot=st.lab[t.weather][t.space],a=takeAnswer(t);
   if(slot.owner!=='you')return DONE;
   if(canStore(st,'bot')){store(st,'bot',null,slot.id);delete slot.owner;delete slot.id;return DONE;}
-  const opts=st.p.assembly.flatMap((present,i)=>!present&&i<6?[{v:i,label:`Assembly slot ${i+1}`,text:D.benefitText(D.ASSEMBLY[i].reward)+' at future income'}]:[]);
+  const empty=st.p.assembly.flatMap((present,i)=>present?[]:[i]),top=empty.filter(i=>i<6),spaces=top.length?top:empty;
+  const opts=spaces.map(i=>({v:i,label:`Assembly slot ${i+1}`,text:D.benefitText(D.ASSEMBLY[i].reward)+(i<6?' at future income':' when constructed again'),icon:'bot'}));
   if(!opts.length)throw new Error('Returning Bot has no Workshop or Assembly space.');
   if(a!==undefined){st.p.assembly[a]=true;delete slot.owner;delete slot.id;return DONE;}
-  ask(st,t,'Return a Bot to Assembly',opts,'Your Workshop is full. Choose an empty space in either top Assembly section; you lose its income until reconstructed.');
+  ask(st,t,'Return a Bot to Assembly',opts,top.length?'Your Workshop is full. Choose an empty space in either top Assembly section; you lose its income until reconstructed.':'Your Workshop is full and both top Assembly sections are too. Choose any empty Assembly space.');
 };
 H.final = (st, t) => {
   const a = takeAnswer(t);
@@ -230,10 +232,12 @@ H.final = (st, t) => {
     if (st.p.investments && (st.p.goals.length || st.p.activeGoals.some(g => !g.flipped))) opts.push({ v: 'investment', label: 'Use an Investment', text: 'Set or flip a Goal' });
     ask(st, t, 'Prepare final scoring', [...opts, { v: 'score', label: 'Score the game', primary: true }], 'Place remaining Awards and use Investments to set or flip Goals.'); return;
   }
-  for (const kind of ['government', 'lab', 'rd']) cp(st, D.FUNDING[kind][st.p.funding[kind]].cp, `${D.VOUCHER_NAME[kind]} funding`);
-  cp(st, 5 * metGoals(st), 'Completed Goals');
+  const score = { play: st.p.cp, funding: 0, goals: 5 * metGoals(st), nobel: st.p.nobel ? 5 : 0 };
+  for (const kind of ['government', 'lab', 'rd']) { score.funding += D.FUNDING[kind][st.p.funding[kind]].cp; cp(st, D.FUNDING[kind][st.p.funding[kind]].cp, `${D.VOUCHER_NAME[kind]} funding`); }
+  cp(st, score.goals, 'Completed Goals');
   if (st.p.nobel) cp(st, 5, 'Nobel Prize');
   const won = finalVictory(st);
   endGame(st, won, challenge(st, 12) ? 'Publish or Perish requires immediate victory.' : `Final score ${st.p.cp}; target ${st.target}. Your score must be higher than the target.`);
+  st.result.score = score;
   return DONE;
 };

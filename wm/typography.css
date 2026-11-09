@@ -1,215 +1,230 @@
-/* KEV's font pairing, with a compact, consistent scale for game information. */
+/* The one authority on type. Loaded last.
+   Numbers: Semi Condensed 700, big. Titles and names: Semi Condensed 600-700. Labels: Barlow 400-500, small and muted.
+   Sizes in use: 12 13 15 17 20 22 24 28.
+   In an X/Y value the maximum is 95% of the current value. At the same nominal size the regular weight rasterizes
+   a pixel taller than bold at common display scales (125%, 150%); at 95% it never does, measured from 100% to 200%. */
 :root {
   --display: "Barlow Semi Condensed", system-ui, sans-serif;
   --body: "Barlow", system-ui, sans-serif;
   --mono: "Barlow", system-ui, sans-serif;
-  --type-label: 12px;
-  --type-small: 13px;
-  --type-body: 15px;
-  --type-number: 18px;
 }
+body { font: 400 15px/1.45 var(--body); }
+small, .small { font-size: 13px; }
+button { line-height: 1.3; }
+b, strong { font-weight: 700; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: .005em; }
+h3 { font-size: 17px; }
 
-body { font-size: var(--type-body); }
-small, .small { font-size: var(--type-small); }
-button { line-height: 1.35; }
-h1, h2, h3 { letter-spacing: .005em; }
-.eyebrow, .wordmark, .wordmark span, .version { font: 500 12px/1.35 var(--body); letter-spacing: .06em; }
-.setup-intro h1 { font-size: clamp(50px, 5.5vw, 80px); letter-spacing: -.025em; }
-.setup-card h2 { font-size: 28px; }
-.setup-card > p:not(.eyebrow), .intro-note { font-size: 15px; }
-.setup-summary .versus, summary span { font-size: 12px; }
-.challenge b, summary, .field { font-size: 15px; }
-.challenge small, .credit, .setup-links .text-button { font-size: 13px; }
-.text-button { font-size: 13px; }
+/* Setup */
+.wordmark, .version { font: 600 12px/1.3 var(--body); letter-spacing: .1em; }
+.setup-intro h1 { font: 700 clamp(56px, 6vw, 88px)/.95 var(--display); letter-spacing: -.02em; }
+.lede { font: 500 22px/1.25 var(--display); }
+.setup-card h2 { font: 700 24px/1.15 var(--display); }
+summary { font: 600 17px/1.3 var(--display); }
+summary span { font: 400 13px var(--body); }
+.challenge b { font: 600 15px/1.3 var(--display); }
+.challenge small, .credit { font-size: 13px; }
+.field { font-size: 15px; }
+.text-button { font: 500 13px var(--body); }
+.start-button { font: 700 20px/1 var(--display); }
+.primary, .secondary { font: 600 17px/1.2 var(--display); }
 
-/* A current/max value is one reading: same size, baseline, and number style. */
-.voucher b, .voucher small {
-  font: 600 var(--type-number)/1 var(--display);
-  font-variant-numeric: tabular-nums;
-}
-.voucher small { font-weight: 500; opacity: .85; }
-.voucher span { font-size: 13px; }
-.funding-label { font-size: 14px; }
-.funding-label b, .funding-label b small, .personal-bottom b, .personal-bottom small {
-  font: 600 17px/1.15 var(--display);
-  font-variant-numeric: tabular-nums;
-}
-.funding-label b small, .personal-bottom small { font-weight: 500; }
-.track i { font: 500 12px/1.2 var(--body); }
-.goal-progress, .goal-progress small { font: 600 20px/1.1 var(--display); }
-.goal-progress small { font-weight: 500; }
-.goal-progress em { font: 500 13px var(--body); }
+/* Header */
+.brand { font: 700 26px/1 var(--display); }
+.topbar .round small { font: 500 13px/1 var(--body); }
+.topbar .round b { font: 700 22px/1 var(--display); font-variant-numeric: tabular-nums; }
+.topbar .round .round-end { font: 700 20.9px/1 var(--display); font-variant-numeric: tabular-nums; }
+.topbar .score-pair b { font: 700 28px/1 var(--display); font-variant-numeric: tabular-nums; }
+.header-inventory b { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.final-tag { font: 600 12px var(--body); }
+.gauge-cell b { font: 600 15px/1 var(--display); }
+.gauge-reports b { font: 700 17px/1 var(--display); font-variant-numeric: tabular-nums; }
 
-/* Compact header metrics; descriptive labels remain readable. */
-.round small { font: 500 12px var(--body); letter-spacing: .02em; opacity: .9; }
-.round b, .score-pair b { font: 600 20px/1 var(--display); font-variant-numeric: tabular-nums; }
-.score-pair small { font: 500 12px var(--body); opacity: 1; }
-.brand i { font: 500 11px var(--body); letter-spacing: .08em; }
-.final-tag { font: 600 11px var(--body); }
-.hand-bar b { font: 600 17px/1.1 var(--display); }
-.hand-color small { font: 500 12px/1.1 var(--body); }
-.personal-summary b, .hideout-stats b { font: 600 22px/1.1 var(--display); }
-.personal-summary small, .hideout-stats small { font: 500 12px/1.25 var(--body); }
-.rail-note, .inventory-strip .small { font-size: 13px; }
+/* Navigation */
+.tabs button { font: 600 15px/1.1 var(--display); letter-spacing: .01em; }
 
-/* Decisions are the main reading surface, not fine print. */
-.decision h2 { font-size: 24px; }
-.decision-text, .decision-body .decision-text { font-size: 14px; line-height: 1.45; }
-.choice strong { font: 600 16px/1.3 var(--display); }
-.choice small { font-size: 13px; line-height: 1.4; }
-.choice em { font: 500 13px/1.3 var(--body); }
-.decision-footer { font-size: 12px; }
-.decision-footer .text-button { font-size: 12px; }
+/* Panels */
+.panel-head h2 { font: 700 20px/1.1 var(--display); letter-spacing: .01em; }
+.panel > h3, .offer > .small, .space-actions, .next-experiment > span:first-child { font: 600 15px/1.2 var(--display); }
+.outlook b { display: block; font: 700 17px/1.15 var(--display); }
+.end-banner b { font: 700 17px/1.1 var(--display); }
+.end-banner span { font-size: 13px; }
+.citations-label { font: 600 15px/1.2 var(--display); }
+.victory-chip b { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.victory-chip small { font-size: 12px; line-height: 1.2; text-align: center; }
+.track-cp u { font: 700 12px/1 var(--display); }
+.weather-markers i b { font: 700 13px/1 var(--display); }
+.supply-cost { font: 700 15px/1 var(--display); }
+.assembly-section button > span.assembly-reward { font: 500 13px/1.25 var(--body); }
+.branch-weather em { font: 500 12px/1.2 var(--body); }
+.score-lines dt { font-size: 13px; }
+.score-lines dd { font: 700 17px/1 var(--display); }
+.rank-card small { font-size: 12px; }
+.rank-card b { font: 700 22px/1 var(--display); }
+.rank-next { font-size: 13px; }
+.outlook small { font-size: 13px; }
 
-/* Board labels may be compact, but do not shrink just because a screen is wide. */
-.tabs button { font-size: 14px; }
-.panel-head h2 { font-size: 20px; }
-.outlook b { font-size: 14px; }
-.outlook small { font-size: 12px; }
-.scientists button > span:last-child { font-size: 13px; line-height: 1.2; }
-.scientists[data-location="1"] button { flex-direction: column; gap: 3px; min-height: 50px; }
-.space-number { font: 500 13px var(--body); }
-.branch-name > span:not(.research-count) { font-size: 14px; }
-.branch-name { min-width: 106px; }
-.research-count { min-width: 22px; height: 22px; font: 500 13px/1 var(--body); }
-.subsidy-pips button { font-size: 12px; min-height: 30px; }
-.branch-weather b, .rd-weather b { font-size: 13px; }
-.branch-weather small { font: 600 11px var(--body); letter-spacing: .02em; }
-.weather-level { font: 500 12px/1.1 var(--body); }
-.branch-label { min-height: 75px; }
-.experiment-stage { font: 500 12px/1.2 var(--body); letter-spacing: .02em; }
-.experiment-card > b { font: 600 20px/1.15 var(--display); }
-.experiment-card b small { font: 500 13px/1.15 var(--body); }
-.science-cost { font: 500 15px/1.1 var(--body); }
+/* Scientist spaces */
+.scientists .space-position { font: 500 12px/1.2 var(--body); }
+.scientists .space-allowance { font: 700 17px/1.1 var(--display); }
+.scientists .scientist-space .space-occupant { font: 700 17px/1.1 var(--display); }
+.scientists .round-limited .space-occupant { font: 500 13px/1.2 var(--body); }
+.scientists .space-position:only-child { font: 600 15px/1.1 var(--display); color: var(--ink); }
+.scientists .lativ-space > span { font: 500 13px var(--body); }
+
+/* Branches */
+.branch-name > span:not(.research-count):not(.pennant) { font: 600 17px/1.1 var(--display); }
+.branch-weather b, .rd-weather b { font: 600 15px/1.1 var(--display); }
+.branch-weather small { font: 700 12px/1.3 var(--body); }
+.weather-level { font: 700 13px/1.1 var(--display); }
+.research-count { font: 700 14px/1 var(--display); font-variant-numeric: tabular-nums; }
+.subsidy-pips button, .government-table .subsidy-pips button { font: 500 12px/1.15 var(--body); }
+
+/* Experiments */
+.experiment-stage { font: 500 12px/1.2 var(--body); }
+.experiment-card b small { font: 500 13px/1.1 var(--body); }
+.science-cost { font: 700 15px/1 var(--display); }
 .next-experiment { font: 500 13px/1.3 var(--body); }
-.next-experiment .experiment-stage { display: none; }
-.next-experiment .experiment-card b { font-size: 18px; }
-.next-experiment .experiment-card small { font-size: 12px; }
-.next-experiment > span:last-child { font: 500 16px/1.2 var(--display); }
-.next-experiment > span small { font: 500 12px/1.2 var(--body); }
-.next-experiment .experiment-card svg { width: 18px; height: 18px; }
-.chemical-market b { font-size: 13px; font-weight: 500; }
-.market-stock i { font: 500 12px/1.1 var(--body); min-width: 16px; }
-.market-price { display: flex; align-items: baseline; gap: 3px; width: auto; min-width: 38px; font: 600 18px/1.1 var(--display); }
-.market-price small { font: 500 12px/1.1 var(--body); }
-.material { font: 600 12px/1 var(--body); }
-.tile-mini .material { font-size: 11px; }
-.bot-slot .material { width: 19px; height: 19px; font-size: 11px; }
-.prototype-parts .material { width: 18px; height: 18px; font-size: 11px; }
+.next-experiment .experiment-card b small { font: 500 13px/1.1 var(--body); }
+.next-experiment .experiment-card .science-cost { font: 700 15px/1 var(--display); }
+.deck-count { font: 700 20px/1 var(--display); }
+.deck-count small { font: 400 13px var(--body); }
+.gear-n b { font: 700 var(--gear-font, 15px)/1 var(--display); font-variant-numeric: tabular-nums; }
 
-/* Office / Workshop / Hideout use the same scale as their decision popups. */
-.empty-label, .chemical-storage small { font: 500 12px/1.2 var(--body); letter-spacing: .02em; }
-.chemical-storage button { font-size: 13px; }
-.assembly-section header b { font-size: 15px; }
+/* Supply */
+.chemical-market b { font: 600 15px/1.15 var(--display); }
+.market-stock i { font: 500 13px/1 var(--body); font-variant-numeric: tabular-nums; }
+.market-stock .taken + i:not(.taken), .market-stock i:first-child:not(.taken) { font-weight: 700; }
+.market-price { font: 700 20px/1 var(--display); }
+
+/* Vouchers: current and maximum are one reading at one size. */
+.voucher b, .voucher small, .decision .voucher b, .decision .voucher small { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.voucher small, .decision .voucher small { font-size: 19px; font-weight: 400; }
+
+/* Funding */
+.funding-label { font: 600 15px/1.2 var(--display); }
+.funding-label b, .funding-label b small { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.funding-label b small { font-size: 19px; font-weight: 400; }
+.track i { font: 500 13px/1.2 var(--body); font-variant-numeric: tabular-nums; }
+.track .here { font-weight: 700; }
+
+/* Your Laboratory */
+.personal-summary b, .hideout-stats b { font: 700 28px/1 var(--display); font-variant-numeric: tabular-nums; }
+.personal-summary small, .hideout-stats small { font: 400 13px/1.25 var(--body); }
+.personal-bottom b, .personal-bottom small { font: 700 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.personal-bottom small { font-size: 19px; font-weight: 400; }
+.rail-note { font-size: 13px; }
+.hand-bar b, .hand-bar .muted.small { font: 700 20px/1 var(--display); }
+.hand-color small { font: 700 15px/1 var(--display); }
+
+/* Workshop */
+.chemical-storage button { font: 600 15px/1.1 var(--display); }
+.chemical-storage small { font: 400 13px/1.2 var(--body); }
+.assembly-section header b { font: 700 17px/1.1 var(--display); }
 .assembly-section header small { font: 500 12px/1.2 var(--body); }
-.assembly-section header { flex-wrap: wrap; }
-.assembly-section button > span:last-child { font-size: 14px; }
-.office-head { font: 500 12px var(--body); }
-.office-row-name { font-size: 14px; }
-.office-slot small { font: 500 12px var(--body); }
-.office-bonus { font: 400 13px/1.25 var(--body); }
-.paper-status small { font: 500 12px/1.2 var(--display); }
-.office-held button { font-size: 13px; }
-.goal-top { font: 500 12px/1.2 var(--body); }
-.goal-card > b { font: 600 16px/1.25 var(--display); }
-.goal-card { min-height: 140px; }
-.tile-inventory b, .investment-count { font-size: 14px; }
-.tile-inventory small { font-size: 13px; }
-.report-label { font: 500 12px/1.3 var(--body); letter-spacing: .02em; }
-.report-agent b { font-size: 20px; }
-.report-priority { font-size: 14px; }
-.report-priority b { font: 500 13px var(--body); }
-.hideout-research b { font-size: 14px; }
-.research-chip { width: 25px; height: 25px; font: 500 13px var(--body); }
-.discard-list button { font-size: 14px; }
-.discard-list b, .discard-list small { font: 500 12px var(--body); }
-.active-challenges p, .journal li:not(.journal-round) { font-size: 14px; }
-.journal li > small { font: 500 12px var(--body); }
-.journal-round { font: 600 16px var(--display); }
-.sheet-body { font-size: 15px; }
-.sheet-body .sheet-rule { font-size: 13px; }
-.sheet-body table { font-size: 14px; }
-.game-footer, .game-footer .text-button { font: 400 12px/1.4 var(--body); }
-.result-score b { font-size: 30px; }
-.result-score small { font: 500 13px/1.3 var(--body); }
-.result p, .result .primary, .result .secondary { font-size: 15px; }
-#share-code, #import-code { font: 13px/1.5 Consolas, monospace; }
 
-@media (max-width: 950px) {
-  .brand span { font-size: 19px; }
-  .voucher { padding-inline: 7px; gap: 5px; }
-  .voucher span { font-size: 12px; }
-  .office-bonus { font-size: 12.5px; }
-  .assembly-section header small { font-size: 11.5px; }
-}
+/* Office */
+.office-head { font: 600 15px/1.1 var(--display); }
+.office-row-name b { font: 700 17px/1 var(--display); }
+.office-bonus { font: 400 12px/1.2 var(--body); }
+.office-slot small, .paper-status small { font: 500 12px/1.2 var(--body); }
+.office-held button { font: 500 13px var(--body); }
+.office-held b { font: 700 17px/1 var(--display); }
+.goal-top { font: 500 12px/1.2 var(--body); }
+.goal-card > b { font: 600 17px/1.2 var(--display); }
+.goal-progress, .goal-progress small { font: 700 24px/1 var(--display); font-variant-numeric: tabular-nums; }
+.goal-progress small { font-size: 22.8px; font-weight: 400; }
+.tile-inventory b { font: 600 17px/1.2 var(--display); }
+.tile-inventory small, .investment-count { font-size: 13px; }
+
+/* Saboteurs */
+.report-band b { font: 700 20px/1 var(--display); }
+.report-label { font: 500 12px/1.2 var(--body); }
+.report-card strong { font: 700 20px/1.1 var(--display); }
+.report-priority { font: 500 13px var(--body); }
+.report-priority b { font: 700 15px/1 var(--display); }
+.initiative-order { font: 500 13px var(--body); }
+.initiative-order b { font: 700 17px/1 var(--display); }
+.hideout-chemicals b { font: 700 20px/1 var(--display); }
+.hideout-research b { font: 600 17px/1.1 var(--display); }
+.research-chip { font: 700 13px/1 var(--display); }
+.discard-list button { font: 500 15px/1.2 var(--display); }
+.discard-list b, .discard-list small { font: 500 13px var(--body); }
+
+/* Journal */
+.journal li:not(.journal-round) { font-size: 15px; line-height: 1.3; }
+.journal-round { font: 700 20px/1.1 var(--display); }
+.active-challenges p { font-size: 15px; }
+.game-footer, .game-footer .text-button { font: 400 12px/1.4 var(--body); }
+
+/* Decisions */
+.eyebrow, .dock-title small { font: 600 12px/1.2 var(--body); letter-spacing: .08em; }
+.decision h2 { font: 700 22px/1.1 var(--display); }
+.dock-title strong { font: 700 22px/1.1 var(--display); }
+.decision-text, .decision-body .decision-text { font-size: 14px; line-height: 1.3; }
+.explain-bar { font: 600 13px/1.3 var(--body); }
+.menu-status { font-size: 14px; line-height: 1.2; }
+.act-name { font: 600 15px/1.08 var(--display); }
+.act-why { font: 500 12px/1.1 var(--body); }
+.act-cost { font: 700 13px/1 var(--display); font-variant-numeric: tabular-nums; }
+.choice-pinned .choice strong { font: 700 18px/1.1 var(--display); }
+.seat-loc b { font: 600 13px/1.1 var(--display); }
+.seat-cell small, .seat-off small { font: 500 12px/1.1 var(--body); }
+.seat-cell b { font: 700 18px/1 var(--display); font-variant-numeric: tabular-nums; }
+.seat-off b { font: 600 13px/1.1 var(--display); }
+.slot-head small, .slot-cell small { font: 500 12px/1.1 var(--body); }
+.current-spot span { font: 400 13px/1.2 var(--body); }
+.current-spot b { font: 700 17px/1.1 var(--display); }
+.choice strong { font: 600 17px/1.2 var(--display); }
+.choice small { font-size: 13px; line-height: 1.3; }
+.choice em { font: 700 15px/1.2 var(--display); }
+.choice-detail { font-weight: 600; }
+.decision-footer, .decision-footer .text-button { font-size: 12px; }
+.result-score b { font: 700 28px/1 var(--display); }
+.result-score small { font: 400 13px/1.3 var(--body); }
+.result h2 { font: 700 28px/1.1 var(--display); }
+
+/* Sheets and explanations */
+.sheet-head h2 { font: 700 22px/1.15 var(--display); }
+.sheet-body { font-size: 15px; line-height: 1.45; }
+.sheet-body .sheet-rule { font-size: 12px; }
+.sheet-body table { font-size: 13px; }
+.tip-v { font: 700 24px/1.1 var(--display); }
+.tip-lines { font-size: 15px; line-height: 1.35; }
+#share-code, #import-code { font: 13px/1.5 Consolas, monospace; }
+#notice { font-size: 15px; }
 
 @media (max-width: 650px) {
-  .setup-intro h1 { font-size: 52px; }
-  .setup-intro > .eyebrow { font-size: 12px; }
-  .lede { font-size: 21px; }
-  .setup-card h2 { font-size: 27px; }
-  .setup-card > p:not(.eyebrow) { font-size: 15px; }
-  .topbar { gap: 7px; }
-  .brand { font-size: 25px; }
-  .brand span { display: none; }
-  .brand i { font-size: 10px; letter-spacing: 0; }
-  .round { margin-left: 0; }
-  .round small { font-size: 12px; }
-  .round b { font-size: 18px; }
-  .score-pair b { font-size: 20px; }
-  .score-pair small { font-size: 12px; }
-  .score-pair span { padding-bottom: 14px; }
-  .score-pair button { padding-inline: 5px; }
-  .final-tag { font-size: 11px; top: 62px; }
-  .voucher-bar { height: 60px; padding-inline: 4px; }
-  .voucher { padding: 4px 3px 18px; gap: 4px; }
-  .voucher.government { min-width: 68px; }
-  .voucher span { font-size: 12px; bottom: 3px; }
-  .voucher b, .voucher small { font-size: 18px; }
-  .voucher small { margin-left: -3px; }
-  .hand-bar .material { font-size: 11px; }
-  .hand-color small { font-size: 12px; }
-  .tabs button { font-size: 12px; }
-  .dock-title small { font: 500 12px/1.2 var(--body); letter-spacing: .04em; }
-  .dock-title strong { font-size: 19px; }
-  .decision-body .decision-text { font-size: 14px; }
-  .choice strong { font-size: 16px; }
-  .choice small { font-size: 13px; }
-  .choice em { font-size: 13px; }
-  .decision-footer, .decision-footer .text-button { font-size: 12px; }
-  .outlook b { font-size: 14px; }
-  .outlook small { font-size: 12px; }
-  .scientists button > span:last-child, .space-number { font-size: 12px; }
-  .scientists[data-location="1"] button { flex-direction: column; gap: 3px; min-height: 50px; }
-  .branch-name { min-width: 102px; }
+  .setup-intro h1 { font-size: clamp(40px, 12vw, 48px); }
+  .lede { font-size: 18px; }
+  .setup-card h2 { font-size: 22px; }
+  .start-button { font-size: 19px; }
+  .topbar .score-pair b { font-size: 24px; }
+  .topbar .round b { font-size: 20px; }
+  .topbar .round .round-end { font-size: 19px; }
+  .header-inventory b { font-size: 18px; }
+  .tabs button { font-size: 13px; }
+  .panel-head h2 { font-size: 20px; }
+  .dock-title strong { font-size: 21px; }
+  .scientists .space-allowance, .scientists .scientist-space .space-occupant { font-size: 16px; }
+  .branch-name > span:not(.research-count):not(.pennant) { font-size: 15px; }
   .branch-weather b, .rd-weather b { font-size: 13px; }
-  .branch-weather small { font-size: 11px; }
-  .chemical-market b { min-width: 54px; font-size: 13px; }
-  .market-stock i { width: 21px; font-size: 12px; }
-  .market-price { margin-left: 0; }
-  .office-head, .office-slot small { font-size: 12px; }
-  .office-bonus { font-size: 12.5px; }
-  .paper-status small { font-size: 11px; }
-  .office-row { min-height: 74px; }
-  .office-held button { font-size: 12.5px; }
-  .assembly-section header small { font-size: 11px; }
-  .assembly-section button > span:last-child { font-size: 13px; }
-  .report-label { font-size: 12px; }
-  .report-agent b { font-size: 18px; }
-  .report-card strong { font-size: 20px; }
-  .report-priority { font-size: 13px; }
-  .report-priority b { font-size: 12px; }
-  .initiative-order { font-size: 13px; flex-wrap: wrap; }
-  .sheet-body { font-size: 15px; }
-  .sheet-body table { font-size: 13px; }
+  .market-price { font-size: 18px; }
+  .report-band b, .report-card strong { font-size: 18px; }
+  .office-head { font-size: 13px; }
 }
-
+/* Three-digit late-game scores still have to fit one header row. */
+@media (max-width: 650px) { .brand { font-size: 22px; } }
+@media (max-width: 400px) {
+  .topbar .score-pair b { font-size: 22px; }
+  .topbar .round b { font-size: 18px; }
+  .topbar .round .round-end { font-size: 17.1px; }
+  .header-inventory b { font-size: 16px; }
+  .header-inventory { gap: 5px; }
+}
 @media (max-width: 360px) {
-  .setup-intro h1 { font-size: 48px; }
-  .topbar { gap: 5px; }
-  .header-actions { gap: 4px; }
-  .voucher { gap: 3px; }
-  .voucher svg { width: 15px; height: 15px; }
-  .market-stock i { width: 18px; }
-  .bot-slot .material { width: 18px; height: 18px; }
+  .voucher b, .decision .voucher b { font-size: 18px; }
+  .voucher small, .decision .voucher small { font-size: 17.1px; }
+  .chemical-market b { font-size: 13px; }
+  .tabs button { font-size: 12px; }
 }
