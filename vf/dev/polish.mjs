@@ -37,6 +37,23 @@ try{
       await shot('corruption-advance-icons-'+width);
     }
     console.log('Corruption and Advance track checked inline and at 18, 24 and 48px, on phone and desktop.');
+  }else if(process.argv.includes('--action-help')){
+    await evalPage('document.getElementById("seed").value="action-help"');await click('[data-do=start]');await wait('typeof VF!=="undefined"&&VF.ready&&!!VF.view');
+    for(let n=0;n<25;n++){
+      const d=await evalPage('VF.view.decision');
+      if(d.choices.some(c=>c.help?.some(h=>h.title==='Establish')&&!c.name))break;
+      const dev=d.choices.find(c=>c.id==='focus_blue.Development'&&!c.disabled),grow=d.choices.find(c=>c.name==='Grow'&&!c.disabled);
+      await execute(dev?{kind:'confirm',indices:[dev.index]}:grow?{kind:'option',index:grow.index}:automatic(d),d);
+    }
+    const before=await evalPage('JSON.stringify(VF.log)');
+    for(const [title,text] of [['Establish','free Guild space'],['Build','free Installation space']]){
+      const index=await evalPage(`VF.view.decision.choices.find(c=>c.help?.some(h=>h.title===${JSON.stringify(title)}))?.index`);assert.notEqual(index,undefined);
+      await click(`.decision [data-do=choice-info][data-index="${index}"]`);await wait(`document.querySelector('dialog[open]')?.textContent.includes(${JSON.stringify(text)})`);
+      assert.equal(await evalPage('JSON.stringify(VF.log)'),before,'Inspection does not take the action');
+      assert.ok(await evalPage('document.querySelector(".sheet-body").textContent.length<350'),'Action explanation stays concise');
+      await shot(title.toLowerCase()+'-help-phone');await click('dialog [data-do=close]');
+    }
+    console.log('Establish and Build info sheets show concise rules without taking the action.');
   }else{
   await evalPage('document.getElementById("seed").value="complete-evaluation";document.getElementById("house").value="Belitan"');await click('[data-do=start]');await wait('typeof VF!=="undefined"&&VF.ready&&!!VF.view');
   for(let n=0;n<12&&(await evalPage('VF.view.decision.message'))!=='Alert card for this round';n++){const d=await evalPage('VF.view.decision');await execute(automatic(d),d);}

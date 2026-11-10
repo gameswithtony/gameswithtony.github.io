@@ -17,6 +17,7 @@ import {adjust,canAdjust,listConvertibleResources,conversions,getCostElements,ha
 import {actions} from './rules/actions.js';
 import {destinationInfo,alertInfo} from './entities.js';
 import {fleetType} from './rules/fleets.js';
+import {actionHelp} from './action-help.js';
 
 const safe = (fn,fallback='') => {try{return fn()}catch{return fallback}};
 const call = v => typeof v==='function'?safe(()=>v()):v;
@@ -67,6 +68,7 @@ export function optionInfo(c,index){
   return {index,id:c.id,type:c.type||'piece',label,disabled,done:c.done,ok:!!c.ok,warn:!!c.warn,extra:!!c.extra,toggle:!!c.toggle,selected:c.toggle?c.obj?.[c.key]===c.value:get(ui).selection.some(s=>s.id===c.id),
     name:c.effectName||object?.name||detail?.name,location:detail?.location,
     cost:object?.cost||c.cost,
+    help:actionHelp(object?.action||c.value),
     description:object?.action?desc(object.action):detail?.choiceDescription??(detail?.effectDescription||detail?.actionDescription||''),detail};
 }
 export function snapshot(){

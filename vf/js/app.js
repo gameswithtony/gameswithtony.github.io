@@ -166,7 +166,9 @@ function coordName(s){return V.coord(s)+' · '+s.name;}
 function readTokenEffect(e){if(Array.isArray(e))return e.map(readTokenEffect).join(' and/or ');if(typeof e==='string')return V.human(e);if(e.either_or)return e.either_or.map(readTokenEffect).join(' OR ');if(e.types)return Object.entries(e.types).map(([k,n])=>n+' '+V.human(k)).join(' + ');return (e.num||1)+' '+V.human(e.verb?.replace(/^gain_/,''))+(e.type?' '+V.human(e.type):'');}
 function choiceInfo(c){
   if(c.id?.startsWith('sectors.')){sectorDetails(c.id);return;}
-  let body=c.detail?cardDetails(c.detail):`<p>${rich(c.label)}</p>${c.description?`<p>${rich(c.description)}</p>`:''}${c.cost?`<h3>Cost</h3>${V.costs(c.cost)}`:''}`;
+  let body=c.detail?cardDetails(c.detail):c.help?.length?'':`<p>${rich(c.description||c.label)}</p>`;
+  body+=(c.help||[]).map(h=>`${c.help.length>1?`<h3>${esc(h.title)}</h3>`:''}<p>${esc(h.text)}</p><p class="sheet-rule">${esc(h.reference)}</p>`).join('');
+  if(c.cost)body+=`<h3>Cost</h3>${V.costs(c.cost)}`;
   if(c.disabled)body=`<p class="error">${c.done?'Already resolved this turn.':'Unavailable in the current position. Check the cost, available targets, and action limit.'}</p>`+body;
   modal(plain(c.name||c.label),body,c.detail?V.kind(c.detail):'info');
 }
