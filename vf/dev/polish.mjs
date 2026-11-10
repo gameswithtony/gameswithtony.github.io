@@ -37,6 +37,32 @@ try{
       await shot('corruption-advance-icons-'+width);
     }
     console.log('Corruption and Advance track checked inline and at 18, 24 and 48px, on phone and desktop.');
+  }else if(process.argv.includes('--track-corruption')){
+    const game=rulesSession();let saved;
+    try{
+      let m=await game.start({...defaultConfig,seed:'emblem-0'});
+      for(let n=0;n<50;n++){
+        const c=m.view.decision.choices.find(c=>c.id==='tracks.blue_society');
+        if(c){saved={format:'VF1',version:'1.00',config:m.config,journal:m.journal};break;}
+        m=await answer(game,m.view,automatic(m.view.decision));
+      }
+    }finally{await game.stop();}
+    assert.ok(saved,'Real track Corruption choice reached');
+    await evalPage(`localStorage.setItem('vf.v1',${JSON.stringify(JSON.stringify(saved))})`);await call('Page.reload');await wait('typeof VF!=="undefined"&&VF.ready&&VF.view?.decision?.message==="Select destination for corruption"');
+    const d=await evalPage('VF.view.decision');await execute({kind:'option',index:d.choices.find(c=>c.id==='tracks.blue_society').index},d);await wait('VF.ready&&!!VF.view.tracks.society.corrupted');
+    await click('.tabs [data-tab=house]');await click('.decision [data-do=collapse]');
+    for(const width of [320,375,1280]){
+      await viewport(width);
+      await evalPage('document.querySelector(".civ-track.corrupted").scrollIntoView({block:"center",behavior:"instant"})');
+      assert.equal(await evalPage('document.querySelector(".civ-track.corrupted .corruption-badge")?.textContent.trim()'),'Corrupted');
+      assert.ok(await evalPage('document.querySelector(".civ-track.corrupted").textContent.includes("Space benefits blocked")'),'Blocked rewards are explicit');
+      assert.ok(await evalPage('document.documentElement.scrollWidth<=innerWidth'),'No horizontal overflow');
+      if(width>1000)assert.ok(await evalPage('document.querySelector(".rail-track.corrupted .track-corruption")?.textContent.includes("Corrupted")'),'Sidebar shows Corruption');
+      await shot('track-corruption-'+width);
+    }
+    await click('.rail-track.corrupted');await wait('document.querySelector("dialog[open]")?.textContent.includes("Space benefits are blocked")');await shot('track-corruption-detail');await click('dialog [data-do=close]');
+    const before=await evalPage('VF.view.tracks.society.corrupted.id');await call('Page.reload');await wait('typeof VF!=="undefined"&&VF.ready&&!!VF.view?.tracks.society.corrupted');assert.equal(await evalPage('VF.view.tracks.society.corrupted.id'),before,'Corruption survives reload');
+    console.log('Real track Corruption persists and is explicit on mobile, desktop, sidebar and inspector.');
   }else if(process.argv.includes('--action-help')){
     await evalPage('document.getElementById("seed").value="action-help"');await click('[data-do=start]');await wait('typeof VF!=="undefined"&&VF.ready&&!!VF.view');
     for(let n=0;n<25;n++){

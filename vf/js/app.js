@@ -108,6 +108,8 @@ function modal(title,body,glyph='info'){
 }
 function close(){if(sheet.open){sheet.close();if(lastFocus?.isConnected)lastFocus.focus({preventScroll:true});}}
 function tip(key){
+  if(view?.tracks[key]){const track=view.tracks[key];modal(V.human(key)+' track',`<p class="track-status ${track.corrupted?'track-corruption':''}">${icon(track.corrupted?'corruption':'check',24)} ${track.corrupted?'Corrupted':'Pure'} · Space ${track.index}/7 · Tier ${track.tier}</p><p>${track.corrupted?'Space benefits are blocked. You can still advance and gain Tiers. Remove or move the Corruption to restore benefits.':esc(tips[key][1])}</p><p class="sheet-rule">Rulebook pp. 28–29.</p>`,key);return;}
+
   if(key==='crisis-board'&&view){modal('Crisis board · Evaluation',`<p>At Evaluation, the Military track adds <strong>${view.crisisPressure.military} Voidborn Fleet Power</strong> to the Skirmish.</p><h3>Economic payment</h3>${Object.keys(view.crisisPressure.economic).length?V.costs(view.crisisPressure.economic):'<p>No extra resources required.</p>'}<p>Each missing resource costs 3 Influence. Adding Crises or Harbingers increases the pressure.</p><p class="sheet-rule">Rulebook pp. 15, 33–34.</p>`,'corruption');return;}
   if(['bounty','reclaim','glory'].includes(key)&&view){const tokens=view.player[key]||[];modal(V.human(key),`<p>${esc(tips[key][1])}</p>${tokens.length?tokens.map(t=>`<div class="owned-token">${icon(key,28)}<span>${key==='glory'?esc(t.value+' Glory'):rich(t.value?.effect?readTokenEffect(t.value.effect):V.human(t.value||t.id))}</span></div>`).join(''):'<p class="muted">None held.</p>'}<p class="sheet-rule">${esc(tips[key][2])}</p>`,key);return;}
   if(key==='voidborn'&&view){modal('Voidborn target',`<p class="tip-value">${view.voidborn.score} Influence</p><p>${esc(tips.voidborn[1])}</p><div class="target-breakdown">${Object.entries(view.voidborn.elements).filter(([,n])=>n).map(([k,n])=>`<div><span>${V.human(k)}</span><small>${n} × ${view.scoreWeights[k]||1}</small><b>${n*(view.scoreWeights[k]||1)}</b></div>`).join('')}</div><p class="sheet-rule">${esc(tips.voidborn[2])}</p>`,'voidborn');return;}
@@ -199,7 +201,7 @@ document.addEventListener('click',async event=>{
   if(action==='tab'){changeTab(el.dataset.tab);return;}
   if(action==='card-tab'){ui.cardTab=el.dataset.tab;render();return;}
   if(action==='event'){const c=view.event||view.foreground.find(c=>c.id?.startsWith('event'));if(c)inspectCard(c.id);else tip('phase');return;}
-  if(action==='track-step'){const track=view.tracks[el.dataset.track],step=track.steps[Number(el.dataset.index)];modal(V.human(el.dataset.track)+' · space '+el.dataset.index,`<p>${rich(step.description)||'Starting space.'}</p><p class="sheet-rule">${track.index===step.index?'Your current position.':track.index>step.index?'Already passed.':'Not yet reached.'} Rulebook p. 28.</p>`,el.dataset.track);return;}
+  if(action==='track-step'){const track=view.tracks[el.dataset.track],step=track.steps[Number(el.dataset.index)];modal(V.human(el.dataset.track)+' · space '+el.dataset.index,`<p>${rich(step.description)||'Starting space.'}</p>${track.corrupted?'<p class="track-corruption">Corrupted · this space’s benefit is blocked. Tiers still advance.</p>':''}<p class="sheet-rule">${track.index===step.index?'Your current position.':track.index>step.index?'Already passed.':'Not yet reached.'} Rulebook p. 28.</p>`,el.dataset.track);return;}
   if(action==='menu'){menu();return;}
   if(action==='share'){share();return;}
   if(action==='import'){importDialog();return;}
