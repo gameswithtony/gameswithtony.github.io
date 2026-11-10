@@ -1,0 +1,32 @@
+export const tips={
+  food:['Food','Pays upkeep at the end of each Cycle. Producing Food gains your current yield. Stockpile limit: 15.','Rulebook pp. 17, 19–20.'],
+  energy:['Energy','Pays for movement, invasions, and several Focus effects. Credits can replace Food, Energy, or Materials at 1:1.','Rulebook pp. 17, 23.'],
+  materials:['Materials','Pays for development and deploying Fleet Power. Production level is the population working in matching guilds, plus bonuses.','Rulebook pp. 19–20.'],
+  credits:['Credits','Can replace Food, Energy, or Materials at 1:1. Credits cannot normally replace Science. Stockpile limit: 15.','Rulebook p. 17.'],
+  science:['Science','Pays for Technologies and Civilization development. Production yield differs from production level.','Rulebook pp. 19–20, 31.'],
+  population:['Population','Each guild contributes the sector’s Population to its resource’s production level. Most Population can range from 1 to 6.','Rulebook p. 19.'],
+  corruption:['Corruption','Corrupted sectors and guilds lose benefits that require Pure pieces. Corruption can also block Agenda slots or Civilization tracks. Removing it restores those benefits.','Rulebook p. 29.'],
+  defense:['Sector Defense','A stationary Installation that defends its sector. Its combat contribution depends on the defending faction and Technologies.','Rulebook pp. 18, 24–26.'],
+  shipyard:['Shipyard','Allows deployment in this sector. Several effects deploy once per Shipyard. Installations also affect upkeep.','Rulebook pp. 18, 21.'],
+  starbase:['Starbase','An Installation unlocked by the Starbases Technology. It protects its sector and participates in combat.','Rulebook pp. 18, 36–38.'],
+  influence:['Influence','Your score. After the third Evaluation, match or exceed the Voidborn score to win. A catastrophe loss overrides Influence.','Rulebook pp. 16–17.'],
+  voidborn:['Voidborn score','The target is recalculated from the current board. Rifts, empty Safe Havens, catastrophes, Harbingers, consumed Technologies, crises, Fallen Houses, Corruption, and Voidborn Population all contribute.','Rulebook p. 16.'],
+  upkeep:['Upkeep','Paid in Food during Evaluation. Fleet Power and occupied guild or Installation spaces can increase it. Each unpaid upkeep costs 3 Influence; allowed substitutes appear during payment.','Rulebook pp. 15, 20.'],
+  fleet_active:['Active Fleet Power','Ready to deploy. Fleet Power moves from inactive to active when activated, and from active onto a sector when deployed.','Rulebook p. 21.'],
+  fleet_inactive:['Inactive Fleet Power','Activate these cubes before deploying them. Your full supply has 14 Fleet Power cubes.','Rulebook p. 21.'],
+  society:['Society','Advance through your House’s Society track to gain the printed effect. Reaching a new Tier can unlock another Improved Technology.','Rulebook p. 28.'],
+  statecraft:['Statecraft','Your House’s Statecraft track grants fleet, Technology, and political benefits. Corruption changes its available rewards.','Rulebook p. 28.'],
+  economy:['Economy','Your House’s Economy track grants trade, guild, and scoring benefits. Inspect each space for the actual reward.','Rulebook p. 28.'],
+  trade:['Trade tokens','Use a Trade token with your Focus to take all three actions instead of two. An Agenda and a Trade token can be played together. Unused Trade tokens can be slotted during clean-up.','Rulebook pp. 9–12, 30.'],
+  glory:['Glory','Collected through conquest. You may normally keep four tokens. Values can be upgraded; inspect an effect before spending or discarding.','Rulebook p. 27.'],
+  bounty:['Bounty','A reward in a sector. Resolve its printed resources or Influence when the relevant effect grants it. Inspect the token for its exact reward.','Rulebook p. 27.'],
+  reclaim:['Reclaim','A sector reward resolved when you successfully invade or when an effect grants it. Its printed effect varies by token.','Rulebook p. 27.'],
+  harbinger:['Harbinger','Increases the Voidborn threat and contributes 10 to their final score while on a sector. Effects specify where it may be placed or removed.','Rulebook pp. 34–35.'],
+  haven:['Safe Havens','Move inactive Fleet Power here through the matching effects. Each unfilled Haven adds 20 to the Voidborn’s score. Capacity is specific to the scenario.','Rulebook p. 35.'],
+  phase:['Cycle of play','Prepare the Galactic Event. Each round, reveal an Alert and Crisis, play a Focus, resolve actions, clean up, and let the Void advance. Evaluation resolves Skirmishes, upkeep, objectives, and Agendas. Play three Cycles.','Rulebook pp. 7–16.'],
+  focus:['Focus cards','Choose an available card, optionally with an Agenda and Trade token. Resolve two distinct actions in any order; a Trade token permits all three. Live costs and legal choices appear in the action panel.','Rulebook pp. 9–12.'],
+  combat:['Combat','Approach precedes Salvo. Damage is reduced by matching Absorption. Fleet types and Technologies alter initiative, damage, and losses. The rules calculate the available outcomes; inspect the fleets retained and payment before confirming.','Rulebook pp. 24–27, 35–38.'],
+  voidstorm:['Voidstorm','The marked edge blocks adjacency. It affects regrouping, invading, and effects that require adjacent sectors.','Rulebook p. 18.']
+};
+export const resourceNames={food:'Food',energy:'Energy',materials:'Materials',credits:'Credits',science:'Science'};
+export const guildNames={farmers_guild:'Farmers’ Guild',engineers_guild:'Engineers’ Guild',miners_guild:'Miners’ Guild',bankers_guild:'Bankers’ Guild',scientists_guild:'Scientists’ Guild'};
