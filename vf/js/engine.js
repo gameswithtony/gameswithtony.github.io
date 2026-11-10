@@ -18,6 +18,7 @@ import {actions} from './rules/actions.js';
 import {destinationInfo,alertInfo} from './entities.js';
 import {fleetType} from './rules/fleets.js';
 import {actionHelp} from './action-help.js';
+import {combatView} from './combat-view.js';
 
 const safe = (fn,fallback='') => {try{return fn()}catch{return fallback}};
 const call = v => typeof v==='function'?safe(()=>v()):v;
